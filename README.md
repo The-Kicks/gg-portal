@@ -40,7 +40,7 @@ npx prisma db seed
 ```
 
 ### 3. Run the Development Server
-Once the database is ready, spin up the local development server:
+Once the database is ready, spin up the local development server (DO THIS FOR BOTH BACKEND AND ROOT):
 ```bash
 npm run dev
 ```
