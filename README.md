@@ -1,84 +1,53 @@
-# GG-PORTAL
-This is just a for fun project, its only to improve my TypeScript (since I never worked with it)
-Everything is self learned and made with some help of our good friends LLM.
+# GG-PORTAL 🎮
 
-The idea is that typescript doesnt actually know what theme and objects its gonna get, since the user can create all kinds of themes in the admin panel themselves. Which kinda beats the purpose of typescript, but its also fun to make it harder.
+Welcome to **GG-Portal**! This is a personal, "for-fun" full-stack project built from scratch to learn and master **TypeScript**, React, and Prisma. Everything in this repository is self-taught, built line by line, and refined with a little help from our LLM friends.
 
-backend terminal
-npx primsa db push
-npx primsa db seed
+## 🧠 The TypeScript Challenge
+
+The core architectural challenge of this project revolves around type safety versus dynamic data. 
+
+In GG-Portal, users can create all kinds of dynamic themes, layers, and custom entities inside an admin panel. Because this data is completely dynamic and user-generated, TypeScript cannot know the exact shapes of these objects at compile-time. Managing this dynamic data while maintaining strict type safety across the frontend and backend was a massive puzzle—which made building it all the more fun and rewarding!
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend:** React, TypeScript, Vite
+- **Backend:** Node.js, Prisma ORM
+- **Database:** MySQL
+
+---
+
+## 🚀 Getting Started
+
+Follow these steps to get your local development environment up and running.
+
+### 1. Prerequisites & Installation
+Clone the repository, open the project in your code editor, and install the dependencies:
+```bash
+npm install
+```
+
+### 2. Backend Setup (Prisma & Database)
+Make sure your database connection is configured in your `.env` file. Then, run the following commands to push the schema and load the starter dataset:
+
+```bash
+# Push the Prisma schema to your MySQL database
+npx prisma db push
+
+# Seed the database with the starter dataset (Themes, Entities, Connections)
+npx prisma db seed
+```
+
+### 3. Run the Development Server
+Once the database is ready, spin up the local development server:
+```bash
 npm run dev
-
-# React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 📦 Starter Set Data
+This project comes with a built-in JSON seeder containing a rich starter set of data, including:
+- **Formula 1 Championship (2026):** Drivers, Constructor Teams, and Governing Bodies.
+- **European Football:** Clubs, Leagues, and legendary Players (like Johan Cruijff).
