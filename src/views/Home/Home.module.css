@@ -1,0 +1,45 @@
+/* ==========================================================================
+   Central Landing Hub Header Layout
+   ========================================================================== */
+.appHeader {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text);
+}
+
+.appHeader h1 {
+  font-size: 2.5rem;
+  font-weight: 900;
+  margin-bottom: 0.5rem;
+}
+
+.appHeader p {
+  font-size: 1.1rem;
+  opacity: 0.8;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Outer layout panel boundary margins wrapper */
+.gamesList {
+  padding: 0 2rem;
+}
+
+/* ==========================================================================
+   Flexible Game Cards Selection Deck
+   ========================================================================== */
+.cardContainer {
+  display: flex;
+  flex-wrap: wrap; /* Permits trailing element cards nodes to stack onto multi rows naturally */
+  gap: 1.5rem; 
+  justify-content: flex-start; /* Aligns generated elements flush left against start margins boundaries */
+  padding: 2rem 0;
+  width: 100%;
+}
+
+/* Text nodes styles living directly inside PortalCard contexts wrappers */
+.gameTitle {
+  font-weight: bold;
+  letter-spacing: 1px;
+  font-size: 1.2rem;
+}

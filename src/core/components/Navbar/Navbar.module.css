@@ -1,0 +1,78 @@
+/* ==========================================================================
+   Main Structural Header Navbar Parent
+   ========================================================================== */
+.navbar {
+  /* Dynamic CSS colors loaded globally into the Document :root tree by App.tsx hooks */
+  background-color: var(--navbarColor);
+  color: var(--text);
+  padding: 0 2rem; /* Creates breathing room on the far left and right sides of the screen */
+  height: 60px;
+  
+  /* Grid Strategy: 3 columns. 
+     Left and Right take up exactly equal proportional space (1fr).
+     The Center column adapts dynamically to the size of its menu content (auto).
+     This guarantees the menu stays mathematically perfectly centered in the viewport. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr; 
+  align-items: center; /* Centers items vertically inside the 60px height boundary */
+  border-bottom: 1px solid var(--primary);
+
+  /* Permanent Layout pinning rules */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000; /* High stack index priority order to prevent main page contents from sliding over the header */
+}
+
+/* ==========================================================================
+   Grid Segment Cell Layout Alignments
+   ========================================================================== */
+
+.navLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-self: start; /* Flushes container completely to the left wall */
+  min-width: max-content; /* Prevents text wrap or layout smashing on ultra small mobile views */
+}
+
+.navCenter {
+  display: flex;
+  gap: 2rem; /* Spacing between different navigation layer tabs buttons */
+  justify-content: center;
+  align-items: center;
+  justify-self: center; /* Locks the container cell down into the absolute center column zone */
+}
+
+.navRight {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  justify-self: end; /* Flushes container completely to the right wall */
+  min-width: max-content;
+}
+
+/* ==========================================================================
+   Navigation Action Links Items Typography
+   ========================================================================== */
+.navItem {
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  white-space: nowrap; /* Keeps link labels locked on a single clean line string */
+}
+
+/* Branding logo text styles */
+.portalName {
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
+
+/* Highlight style modifier class applied via React when a link matches the active router link layer */
+.navItem.active {
+  font-weight: bold;
+  border-bottom: 2px solid var(--secondary); /* High contrast underline indicator */
+}

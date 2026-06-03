@@ -1,0 +1,125 @@
+/* ==========================================================================
+   Main Profile Card Container
+   ========================================================================== */
+.card {
+  width: 100%;
+  max-width: 500px;
+  aspect-ratio: 2 / 3; /* Enforces a perfect vertical card ratio aspect (e.g., 300px width by 450px height) */
+  clip-path: inset(0 round 20px); /* Hardware-level clipping masks that prevents image bleeding during hover scales */
+  position: relative; /* Anchor point for the absolute positioned text overlay gradient layer */
+  margin: 1rem auto; /* Centers the card horizontally within flex/grid rows layouts */
+  background-color: var(--bg);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  
+  /* HIGH-PERFORMANCE ANIMATION RIGGING:
+     Forces the browser engine to offload hover animations to the GPU (Video Card) 
+     preventing visual micro-stuttering or lag on lower-end devices. */
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: transform 0.3s ease;
+}
+
+/* Vertical lift animation triggered when a mouse pointer hovers over the card surface */
+.card:hover {
+  transform: translateY(-5px);
+}
+
+/* ==========================================================================
+   Background Image Canvas Layer
+   ========================================================================== */
+.imageContainer {
+  width: 100%;
+  height: 100%;
+  background-size: cover; /* Stretches the profile portrait photo to fully span dimensions without stretching */
+  background-position: center top; /* Keeps athlete/person faces perfectly centered near upper boundaries */
+  background-repeat: no-repeat;
+  border-radius: inherit; /* Copies the 20px corner rounding criteria downward from parent card limits */
+}
+
+/* ==========================================================================
+   Bottom Content Shield & Shading Gradient Overlays
+   ========================================================================== */
+.overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 60%; /* Spans more than halfway up the card box body height */
+  
+  /* Smooth color blending curtain gradient fading into the global root theme background variable.
+     This ensures high legibility for white text layouts overlaid directly over multi-colored images. */
+  background: linear-gradient(to top, var(--bg) 0%, transparent 100%);
+  
+  display: flex;
+  align-items: flex-end; /* Locks data components flush against bottom layout boundaries */
+  padding: 20px;
+  
+  /* Safeguards sub-elements layers masks fields alignments on old iOS WebKit rendering engines */
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  background-clip: padding-box;
+}
+
+/* Structural wrapper grouping encapsulating name labels, badges and country flags modules */
+.info {
+  width: 100%;
+  color: var(--text); 
+}
+
+/* Primary Entity Name Identification Headline Header */
+.name {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #ffffff; /* Explicitly locked to white to stay legible against the dark background gradient fade */
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5); /* Drop shadow text effect separating font characters from image lines */
+}
+
+/* ==========================================================================
+   Organization Affiliation Capsule Badge (Frosted Glass Panel Effect)
+   ========================================================================== */
+.orgBadge {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column; /* Vertically stacks structural internal metadata labels above organization string keys */
+  
+  /* Creates a high-fidelity 85% transparent frosted backdrop overlay */
+  background: color-mix(in srgb, var(--text), transparent 85%);
+  backdrop-filter: blur(5px); /* Blurs imagery moving behind the badge container layer */
+  
+  padding: 8px 12px;
+  border-radius: 10px;
+  border-left: 4px solid var(--secondary); /* High-contrast accent color bar line marker */
+}
+
+/* Inner localized category description tags */
+.label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--primary); 
+  font-weight: 800;
+}
+
+/* Secondary organizational value labels (e.g. Team Name strings values) */
+.orgName {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* ==========================================================================
+   Nationality Country Badges Horizontal Strip Array
+   ========================================================================== */
+.metadata {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Wraps the raw SVG flags components into clean high-contrast drop-shadow boxes */
+.countryBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+}

@@ -1,0 +1,62 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Theme {
+  id                  String   @id
+  title               String
+  description         String
+  orgLayer            String   
+  miniViewLayers      Json     
+  primaryColor        String
+  secondaryColor      String
+  backgroundColor     String
+  navbarColor         String
+  textColor           String
+  darkPrimaryColor    String?
+  darkSecondaryColor  String?
+  darkBackgroundColor String?
+  darkTextColor       String?
+  darkNavbarColor     String?
+  games               Json     
+  navbarItems         Json     
+  labels              Json     
+  layerMetadata       Json     
+  entities            Entity[]
+}
+
+model Entity {
+  id                String             @id
+  themeId           String
+  name              String
+  type              String             
+  status            String            
+  isStandalone      Boolean            @default(false) 
+  image             Json               
+  metadata          Json               
+
+  theme             Theme              @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  connections       EntityConnection[] @relation("SourceEntity")
+  targetConnections EntityConnection[] @relation("TargetEntity")
+
+  @@index([themeId])
+}
+
+model EntityConnection {
+  id             String @id 
+  themeId        String
+  sourceEntityId String
+  targetEntityId String
+  metadata       Json   
+  
+  sourceEntity   Entity @relation("SourceEntity", fields: [sourceEntityId], references: [id], onDelete: Cascade)
+  targetEntity   Entity @relation("TargetEntity", fields: [targetEntityId], references: [id], onDelete: Cascade)
+
+  @@index([sourceEntityId])
+  @@index([targetEntityId])
+}

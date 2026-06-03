@@ -1,0 +1,377 @@
+/* ==========================================================================
+   1. CORE PAGE WIREFRAME LAYOUT
+   ========================================================================== */
+.pageWrapper { 
+  background-color: var(--bg); 
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mainLayout {
+  display: grid;
+  /* Splitting page: left side sets parameters block, right side populates content listings */
+  grid-template-columns: clamp(280px, 22vw, 400px) 1fr;
+  gap: 5vw;
+  padding: 0 6vw 1vh 6vw;
+  align-items: start;
+  flex-grow: 1; 
+  min-height: 45vh; 
+  background-color: var(--bg);
+}
+
+/* ==========================================================================
+   2. HERO BRANDING HEADER BLOCK
+   ========================================================================== */
+.heroSection {
+  height: 65vh;
+  min-height: 450px;
+  position: relative;
+  margin-bottom: 0; 
+  background-color: var(--navbarColor);
+}
+
+.heroBg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-size: cover;
+  background-position: center 20%;
+  filter: brightness(0.6);
+  z-index: 1;
+}
+
+.heroOverlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to top, var(--bg) 0%, transparent 80%);
+  z-index: 2;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 3;
+  height: 100%;
+  display: flex;
+  align-items: flex-end; 
+  padding: 0 6vw;
+  gap: 2.5rem; 
+  transform: translateY(0); 
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.heroContent.hidden { 
+  opacity: 0; 
+  transform: translateY(-2vh); 
+  pointer-events: none; 
+}
+
+.avatarContainer {
+  width: clamp(180px, 18vw, 300px);
+  aspect-ratio: 2 / 3;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  border: 0.5rem solid var(--bg);
+  box-shadow: 0 2rem 4rem rgba(0,0,0,0.5);
+  background: var(--navbarColor);
+  margin-bottom: -2vh; 
+  flex-shrink: 0; 
+}
+
+.floatingAvatar { 
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+}
+
+.titleBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem; 
+  align-items: flex-start;
+  padding-bottom: 2vh; 
+}
+
+.layerLabel {
+  background: var(--primary);
+  color: #fff;
+  padding: 0.3rem 0.8rem;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin: 0;
+  display: inline-block;
+}
+
+.entityName { 
+  font-size: clamp(3rem, 7vw, 8.5rem); 
+  font-weight: 950; 
+  text-transform: uppercase; 
+  color: var(--text);
+  line-height: 0.75; 
+  margin: 0; 
+  padding: 0;
+  letter-spacing: -2px;
+}
+
+.breadcrumbPath { 
+  margin: 0;
+  font-weight: 700; 
+  color: var(--secondary); 
+  text-transform: uppercase; 
+  font-size: 0.85rem; 
+  opacity: 0.8;
+  padding-top: 0.5vh;
+}
+
+.sep { margin: 0 6px; opacity: 0.4; }
+
+/* Clean alternate fallback header config parameters when hero media fails or doesn't exist */
+.standaloneTitleWrapper {
+  padding: 60px 6vw 30px 6vw;
+  background-color: var(--bg);
+}
+
+.standaloneTitleWrapper .titleBox {
+  padding-bottom: 0;
+}
+
+/* ==========================================================================
+   3. STICKY SIDEBAR PARAMETERS PANEL
+   ========================================================================== */
+.sidebar { 
+  height: 100%; 
+  background-color: var(--bg);
+  padding: 3vh 0; 
+}
+
+.stickyContainer {
+  position: sticky;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; 
+  z-index: 10;
+  align-self: start; 
+  align-items: stretch; 
+  transition: top 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  width: 100%;
+}
+
+.isStatic { top: -20vh; }
+.isSticky { top: 80px; }
+
+.compactHeader {
+  display: none; 
+  flex-direction: column;
+  align-items: center; 
+  width: 100%;
+  max-width: 400px; 
+  align-self: center; 
+}
+
+.compactHeader.visible { 
+  display: flex;
+  opacity: 1; 
+  visibility: visible; 
+  transform: translateY(0);
+  margin-bottom: 0.4rem;
+}
+
+.miniAvatar {
+  width: auto; 
+  min-width: 180px;
+  max-width: 90%; 
+  aspect-ratio: 2 / 3;
+  max-height: 44vh; 
+  border-radius: 1.5rem;
+  object-fit: cover;
+  border: 5px solid var(--primary); 
+  box-shadow: 0 1.5rem 3rem rgba(0,0,0,0.4);
+}
+
+.compactName {
+  font-size: clamp(1.6rem, 2.1vw, 2.6rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-top: 0.8rem;
+  text-align: center; 
+  line-height: 1;
+  color: var(--text);
+  width: 100%;
+}
+
+.compactLabel {
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 0.2rem;
+  text-align: center; 
+  width: 100%;
+}
+
+.infoCard {
+  width: 100%;
+  max-width: 400px; 
+  align-self: center; 
+  background: color-mix(in srgb, var(--text), transparent 97%);
+  border: 1px solid color-mix(in srgb, var(--text), transparent 90%);
+  border-radius: 2rem;
+  padding: 1.8rem;
+  box-sizing: border-box;
+}
+
+.sidebarTitle { 
+  font-size: 0.75rem; 
+  text-transform: uppercase; 
+  color: var(--secondary); 
+  margin-bottom: 0.8rem; 
+  letter-spacing: 1px; 
+  opacity: 0.6;
+}
+
+.statsGrid { display: flex; flex-direction: column; gap: 0.9rem; }
+.statBox label { display: block; font-size: 0.65rem; text-transform: uppercase; font-weight: 800; opacity: 0.5; margin-bottom: 2px; }
+.statBox span { font-size: 1.1rem; font-weight: 600; color: var(--secondary); }
+
+/* ==========================================================================
+   4. COMPONENT LEVEL STRUC CARDS DISPLAY GRID
+   ========================================================================== */
+.teammatesSection {
+  margin-top: 4vh; /* Slightly tighter top spacing than profile layouts to cluster items cleanly */
+  padding-top: 4vh;
+  border-top: 1px solid color-mix(in srgb, var(--text), transparent 92%);
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* Strip top separator line borders from the first content section automatically */
+.contentArea > .teammatesSection:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.sectionHeading {
+  font-size: clamp(1.5rem, 2.2vw, 2.5rem);
+  text-transform: uppercase;
+  font-weight: 900;
+  margin-bottom: 2rem;
+  border-left: 0.5rem solid var(--primary);
+  padding-left: 1.5rem;
+}
+
+.teammatesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2rem;
+  align-items: stretch;
+  width: 100%;
+}
+
+.teammateCardWrapper {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: 
+    transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), 
+    filter 0.3s ease, 
+    opacity 0.3s ease;
+}
+
+.teammateCardWrapper > div {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.teammateCardWrapper:hover {
+  transform: translateY(-6px);
+  filter: brightness(1.05);
+}
+
+.teammateCardWrapper:active {
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   5. VISUAL ATTRIBUTES MUTATION FOR DISBANDED / HISTORIC NODES
+   ========================================================================== */
+.isFormerTeammate {
+  opacity: 0.45;          
+  filter: grayscale(100%);  
+  transform: scale(0.98);   
+  transition: 
+    transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), 
+    filter 0.3s ease, 
+    opacity 0.3s ease;
+}
+
+.isFormerTeammate:hover {
+  opacity: 1;
+  filter: grayscale(0%) brightness(1.05);
+  transform: translateY(-6px) scale(1); 
+}
+
+/* ==========================================================================
+   6. EMPTY STATES PLACEHOLDERS (Fallback screen layouts)
+   ========================================================================== */
+.emptyMediaContainer {
+  width: 100%;
+  min-height: 50vh; 
+  background: color-mix(in srgb, var(--text), transparent 98%);
+  border: 1px dashed color-mix(in srgb, var(--text), transparent 85%);
+  border-radius: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Backlit styling glow effect behind empty states panel text */
+.emptyMediaContainer::before {
+  content: '';
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  background: var(--primary);
+  filter: blur(120px);
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.emptyMediaInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.emptyMediaTitle {
+  font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text);
+  margin: 0;
+}
+
+.emptyMediaSubtitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--secondary);
+  letter-spacing: 1px;
+  opacity: 0.6;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -1,0 +1,111 @@
+/* ==========================================================================
+   Individual Card Core Structure Styles
+   ========================================================================== */
+.card {
+    position: relative; /* Essential anchor point boundary for absolute floating child element layers */
+    overflow: hidden; /* Clips out any visual overflows like expanding spotlight gradient circles safely inside corners */
+    border: 2px solid var(--primary);
+    color: var(--text);
+    border-radius: 12px;
+    cursor: pointer;
+    box-sizing: border-box;
+    min-height: 120px;
+    display: flex; 
+    transition: transform 0.2s ease, box-shadow 0.2s ease; /* Fluid speeds for liftoff elevations */
+    
+    /* Triggers a custom CSS keyframe intro sequence immediately upon arriving into the active browser layout viewport */
+    animation: spawnIn 0.3s ease-out forwards;
+}
+
+/* ==========================================================================
+   Advanced Flashlight Spotlight Shader Layer Effect
+   ========================================================================== */
+.spotlight {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; /* Prevents the invisible layer box from intercepting cursor tracking coordinates or mouse clicks */
+    z-index: 1; /* Sits over the background surface layer, but below active textual contents */
+    opacity: 0; /* Fully hidden standard state until hovered over */
+    transition: opacity 0.3s ease; /* Smooth fades the beam into visibility */
+    
+    /* Radial Gradient Shader:
+       Generates a 200px tracking circle locked perfectly to mouse-x and mouse-y variables supplied directly via React.
+       Uses 'color-mix' to blend the active secondary color theme down with 60% transparency into smooth alpha masks. */
+    background: radial-gradient(
+        200px circle at var(--mouse-x) var(--mouse-y), 
+        color-mix(in srgb, var(--secondary), transparent 60%), 
+        transparent 100%
+    );
+}
+
+/* Elevates content layer above the spotlight effect layer underneath it */
+.content {
+    position: relative;
+    z-index: 2; /* Content stays on tier 2, floating safely above the spotlight tier 1 shader beam layer */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; 
+    align-items: center;     
+    flex: 1;                
+    padding: 1.5rem;
+    text-align: center;
+}
+
+/* Hover Interactivity Triggers */
+.card:hover .spotlight {
+    opacity: 1; /* Activates the flashlight beam visibility once a cursor enters boundaries */
+}
+
+.card:hover {
+    transform: translateY(-4px); /* Vertical liftoff jump simulation pop effect */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2); /* Deep rich floating shadow accent dropped underneath the card */
+}
+
+/* ==========================================================================
+   Dynamic Flex Responsive Percentage Width Triggers
+   ========================================================================== */
+.size25 { width: calc(25% - 1rem); }
+.size33 { width: calc(33.33% - 1rem); }
+.size50 { width: calc(50% - 1rem); }
+.size66 { width: calc(66.66% - 1rem); }
+.size75 { width: calc(75% - 1rem); }
+.size100 { width: 100%; }
+
+/* Introductory keyframe setup smoothly animating incoming cards sliding upward */
+@keyframes spawnIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Tablet & Mobile Breakpoints: Automatically flattens columns layout widths out to 100% block stacking streams */
+@media (max-width: 768px) {
+    .size25, .size33, .size50, .size66, .size75 { width: 100%; }
+}
+
+/* ==========================================================================
+   Portal Group Component Section Categorization Boxes
+   ========================================================================== */
+.group {
+    border: 2px solid var(--primary);
+    border-radius: 16px;
+    padding: 2rem;
+    background-color: var(--bg) ;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 2rem;
+}
+
+/* Stylish section dividing title text header underlines */
+.groupTitle {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: var(--text);
+    /* Creates a soft tinted underline utilizing the dynamic secondary theme configuration values */
+    border-bottom: 1px solid color-mix(in srgb, var(--secondary), transparent 50%);
+    display: inline-block;
+    padding-bottom: 0.5rem;
+}
+
+.groupContent {
+    width: 100%;
+}

@@ -1,0 +1,62 @@
+/* ==========================================================================
+   Main Slider Track (The background bar)
+   ========================================================================== */
+.track {
+  width: 58px;
+  height: 28px;
+  flex-shrink: 0; /* Prevents the toggle from squeezing or shrinking inside flexbox layouts */
+  background-color: #ffffff; /* Default background for Light Mode */
+  border-radius: 20px; /* Makes the edges completely round */
+  position: relative; /* Established as an anchor point so child items (icons/thumb) can use absolute positioning */
+  cursor: pointer; /* Displays a hand icon on hover to signal clickability */
+  transition: background-color 0.3s ease; /* Smoothly transitions background color when toggling modes */
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); /* Subtle inner shadow to give the track a realistic depth */
+}
+
+/* Modifier class appended dynamically via React when dark mode is enabled */
+.trackDark {
+  background-color: #2c3e50; /* Deep blue-grey background for Dark Mode */
+}
+
+/* ==========================================================================
+   Sliding Circle (The Selector Thumb)
+   ========================================================================== */
+.thumb {
+  width: 22px;
+  height: 22px;
+  background-color: #ffffff; /* Consistent hex-code usage for absolute white */
+  border-radius: 50%; /* Makes the element a perfect circular shape */
+  position: absolute;
+  top: 3px; /* Centers the thumb vertically inside the 28px high track (22px + 3px top + 3px bottom = 28px) */
+  left: 3px; /* Default starting position on the left side */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* High-performance smooth sliding acceleration curve */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3); /* Pop-out shadow effect to make the thumb look layered on top */
+  z-index: 2; /* Ensures the circular handle always slides on top of the emoji icons */
+}
+
+/* Modifier class appended dynamically via React to trigger the hardware-accelerated slide */
+.thumbRight {
+  transform: translateX(30px); /* Physically pushes the circle 30px to the right side */
+}
+
+/* ==========================================================================
+   Emoji Icons (Sun & Moon)
+   ========================================================================== */
+.icon {
+  position: absolute;
+  top: 50%; /* Pushes the icon down to the middle of the track */
+  transform: translateY(-50%); /* Perfectly centers the icon vertically by counteracting its own height */
+  font-size: 14px;
+  user-select: none; /* Disables text highlighting text-cursors if users double click the switch rapidly */
+  z-index: 1; /* Places icons underneath the selector thumb layer */
+  line-height: 1; /* Prevents text font-line heights from throwing off vertical alignment grids */
+}
+
+/* Anchor coordinates for the individual icons */
+.sunIcon {
+  left: 7px; /* Placed cleanly on the left side zone */
+}
+
+.moonIcon {
+  right: 7px; /* Placed cleanly on the right side zone */
+}

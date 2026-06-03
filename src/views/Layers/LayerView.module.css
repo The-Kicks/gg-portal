@@ -1,0 +1,60 @@
+/* ==========================================================================
+   Global Layer Views Layout Scaffolding
+   ========================================================================== */
+.layerContainer {
+  /* Premium paddock look: 24px inner horizontal spacing with breathing room */
+  padding: 40px 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.groupSection {
+  /* Massive vertical separation spacing block ranges creating clean visual rhythm layouts */
+  margin-bottom: 80px;
+}
+
+/* Structural Section Headers Typography layout */
+.groupHeader {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text);
+  text-transform: uppercase;
+  margin: 0 0 32px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--primary);
+  /* High contrast border rule indicator */
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   Responsive Grid System Settings
+   ========================================================================== */
+.cardGrid {
+  display: grid;
+  /* Automatically pushes columns blocks out into fluid wrap layouts using rigid 310px spacing slots */
+  grid-template-columns: repeat(auto-fill, 310px);
+  gap: 28px;
+}
+
+.cardWrapper {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Defunct / Historical Status Filter Modifiers
+   ========================================================================== */
+.isFormer {
+  opacity: 0.5;
+  /* Dim structural layout opacity weights down to indicate past history context records */
+  filter: grayscale(90%);
+  /* Removes saturation values down into elegant muted hues */
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Highlights the targeted archived card out into vibrant high-contrast life upon user hover focal points */
+.isFormer:hover {
+  opacity: 1;
+  filter: grayscale(0%);
+}

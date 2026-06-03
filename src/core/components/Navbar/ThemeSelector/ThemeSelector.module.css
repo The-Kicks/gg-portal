@@ -1,0 +1,39 @@
+/* ==========================================================================
+   Main Container Layout Group
+   ========================================================================== */
+.themeSelectorContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Generates automatic margins and spacing gaps between the label and selection fields */
+  flex-wrap: wrap; /* Allows the input components to stack vertically if screen real estate turns critically narrow */
+  justify-content: flex-end; /* Flushes alignment configurations perfectly toward the right boundaries of parent headers */
+  flex: 0 1 auto; /* Tells layout engines not to forcefully stretch or grow this selector container box dimensions */
+}
+
+/* ==========================================================================
+   Text Typography Labels (CLEANED: Duplicates removed)
+   ========================================================================== */
+.label {
+  white-space: nowrap; /* Strictly forbids text strings from wrapping into multiple broken stacked text lines */  
+  color: var(--text); /* Dynamically reads out active global root hex color variables injected via App.tsx hooks */
+}
+
+/* ==========================================================================
+   Selection Dropdown Form Fields Elements
+   ========================================================================== */
+.themeDropdown {
+  height: 32px; 
+  background-color: rgba(255, 255, 255, 0.2); /* Semi-transparent frosted-glass white surface backdrop look */
+  color: var(--text); /* Keeps text values in alignment with active global context styling variables */
+  border: 1px solid rgba(255, 255, 255, 0.4); /* Soft subtle bounding outline box rings styles */
+  padding: 0 8px; /* Inserts internal horizontal structural spacing buffers inside the clickable area zones */
+  border-radius: 4px; /* Smooth rounded corners */
+  cursor: pointer; /* Displays hand indicators signaling clear clickable user interactive properties */
+  box-sizing: border-box; /* Forces browser engines to count border and padding widths within the total 32px height constraint */
+  margin: 0;
+}
+
+/* Individual options dropdown item boxes rendered by native operating system browser agents */
+.option {
+  color: black; /* Hardcoded black color to ensure fallback legibility against default native white systems styling elements */
+}

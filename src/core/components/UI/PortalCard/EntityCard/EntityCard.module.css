@@ -1,0 +1,83 @@
+/* ==========================================================================
+   Outer Interactive Card Wrapper Layout
+   ========================================================================== */
+.cardWrapper {
+  position: relative; /* Crucial anchor boundary node enabling absolute status overlay badge stacking controls */
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  transition: transform 0.2s ease; /* Supports physics animations response transitions speeds */
+}
+
+/* Hover elevator liftoff animation responses triggers */
+.cardWrapper:hover {
+  transform: translateY(-4px);
+}
+
+/* ==========================================================================
+   Historical 'Former' Status Visual Overrides 
+   (SECURE LOCK: Left fully structurally intact as requested)
+   ========================================================================== */
+.isFormer {
+  filter: grayscale(100%); /* Drains card structural saturation levels completely out into clean black and white lines */
+  opacity: 0.8; /* Dims brightness to indicate past status records profiles */
+}
+
+/* Restores layout color hints slightly upon hover actions */
+.isFormer:hover {
+  filter: grayscale(50%); 
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Floating Badge Overlays Layer Stack Controls
+   ========================================================================== */
+.badgeOverlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10; /* Ensures critical status alerts float clean and safe above child interior profile card canvas boundaries */
+  display: flex;
+  flex-direction: column; /* Vertically stacks warnings if multiple alerts apply simultaneously */
+  gap: 5px;
+  pointer-events: none; /* Allows mouse clicks to pierce directly through text areas to fire card actions unhindered */
+}
+
+/* Core shared typesetting design blueprints applied to all status pills tokens */
+.statusBadge, .alertBadge, .warningBadge, .infoBadge {
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff; /* Uniform clean high contrast white typography */
+}
+
+/* ==========================================================================
+   Status Tokens Color Buckets Preset Collections
+   ========================================================================== */
+
+/* BUCKET 1: Neutral / Past Status / Inactive Dark-Grey Accent Styles */
+.statusBadge {
+  background-color: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* BUCKET 2: High Alert / Danger / Crimson Red Accent Blocks */
+.alertBadge {
+  background-color: #e74c3c; 
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* BUCKET 3: Warning / Caution / Soft Amber Orange Attention Shades */
+.warningBadge {
+  background-color: #e67e22;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* BUCKET 4: Info / Active Success / Vibrant Emerald Green Highlights */
+.infoBadge {
+  background-color: #2ecc71;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
