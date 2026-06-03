@@ -48,8 +48,8 @@ export interface BaseEntity {
  * Extended entity interface including hydrated relational graph data from Prisma.
  */
 export interface HydratedEntity extends BaseEntity {
-  connections?: HydratedEntityConnection[];       // Outgoing connections (e.g., Idol -> Group)
-  targetConnections?: HydratedEntityConnection[]; // Incoming connections (e.g., Group -> Idols)
+  connections?: HydratedEntityConnection[];       // Outgoing connections (e.g., Driver -> Team)
+  targetConnections?: HydratedEntityConnection[]; // Incoming connections (e.g., Team -> Drivers)
 }
 
 /**

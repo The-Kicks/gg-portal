@@ -302,7 +302,7 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                         .replace(/[^a-z0-9-]/g, '');
                                     setEditingTheme({ ...editingTheme, id: sanitizedValue });
                                 }}
-                                placeholder="e.g., kpop-gg"
+                                placeholder="e.g., WEC-gg"
                                 style={{ width: '100%', padding: '10px', background: '#2d2d2d', border: '1px solid #555', color: '#fff', borderRadius: '4px' }}
                                 required
                             />
