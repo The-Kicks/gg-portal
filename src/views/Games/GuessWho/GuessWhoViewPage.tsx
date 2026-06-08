@@ -9,9 +9,9 @@ export interface GuessRow {
         org: 'correct' | 'incorrect';
         nationality: 'correct' | 'partial' | 'incorrect';
         role: 'correct' | 'partial' | 'incorrect';
-        debut: 'correct' | 'incorrect' | 'higher' | 'lower'; 
-        age: 'correct' | 'incorrect' | 'higher' | 'lower'; 
-        height: 'correct' | 'incorrect' | 'higher' | 'lower'; 
+        debut: 'correct' | 'incorrect' | 'higher' | 'lower';
+        age: 'correct' | 'incorrect' | 'higher' | 'lower';
+        height: 'correct' | 'incorrect' | 'higher' | 'lower';
     };
     arrows: {
         debut: string;
@@ -42,48 +42,48 @@ const parseMetaArray = (value: unknown): string[] => {
 };
 
 const evaluateArrayMatch = (guessArr: string[], secretArr: string[]): 'correct' | 'partial' | 'incorrect' => {
-  if (guessArr.length === 0 || secretArr.length === 0) return 'correct';
-  
-  const hasMatch = guessArr.some(item => secretArr.includes(item));
-  const isExact = secretArr.length === guessArr.length && secretArr.every(item => guessArr.includes(item));
-  
-  if (isExact) return 'correct';
-  if (hasMatch) return 'partial';
-  return 'incorrect';
+    if (guessArr.length === 0 || secretArr.length === 0) return 'correct';
+
+    const hasMatch = guessArr.some(item => secretArr.includes(item));
+    const isExact = secretArr.length === guessArr.length && secretArr.every(item => guessArr.includes(item));
+
+    if (isExact) return 'correct';
+    if (hasMatch) return 'partial';
+    return 'incorrect';
 };
 
 const evaluateRoleMatch = (guessRole: unknown, secretRole: unknown): 'correct' | 'partial' | 'incorrect' => {
-  const gStr = String(guessRole || '').toLowerCase().trim();
-  const sStr = String(secretRole || '').toLowerCase().trim();
+    const gStr = String(guessRole || '').toLowerCase().trim();
+    const sStr = String(secretRole || '').toLowerCase().trim();
 
-  if (!gStr || !sStr) return 'correct';
-  if (gStr === sStr) return 'correct';
-  
-  const segments = gStr.split('/');
-  const hasPartial = segments.some(seg => seg.trim() && sStr.includes(seg.trim()));
-  return hasPartial ? 'partial' : 'incorrect';
+    if (!gStr || !sStr) return 'correct';
+    if (gStr === sStr) return 'correct';
+
+    const segments = gStr.split('/');
+    const hasPartial = segments.some(seg => seg.trim() && sStr.includes(seg.trim()));
+    return hasPartial ? 'partial' : 'incorrect';
 };
 
 const evaluateNumericMetric = (guessNum: number, secretNum: number, invertLogic = false) => {
-  if (!guessNum || !secretNum) {
-    return { check: 'correct' as const, arrow: '' };
-  }
-  if (guessNum === secretNum) {
-    return { check: 'correct' as const, arrow: '' };
-  }
-  
-  const isLessThanSecret = guessNum < secretNum;
-  if (isLessThanSecret) {
-    return {
-      check: (invertLogic ? 'lower' : 'higher') as 'higher' | 'lower',
-      arrow: '⬆️'
-    };
-  } else {
-    return {
-      check: (invertLogic ? 'higher' : 'lower') as 'higher' | 'lower',
-      arrow: '⬇️'
-    };
-  }
+    if (!guessNum || !secretNum) {
+        return { check: 'correct' as const, arrow: '' };
+    }
+    if (guessNum === secretNum) {
+        return { check: 'correct' as const, arrow: '' };
+    }
+
+    const isLessThanSecret = guessNum < secretNum;
+    if (isLessThanSecret) {
+        return {
+            check: (invertLogic ? 'lower' : 'higher') as 'higher' | 'lower',
+            arrow: '⬆️'
+        };
+    } else {
+        return {
+            check: (invertLogic ? 'higher' : 'lower') as 'higher' | 'lower',
+            arrow: '⬇️'
+        };
+    }
 };
 
 // ============================================================================
@@ -135,13 +135,28 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
         return connection?.sourceEntity?.name || '';
     }, [theme.orgLayer]);
 
-    const getAgeFromDateString = useCallback((dateStr: unknown): number => {
-        if (typeof dateStr !== 'string') return 0;
-        const parts = dateStr.split('-');
-        if (parts.length !== 3) return 0;
-        const birthYear = parseInt(parts[2], 10);
+    const getAgeFromDateString = useCallback((birthDateStr?: unknown, passingDateStr?: unknown): number => {
+        if (typeof birthDateStr !== 'string') return 0;
+
+        const birthParts = birthDateStr.split('-');
+        if (birthParts.length !== 3) return 0;
+
+        const birthYear = parseInt(birthParts[2], 10);
         if (isNaN(birthYear)) return 0;
-        return new Date().getFullYear() - birthYear;
+
+        // Bepaal de 'einddatum': gebruik passingDate indien aanwezig, anders nu
+        let endYear = new Date().getFullYear();
+        if (typeof passingDateStr === 'string') {
+            const passingParts = passingDateStr.split('-');
+            if (passingParts.length === 3) {
+                const parsedPassingYear = parseInt(passingParts[2], 10);
+                if (!isNaN(parsedPassingYear)) {
+                    endYear = parsedPassingYear;
+                }
+            }
+        }
+
+        return endYear - birthYear;
     }, []);
 
     const filteredDropdownOptions = useMemo<HydratedEntity[]>(() => {
@@ -172,7 +187,10 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
         const roleStatus = evaluateRoleMatch(gMeta.Role, sMeta.Role);
 
         const debutMetric = evaluateNumericMetric(Number(gMeta.DebutYear || 0), Number(sMeta.DebutYear || 0));
-        const ageMetric = evaluateNumericMetric(getAgeFromDateString(gMeta.Birthday), getAgeFromDateString(sMeta.Birthday));
+        const ageMetric = evaluateNumericMetric(
+            getAgeFromDateString(gMeta.Birthday, gMeta.PassingDate),
+            getAgeFromDateString(sMeta.Birthday, sMeta.PassingDate)
+        );
         const heightMetric = evaluateNumericMetric(Number(gMeta.Height || 0), Number(sMeta.Height || 0), true);
 
         const newRow: GuessRow = {

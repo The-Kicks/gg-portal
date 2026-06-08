@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Theme } from '../../types';
+import styles from './AdminGlobal.module.css'; // Importeer de centrale css module
 
 interface Props { 
   theme: Theme | undefined | null; 
@@ -9,7 +10,6 @@ interface Props {
 const LAYER_ORDER: Record<string, number> = { l1: 1, l2: 2, l3: 3, l4: 4 };
 type ThemeEntity = NonNullable<Theme['entities']>[number];
 
-// Flexibele interface voor de connecties, mochten de data-types variëren
 interface ExpectedConnection {
   id?: string;
   entityId?: string;
@@ -30,15 +30,9 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const [filterType, setFilterType] = useState<string>('all');
 
-  /**
-   * Krachtige relational lookup helper.
-   * Traverseert de entiteiten-lijst om de hiërarchische parent te achterhalen,
-   * ongeacht of de connectie is opgeslagen via ID's of geneste objecten.
-   */
   const resolveParentAssignment = (entity: ThemeEntity, allEntities: ThemeEntity[]): string => {
     const currentLayer = entity.type.toLowerCase();
     
-    // Root level (L1) heeft per definitie geen parent framework boven zich
     if (currentLayer === 'l1') return '-';
 
     const extendedEntity = entity as ThemeEntity & { 
@@ -46,7 +40,6 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
       targetConnections?: ExpectedConnection[]; 
     };
     
-    // Combineer alle mogelijke connectie-arrays voor maximale tolerantie
     const allConnections = [
       ...(extendedEntity.connections || []),
       ...(extendedEntity.targetConnections || [])
@@ -54,7 +47,6 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
     if (allConnections.length === 0) return '-';
 
-    // Bepaal de hiërarchische zoekvolgorde op basis van nabijheid
     let targetLayers: string[] = [];
     if (currentLayer === 'l4') targetLayers = ['l3', 'l2', 'l1'];
     if (currentLayer === 'l3') targetLayers = ['l2', 'l1'];
@@ -62,11 +54,9 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
     for (const targetLayer of targetLayers) {
       for (const conn of allConnections) {
-        // 1. Check op directe geneste objecten
         if (conn.sourceEntity?.type.toLowerCase() === targetLayer) return conn.sourceEntity.name;
         if (conn.targetEntity?.type.toLowerCase() === targetLayer) return conn.targetEntity.name;
 
-        // 2. Check op ID-gebaseerde connecties (meest waarschijnlijk bij lege resultaten)
         const possibleIds = [conn.entityId, conn.sourceEntityId, conn.targetEntityId, conn.id].filter(Boolean);
         
         for (const id of possibleIds) {
@@ -120,75 +110,62 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
   if (!theme) {
     return (
-      <div style={{ padding: '40px', background: '#121212', color: '#fff', minHeight: '100vh' }}>
-        <h1>Admin Workspace</h1>
+      <div className={styles.container}>
+        <h1 className={styles.title}>Admin Workspace</h1>
         <p>Resolving cloud database configurations for {themeName}...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '40px', background: '#121212', color: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+    <div className={styles.container}>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ margin: 0 }}>{theme.title} - Admin Dashboard</h1>
+      <div className={styles.header}>
+        <h1 className={styles.title}>{theme.title} - Admin Dashboard</h1>
         
-        <div style={{ display: 'flex', gap: '15px' }}>
+        <div className={styles.buttonGroup}>
           <button
             onClick={() => navigate(`/${themeName}/admin/theme`)}
-            style={{
-              padding: '12px 24px', background: '#2d2d2d', color: '#deff9a',
-              border: '1px solid #deff9a', borderRadius: '6px', fontWeight: 'bold',
-              cursor: 'pointer', fontSize: '15px'
-            }}
+            className={`${styles.btn} ${styles.btnOutline}`}
           >
             Theme & Layers Configuration
           </button>
 
           <button
             onClick={() => navigate(`/${themeName}/admin/create`)}
-            style={{
-              padding: '12px 24px', background: '#deff9a', color: '#000',
-              border: 'none', borderRadius: '6px', fontWeight: 'bold',
-              cursor: 'pointer', fontSize: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.2)'
-            }}
+            className={`${styles.btn} ${styles.btnPrimary}`}
           >
             Add New Entity
           </button>
         </div>
       </div>
       
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+      <div className={styles.filterGroup}>
         {['all', 'l1', 'l2', 'l3', 'l4'].map(type => (
           <button 
             key={type} 
             onClick={() => setFilterType(type)}
-            style={{ 
-              padding: '8px 16px', 
-              background: filterType === type ? '#deff9a' : '#2d2d2d', 
-              color: filterType === type ? '#000' : '#fff', 
-              border: 'none', cursor: 'pointer', fontWeight: 'bold', borderRadius: '4px'
-            }}
+            className={filterType === type ? styles.filterBtnActive : styles.filterBtn}
           >
             {type.toUpperCase()}
           </button>
         ))}
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', background: '#1e1e1e' }}>
+      <table className={styles.table}>
         <thead>
-          <tr style={{ borderBottom: '2px solid #333', textAlign: 'left' }}>
-            <th style={{ padding: '12px' }}>Name</th>
-            <th style={{ padding: '12px' }}>Tier Type</th>
-            <th style={{ padding: '12px' }}>Parent Context Assignment</th>
-            <th style={{ padding: '12px' }}>Status</th>
-            <th style={{ padding: '12px' }}>Actions</th>
+          <tr className={styles.tableHeaderRow}>
+            <th className={styles.th}>Name</th>
+            <th className={styles.th}>Tier Type</th>
+            <th className={styles.th}>Parent Context Assignment</th>
+            <th className={styles.th}>Status</th>
+            <th className={styles.th}>Actions</th>
           </tr>
         </thead>
         <tbody>
           {sortedAndFilteredRows.length === 0 ? (
             <tr>
-              <td colSpan={5} style={{ padding: '12px', textAlign: 'center', color: '#aaa' }}>
+              <td colSpan={5} className={`${styles.td} styles.textCenter ${styles.textMuted}`}>
                 No entities found matching the selected tier filter.
               </td>
             </tr>
@@ -208,27 +185,20 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
               return (
                 <tr 
                   key={rowId} 
-                  style={{ 
-                    borderBottom: isLastOfSection 
-                      ? '3px solid #deff9a' 
-                      : '1px solid #333' 
-                  }}
+                  className={isLastOfSection ? styles.rowSectionEnd : styles.rowNormal}
                 >
-                  <td style={{ padding: '12px', fontWeight: 'bold' }}>{entity.name}</td>
-                  <td style={{ padding: '12px' }}>
-                    <span style={{ color: '#aaa' }}>{entity.type.toUpperCase()}</span>
+                  <td className={`${styles.td} ${styles.textBold}`}>{entity.name}</td>
+                  <td className={styles.td}>
+                    <span className={styles.textMuted}>{entity.type.toUpperCase()}</span>
                   </td>
-                  <td style={{ padding: '12px', color: displayParent !== '-' ? '#deff9a' : '#666' }}>
+                  <td className={`${styles.td} ${displayParent !== '-' ? styles.textPrimary : styles.textDimmed}`}>
                     {displayParent}
                   </td>
-                  <td style={{ padding: '12px' }}>{entity.status || 'active'}</td>
-                  <td style={{ padding: '12px' }}>
+                  <td className={styles.td}>{entity.status || 'active'}</td>
+                  <td className={styles.td}>
                     <button 
                       onClick={() => navigate(`/${themeName}/admin/edit/${entity.id}`)}
-                      style={{ 
-                        background: '#2d2d2d', color: '#deff9a', border: '1px solid #deff9a', 
-                        padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' 
-                      }}
+                      className={styles.btnEdit}
                     >
                       Edit
                     </button>

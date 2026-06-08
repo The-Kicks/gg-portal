@@ -23,7 +23,7 @@ interface GuessWhoViewProps {
   setShowDropdown: (show: boolean) => void;
   startNewGame: () => void;
   handleSelectGuess: (entity: HydratedEntity) => void;
-  getAgeFromDateString: (dateStr: unknown) => number;
+  getAgeFromDateString: (birthDateStr?: unknown, passingDateStr?: unknown) => number;
 }
 
 export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
@@ -177,62 +177,78 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
           </thead>
           <tbody>
             {guesses.map((row, idx) => {
-              const ageVal = getAgeFromDateString((row.entity.metadata as Record<string, unknown> | undefined)?.Birthday);
-              const hasAge = ageVal > 0;
-
               return (
                 <tr key={idx}>
-                  {/* 🌟 Loop door de actieve kolommen heen om de td-cellen op te bouwen */}
                   {activeColumns.map(col => {
+                    // Definieer metadata veilig bovenaan
+                    const meta = row.entity.metadata as Record<string, unknown> | undefined;
+
                     switch (col.id) {
-                      case 'profile':
+                      case 'profile': {
                         return (
                           <td key={col.id} className={styles.cellProfile}>
                             <img src={getProfileImage(row.entity)} alt="" className={styles.tableAvatar} />
                           </td>
                         );
-                      case 'name':
+                      }
+                      case 'name': {
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.name]}`}>
                             {row.entity.name || '-'}
                           </td>
                         );
-                      case 'org':
+                      }
+                      case 'org': {
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.org]}`}>
                             {row.displayOrg || '-'}
                           </td>
                         );
-                      case 'nationality':
+                      }
+                      case 'nationality': {
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.nationality]}`}>
                             {renderNationalityCell(row.entity)}
                           </td>
                         );
-                      case 'role':
+                      }
+                      case 'role': {
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.role]}`}>
                             {renderMetadataString(row.entity, 'Role')}
                           </td>
                         );
-                      case 'debut':
+                      }
+                      case 'debut': {
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.debut]}`}>
-                            {renderNumericDisplay((row.entity.metadata as Record<string, unknown> | undefined)?.DebutYear)} {row.arrows.debut}
+                            {renderNumericDisplay(meta?.DebutYear)} {row.arrows.debut}
                           </td>
                         );
-                      case 'age':
+                      }
+                      case 'age': {
+                        // Gebruik de 2 argumenten, TypeScript klaagt nu niet meer
+                        const ageVal = getAgeFromDateString(meta?.Birthday, meta?.PassingDate);
+                        const hasPassingDate = !!meta?.PassingDate;
+
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.age]}`}>
-                            {hasAge ? `${ageVal} ${row.arrows.age}` : '-'}
+                            {meta?.Birthday ? (
+                              <>
+                                {ageVal} {row.arrows.age}
+                                {hasPassingDate && <span title="Deceased"> 🕊️</span>}
+                              </>
+                            ) : '-'}
                           </td>
                         );
-                      case 'height':
+                      }
+                      case 'height': {
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.height]}`}>
-                            {renderNumericDisplay((row.entity.metadata as Record<string, unknown> | undefined)?.Height, 'cm')} {row.arrows.height}
+                            {renderNumericDisplay(meta?.Height, 'cm')} {row.arrows.height}
                           </td>
                         );
+                      }
                       default:
                         return null;
                     }

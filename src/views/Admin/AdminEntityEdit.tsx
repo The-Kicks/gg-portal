@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Theme, HydratedEntity, HydratedEntityConnection, BaseEntity } from '../../types';
 import { entityService } from './EntityService';
+import styles from './AdminGlobal.module.css';
 
 interface Props {
   theme: Theme;
@@ -57,7 +58,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
   // --- Fast-track Provisioning Pool ---
   const [quickCreatedEntities, setQuickCreatedEntities] = useState<HydratedEntity[]>([]);
-  
+
   // Gecombineerde pool via Derived State
   const entitiesPool = useMemo(() => {
     return [...(theme.entities || []), ...quickCreatedEntities];
@@ -247,7 +248,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   const handleAddMetadataField = () => {
     const cleanKey = newMetadataKey.trim();
     if (!cleanKey || metadataInputs[cleanKey] !== undefined) return;
-    
+
     if (originalEntity.type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase())) {
       alert(`Field "${cleanKey}" is already configured inside the required system attributes.`);
       return;
@@ -470,18 +471,30 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   };
 
   return (
-    <div style={{ padding: '20px', background: '#1e1e1e', color: '#fff', borderRadius: '8px', marginBottom: '20px', border: '2px solid #deff9a' }}>
-      <h2>Modify {originalEntity.type.toUpperCase()}: <span style={{ color: '#deff9a' }}>{name}</span></h2>
+    <div className={styles.formCard}>
+      <h2 className={styles.formCardTitle}>
+        Modify {originalEntity.type.toUpperCase()}: <span className={styles.textPrimary}>{name}</span>
+      </h2>
 
       {/* Core Base Info Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '15px', marginBottom: '25px' }}>
+      <div className={styles.editInfoGrid}>
         <div>
-          <div style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#aaa' }}>Name</div>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} />
+          <div className={styles.fieldLabel}>Name</div>
+          <input 
+            type="text" 
+            value={name} 
+            onChange={e => setName(e.target.value)} 
+            className={styles.inputField} 
+          />
         </div>
+
         <div>
-          <div style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#aaa' }}>Status</div>
-          <select value={status} onChange={e => setStatus(e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}>
+          <div className={styles.fieldLabel}>Status</div>
+          <select 
+            value={status} 
+            onChange={e => setStatus(e.target.value)} 
+            className={styles.inputField}
+          >
             <option value="active">Active</option>
             <option value="disbanded">Disbanded</option>
             <option value="inactive">Inactive</option>
@@ -493,29 +506,46 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
             ))}
           </select>
         </div>
+
         <div>
-          <div style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#aaa' }}>Standalone Node</div>
-          <input type="checkbox" checked={isStandalone} onChange={e => setIsStandalone(e.target.checked)} style={{ marginTop: '14px', transform: 'scale(1.4)' }} />
+          <div className={styles.fieldLabel}>Passing Date</div>
+          <input
+            type="text"
+            placeholder="DD-MM-YYYY"
+            value={metadataInputs['PassingDate'] || ''}
+            onChange={e => handleMetadataInputChange('PassingDate', e.target.value)}
+            className={styles.inputField}
+          />
+        </div>
+
+        <div>
+          <div className={styles.fieldLabel}>Standalone Node</div>
+          <input 
+            type="checkbox" 
+            checked={isStandalone} 
+            onChange={e => setIsStandalone(e.target.checked)} 
+            className={styles.checkbox} 
+          />
         </div>
       </div>
 
       {/* SECTIE A: CORE REQUIRED GAME FIELDS (Zichtbaar bij Layer 4) */}
       {originalEntity.type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
-        <div style={{ border: '2px dashed #ffb300', padding: '15px', borderRadius: '6px', marginBottom: '25px', background: '#2e2516' }}>
-          <h3 style={{ margin: '0 0 5px 0', color: '#ffb300' }}>🔒 Required Game Metrics (Layer 4 Core)</h3>
-          <p style={{ fontSize: '12px', color: '#ccc', margin: '0 0 15px 0' }}>These attributes are strictly required by the GuessWho game configuration engine.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+        <div className={styles.requiredSection}>
+          <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
+          <p className={`${styles.labelSubText} ${styles.textMuted}`}>These attributes are strictly required by the GuessWho game configuration engine.</p>
+          <div className={styles.twoColumnGrid}>
             {partitionedMetadataKeys.requiredKeys.map(key => (
               <div key={key}>
-                <div style={{ marginBottom: '5px', fontSize: '13px', color: '#ffb300', fontWeight: 'bold' }}>
-                  {key} {key.toLowerCase() === 'nationality' && <small style={{ color: '#aaa' }}>(Comma separated list)</small>}
+                <div className={styles.requiredLabel}>
+                  {key} {key.toLowerCase() === 'nationality' && <small className={styles.textMuted}>(Comma separated list)</small>}
                 </div>
                 <input
                   type="text"
                   placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
                   value={metadataInputs[key] || ''}
                   onChange={e => handleMetadataInputChange(key, e.target.value)}
-                  style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #ffb300', borderRadius: '4px' }}
+                  className={`${styles.inputField} ${styles.requiredInput}`}
                 />
               </div>
             ))}
@@ -524,32 +554,38 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       )}
 
       {/* SECTIE B: DYNAMIC THEME ATTRIBUTES */}
-      <h3>🛠️ Dynamic Attributes (Populated via {originalEntity.type.toUpperCase()} Theme Schema)</h3>
-      <div style={{ background: '#151515', padding: '15px', borderRadius: '6px', marginBottom: '25px' }}>
+      <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Populated via {originalEntity.type.toUpperCase()} Theme Schema)</h3>
+      <div className={styles.innerSection}>
         {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
-          <p style={{ color: '#888', fontSize: '14px', margin: '0' }}>No specific layout metadata schema properties injected for this layer. Append custom fields below:</p>
+          <p className={`${styles.textMuted} ${styles.labelSubText}`}>No specific layout metadata schema properties injected for this layer. Append custom fields below:</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div className={styles.twoColumnGrid}>
             {partitionedMetadataKeys.dynamicKeys.map(key => {
               const triggerValues = triggerFieldsMap[key];
               const isList = key.toLowerCase() === 'nationality' || (metadataInputs[key] && metadataInputs[key].includes(','));
 
               return (
                 <div key={key}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '13px', color: '#deff9a' }}>
+                  <div className={styles.labelActionRow}>
                     <span>
-                      {key} 
-                      {isList && <small style={{ color: '#888' }}> (Array List)</small>}
-                      {triggerValues && <small style={{ color: '#ffb300' }}> (Schema Controlled 🔒)</small>}
+                      {key}
+                      {isList && <small className={styles.textDimmed}> (Array List)</small>}
+                      {triggerValues && <small className={styles.textWarning}> (Schema Controlled 🔒)</small>}
                     </span>
-                    <button type="button" onClick={() => handleRemoveMetadataField(key)} style={{ background: 'transparent', color: '#ff4d4d', border: 'none', cursor: 'pointer', fontSize: '11px', padding: 0 }}>Remove</button>
+                    <button 
+                      type="button" 
+                      onClick={() => handleRemoveMetadataField(key)} 
+                      className={styles.btnRemove}
+                    >
+                      Remove
+                    </button>
                   </div>
 
                   {triggerValues ? (
                     <select
                       value={metadataInputs[key]}
                       onChange={e => handleMetadataInputChange(key, e.target.value)}
-                      style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}
+                      className={styles.inputField}
                     >
                       <option value="">-- Active / Normal --</option>
                       {triggerValues.map(val => (
@@ -559,11 +595,11 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                       ))}
                     </select>
                   ) : (
-                    <input 
-                      type="text" 
-                      value={metadataInputs[key] || ''} 
-                      onChange={e => handleMetadataInputChange(key, e.target.value)} 
-                      style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} 
+                    <input
+                      type="text"
+                      value={metadataInputs[key] || ''}
+                      onChange={e => handleMetadataInputChange(key, e.target.value)}
+                      className={styles.inputField}
                     />
                   )}
                 </div>
@@ -571,81 +607,124 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
             })}
           </div>
         )}
-        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center', background: '#222', padding: '10px', borderRadius: '4px' }}>
-          <input type="text" placeholder="e.g., Twitter, Instagram or SquadNumber" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} style={{ padding: '6px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', flex: 1 }} />
-          <button type="button" onClick={handleAddMetadataField} style={{ background: '#deff9a', color: '#000', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>Add Attribute Property</button>
+        <div className={styles.innerActionRow}>
+          <input 
+            type="text" 
+            placeholder="e.g., Twitter, Instagram or SquadNumber" 
+            value={newMetadataKey} 
+            onChange={e => setNewMetadataKey(e.target.value)} 
+            className={styles.inlineInput} 
+          />
+          <button 
+            type="button" 
+            onClick={handleAddMetadataField} 
+            className={`${styles.btn} ${styles.btnPrimary}`}
+          >
+            Add Attribute Property
+          </button>
         </div>
       </div>
 
       {/* Media Assets */}
-      <h3>Media Assets</h3>
-      <div style={{ background: '#151515', padding: '15px', borderRadius: '6px', marginBottom: '25px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+      <h3 className={styles.sectionTitle}>Media Assets</h3>
+      <div className={styles.innerSection}>
+        <div className={styles.twoColumnGrid}>
           {Object.keys(imageInputs).map(key => (
             <div key={key}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '13px', color: '#b3e5fc' }}>
-                <span>{key} {Array.isArray(originalEntity.image?.[key]) && <small style={{ color: '#888' }}>(Array List)</small>}</span>
-                <button type="button" onClick={() => handleRemoveImageField(key)} style={{ background: 'transparent', color: '#ff4d4d', border: 'none', cursor: 'pointer', fontSize: '11px', padding: 0 }}>Remove</button>
+              <div className={styles.labelActionRow}>
+                <span>
+                  {key} {Array.isArray(originalEntity.image?.[key]) && <small className={styles.textDimmed}>(Array List)</small>}
+                </span>
+                <button 
+                  type="button" 
+                  onClick={() => handleRemoveImageField(key)} 
+                  className={styles.btnRemove}
+                >
+                  Remove
+                </button>
               </div>
-              <input type="text" value={imageInputs[key]} onChange={e => handleImageInputChange(key, e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} />
+              <input 
+                type="text" 
+                value={imageInputs[key]} 
+                onChange={e => handleImageInputChange(key, e.target.value)} 
+                className={styles.inputField} 
+              />
             </div>
           ))}
         </div>
-        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center', background: '#222', padding: '10px', borderRadius: '4px' }}>
-          <input type="text" placeholder="e.g., streamingTeaser or liveries" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} style={{ padding: '6px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', flex: 1 }} />
-          <button type="button" onClick={handleAddImageField} style={{ background: '#b3e5fc', color: '#000', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>Add Asset Field</button>
+        <div className={styles.innerActionRow}>
+          <input 
+            type="text" 
+            placeholder="e.g., streamingTeaser or liveries" 
+            value={newImageKey} 
+            onChange={e => setNewImageKey(e.target.value)} 
+            className={styles.inlineInput} 
+          />
+          <button 
+            type="button" 
+            onClick={handleAddImageField} 
+            className={`${styles.btn} ${styles.btnOutline}`}
+          >
+            Add Asset Field
+          </button>
         </div>
       </div>
 
       {/* Mapped Registry Entity Connections */}
-      <h3>Mapped Registry Entity Connections (Direction Agnostic)</h3>
-      <div style={{ background: '#2d2d2d', padding: '15px', borderRadius: '6px', marginBottom: '25px' }}>
+      <h3 className={styles.sectionTitle}>Mapped Registry Entity Connections (Direction Agnostic)</h3>
+      <div className={styles.innerSection}>
         {unifiedConnections.map(conn => {
           const isL4ToL4 = originalEntity.type.toLowerCase() === 'l4' && conn.relatedEntity?.type?.toLowerCase() === 'l4';
           const isExpanded = expandedChildId === conn.relatedEntityId;
 
           return (
-            <div key={conn.id} style={{ borderBottom: '1px solid #444', padding: '12px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div key={conn.id} className={styles.connectionRow}>
+              <div className={styles.connectionHeader}>
+                <span className={styles.connectionRowLeft}>
                   <button
                     type="button"
                     onClick={() => setExpandedChildId(isExpanded ? null : conn.relatedEntityId)}
-                    style={{ background: isExpanded ? '#555' : '#444', color: '#deff9a', border: 'none', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    className={styles.filterBtn}
+                    style={{ padding: '2px 8px', fontSize: '13px' }}
                   >
                     {isExpanded ? 'Collapse' : 'Expand'}
                   </button>
-                  <span style={{ background: conn.direction === 'incoming' ? '#2e4053' : '#1e3f20', color: '#fff', padding: '2px 5px', borderRadius: '3px', fontSize: '10px', fontWeight: 'bold' }}>
+                  <span className={conn.direction === 'incoming' ? styles.badgeInbound : styles.badgeOutbound}>
                     {conn.direction === 'incoming' ? 'INBOUND' : 'OUTBOUND'}
                   </span>
-                  <span style={{ background: '#151515', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', color: '#aaa' }}>
+                  <span className={styles.layerBadge}>
                     {conn.relatedEntity?.type?.toUpperCase() || 'L4'}
                   </span>
-                  <strong style={{ color: '#deff9a' }}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
+                  <strong className={styles.textPrimary}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
                   {isL4ToL4 && (
-                    <span style={{ color: '#ffb300', fontSize: '12px', marginLeft: '5px' }}>Cross-individual connection (L4 to L4 Peer)</span>
+                    <span className={styles.textWarning}>Cross-individual connection (L4 to L4 Peer)</span>
                   )}
                 </span>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div className={styles.buttonGroup} style={{ gap: '10px' }}>
                   <select
                     value={conn.status}
                     onChange={e => handleConnectionStatusChange(conn.id, e.target.value)}
-                    style={{ padding: '6px 10px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}
+                    className={styles.inputField}
+                    style={{ padding: '6px 10px', width: 'auto' }}
                   >
                     <option value="active">Active</option>
                     <option value="former">Former</option>
                     <option value="inactive">Inactive</option>
                     <option value="retired">Retired</option>
                   </select>
-                  <button type="button" onClick={() => handleRemoveConnection(conn.id)} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', borderRadius: '4px', fontWeight: 'bold' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => handleRemoveConnection(conn.id)} 
+                    className={styles.btnUnlink}
+                  >
                     Unlink
                   </button>
                 </div>
               </div>
 
               {isExpanded && conn.relatedEntity && (
-                <div style={{ marginTop: '15px', padding: '15px', background: '#151515', borderRadius: '6px', borderLeft: '4px solid #deff9a' }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#b3e5fc' }}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
+                <div className={styles.portalSection}>
+                  <h4 className={styles.portalTitle}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
                   <AdminEntityEdit
                     theme={theme}
                     entityId={conn.relatedEntityId}
@@ -670,8 +749,9 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
           );
         })}
 
-        <div ref={dropdownRef} style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #555', position: 'relative' }}>
-          <div style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#aaa' }}>
+        {/* Search & Selection Dropdown */}
+        <div ref={dropdownRef} className={styles.dropdownWrapper}>
+          <div className={`${styles.fieldLabel} ${styles.labelSubText}`}>
             Link Existing Component Entity Record (Search by Name, Layer or ID)
           </div>
           <input
@@ -683,11 +763,11 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
               setConnectionSearchTerm(e.target.value);
               setIsConnectionDropdownOpen(true);
             }}
-            style={{ width: '100%', padding: '10px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px', boxSizing: 'border-box' }}
+            className={styles.inputField}
           />
 
           {isConnectionDropdownOpen && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: '250px', overflowY: 'auto', background: '#1e1e1e', border: '1px solid #444', borderRadius: '4px', marginTop: '5px', zIndex: 999, boxShadow: '0px 4px 12px rgba(0,0,0,0.5)' }}>
+            <div className={styles.dropdownMenu}>
               {filteredAvailableTargets.length > 0 ? (
                 filteredAvailableTargets.map(t => (
                   <div
@@ -697,39 +777,72 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                       setConnectionSearchTerm('');
                       setIsConnectionDropdownOpen(false);
                     }}
-                    style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #2d2d2d', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#252525' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#2d2d2d')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = '#252525')}
+                    className={styles.dropdownItem}
                   >
-                    <span style={{ color: '#fff', fontWeight: '500' }}>{t.name}</span>
-                    <span style={{ background: '#151515', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', color: '#aaa' }}>{t.type.toUpperCase()}</span>
+                    <span className={styles.textBold}>{t.name}</span>
+                    <span className={styles.layerBadge}>{t.type.toUpperCase()}</span>
                   </div>
                 ))
               ) : (
-                <div style={{ padding: '12px 15px', color: '#888', fontStyle: 'italic', background: '#252525' }}>No matching entities found in workspace...</div>
+                <div className={styles.dropdownNoResults}>
+                  No matching entities found in workspace...
+                </div>
               )}
             </div>
           )}
         </div>
 
-        <div style={{ marginTop: '20px', padding: '15px', background: '#222', borderRadius: '6px', border: '1px dashed #444' }}>
-          <div style={{ display: 'block', fontSize: '13px', marginBottom: '8px', color: '#b3e5fc', fontWeight: 'bold' }}>Fast-track Provisioning: Create New Entity & Link Instantly</div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input type="text" placeholder="Entry Name" value={quickCreateName} onChange={e => setQuickCreateName(e.target.value)} style={{ flex: 2, padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} />
-            <select value={quickCreateLayer} onChange={e => setQuickCreateLayer(e.target.value)} style={{ flex: 1, padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}>
+        {/* Fast-track Provisioning Section */}
+        <div className={styles.provisionBox}>
+          <div className={styles.provisionTitle}>Fast-track Provisioning: Create New Entity & Link Instantly</div>
+          <div className={styles.buttonGroup} style={{ gap: '10px' }}>
+            <input 
+              type="text" 
+              placeholder="Entry Name" 
+              value={quickCreateName} 
+              onChange={e => setQuickCreateName(e.target.value)} 
+              className={styles.inputField}
+              style={{ flex: 2 }} 
+            />
+            <select 
+              value={quickCreateLayer} 
+              onChange={e => setQuickCreateLayer(e.target.value)} 
+              className={styles.inputField}
+              style={{ flex: 1 }}
+            >
               <option value="l2">Layer 2 (Governing Body / Association)</option>
               <option value="l3">Layer 3 (Team / Club / Constructor)</option>
               <option value="l4">Layer 4 (Driver / Player / Individual)</option>
             </select>
-            <button type="button" onClick={() => { void handleInlineQuickCreate(); }} style={{ background: '#b3e5fc', color: '#000', border: 'none', padding: '8px 16px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '4px' }}>Provision Record</button>
+            <button 
+              type="button" 
+              onClick={() => { void handleInlineQuickCreate(); }} 
+              className={`${styles.btn} ${styles.btnOutline}`}
+              style={{ background: '#b3e5fc', color: '#000', border: 'none' }}
+            >
+              Provision Record
+            </button>
           </div>
         </div>
       </div>
 
       {/* Action Footers */}
-      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} style={{ padding: '10px 20px', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-        <button type="button" onClick={(e) => { void handleSubmit(e); }} style={{ padding: '10px 20px', background: '#deff9a', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Save Commit Changes</button>
+      <div className={styles.footerActions}>
+        <button 
+          type="button" 
+          onClick={onCancel} 
+          className={`${styles.btn} ${styles.btnBack}`}
+          style={{ marginBottom: 0 }}
+        >
+          Cancel
+        </button>
+        <button 
+          type="button" 
+          onClick={(e) => { void handleSubmit(e); }} 
+          className={`${styles.btn} ${styles.btnPrimary}`}
+        >
+          Save Commit Changes
+        </button>
       </div>
     </div>
   );
