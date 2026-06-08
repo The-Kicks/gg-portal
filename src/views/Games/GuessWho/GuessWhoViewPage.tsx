@@ -1,0 +1,226 @@
+import React, { useState, useMemo, useCallback } from 'react';
+import type { Theme, HydratedEntity } from '../../../types';
+import { GuessWhoView } from './GuessWhoView';
+
+export interface GuessRow {
+    entity: HydratedEntity;
+    checks: {
+        name: 'correct' | 'incorrect';
+        org: 'correct' | 'incorrect';
+        nationality: 'correct' | 'partial' | 'incorrect';
+        role: 'correct' | 'partial' | 'incorrect';
+        debut: 'correct' | 'incorrect' | 'higher' | 'lower'; 
+        age: 'correct' | 'incorrect' | 'higher' | 'lower'; 
+        height: 'correct' | 'incorrect' | 'higher' | 'lower'; 
+    };
+    arrows: {
+        debut: string;
+        age: string;
+        height: string;
+    };
+    displayOrg: string;
+}
+
+interface Props {
+    theme: Theme; // 🌟 Teruggezet naar het originele, pure Theme type
+}
+
+// ============================================================================
+// STANDALONE PURE UTILITY FUNCTIONS 
+// ============================================================================
+
+const parseMetaArray = (value: unknown): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+        return value.map(v => String(v).trim().toLowerCase()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+        return value.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+    }
+    const serialized = String(value).trim().toLowerCase();
+    return serialized ? [serialized] : [];
+};
+
+const evaluateArrayMatch = (guessArr: string[], secretArr: string[]): 'correct' | 'partial' | 'incorrect' => {
+  if (guessArr.length === 0 || secretArr.length === 0) return 'correct';
+  
+  const hasMatch = guessArr.some(item => secretArr.includes(item));
+  const isExact = secretArr.length === guessArr.length && secretArr.every(item => guessArr.includes(item));
+  
+  if (isExact) return 'correct';
+  if (hasMatch) return 'partial';
+  return 'incorrect';
+};
+
+const evaluateRoleMatch = (guessRole: unknown, secretRole: unknown): 'correct' | 'partial' | 'incorrect' => {
+  const gStr = String(guessRole || '').toLowerCase().trim();
+  const sStr = String(secretRole || '').toLowerCase().trim();
+
+  if (!gStr || !sStr) return 'correct';
+  if (gStr === sStr) return 'correct';
+  
+  const segments = gStr.split('/');
+  const hasPartial = segments.some(seg => seg.trim() && sStr.includes(seg.trim()));
+  return hasPartial ? 'partial' : 'incorrect';
+};
+
+const evaluateNumericMetric = (guessNum: number, secretNum: number, invertLogic = false) => {
+  if (!guessNum || !secretNum) {
+    return { check: 'correct' as const, arrow: '' };
+  }
+  if (guessNum === secretNum) {
+    return { check: 'correct' as const, arrow: '' };
+  }
+  
+  const isLessThanSecret = guessNum < secretNum;
+  if (isLessThanSecret) {
+    return {
+      check: (invertLogic ? 'lower' : 'higher') as 'higher' | 'lower',
+      arrow: '⬆️'
+    };
+  } else {
+    return {
+      check: (invertLogic ? 'higher' : 'lower') as 'higher' | 'lower',
+      arrow: '⬇️'
+    };
+  }
+};
+
+// ============================================================================
+// REACT COMPONENTS
+// ============================================================================
+
+export const GuessWhoViewPage: React.FC<Props> = ({ theme }) => {
+    const playableEntities = useMemo<HydratedEntity[]>(() => {
+        if (!theme.entities) return [];
+        return theme.entities.filter(e => e.type.toLowerCase() === 'l4');
+    }, [theme.entities]);
+
+    return <GuessWhoGameEngine key={theme.id} theme={theme} availableEntities={playableEntities} />;
+};
+
+interface EngineProps {
+    theme: Theme; // 🌟 Teruggezet naar het originele Theme type
+    availableEntities: HydratedEntity[];
+}
+
+const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities }) => {
+    const [secretEntity, setSecretEntity] = useState<HydratedEntity | null>(() => {
+        if (availableEntities.length === 0) return null;
+        return availableEntities[Math.floor(Math.random() * availableEntities.length)];
+    });
+
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [guesses, setGuesses] = useState<GuessRow[]>([]);
+    const [gameOver, setGameOver] = useState<boolean>(false);
+    const [showDropdown, setShowDropdown] = useState<boolean>(false);
+
+    const startNewGame = useCallback<() => void>(() => {
+        if (availableEntities.length === 0) {
+            setSecretEntity(null);
+            return;
+        }
+        const randomIdx = Math.floor(Math.random() * availableEntities.length);
+        setSecretEntity(availableEntities[randomIdx]);
+        setGuesses([]);
+        setGameOver(false);
+        setSearchQuery('');
+    }, [availableEntities]);
+
+    const getOrganizationName = useCallback((entity: HydratedEntity): string => {
+        const orgLayerKey = theme.orgLayer || 'l3';
+        const connection = entity.targetConnections?.find(
+            c => c.sourceEntity?.type.toLowerCase() === orgLayerKey.toLowerCase()
+        );
+        return connection?.sourceEntity?.name || '';
+    }, [theme.orgLayer]);
+
+    const getAgeFromDateString = useCallback((dateStr: unknown): number => {
+        if (typeof dateStr !== 'string') return 0;
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return 0;
+        const birthYear = parseInt(parts[2], 10);
+        if (isNaN(birthYear)) return 0;
+        return new Date().getFullYear() - birthYear;
+    }, []);
+
+    const filteredDropdownOptions = useMemo<HydratedEntity[]>(() => {
+        if (!searchQuery.trim()) return [];
+        const query = searchQuery.toLowerCase();
+
+        const matches: HydratedEntity[] = [];
+        for (const e of availableEntities) {
+            if (matches.length >= 8) break;
+            const isAlreadyGuessed = guesses.some(g => g.entity.id === e.id);
+            if (e.name.toLowerCase().includes(query) && !isAlreadyGuessed) {
+                matches.push(e);
+            }
+        }
+        return matches;
+    }, [searchQuery, availableEntities, guesses]);
+
+    const handleSelectGuess = useCallback((guessedEntity: HydratedEntity): void => {
+        if (!secretEntity || gameOver) return;
+
+        const secretOrg = getOrganizationName(secretEntity);
+        const guessOrg = getOrganizationName(guessedEntity);
+
+        const sMeta = (secretEntity.metadata || {}) as Record<string, unknown>;
+        const gMeta = (guessedEntity.metadata || {}) as Record<string, unknown>;
+
+        const nationalityStatus = evaluateArrayMatch(parseMetaArray(gMeta.Nationality), parseMetaArray(sMeta.Nationality));
+        const roleStatus = evaluateRoleMatch(gMeta.Role, sMeta.Role);
+
+        const debutMetric = evaluateNumericMetric(Number(gMeta.DebutYear || 0), Number(sMeta.DebutYear || 0));
+        const ageMetric = evaluateNumericMetric(getAgeFromDateString(gMeta.Birthday), getAgeFromDateString(sMeta.Birthday));
+        const heightMetric = evaluateNumericMetric(Number(gMeta.Height || 0), Number(sMeta.Height || 0), true);
+
+        const newRow: GuessRow = {
+            entity: guessedEntity,
+            displayOrg: guessOrg || 'Independent',
+            checks: {
+                name: guessedEntity.id === secretEntity.id ? 'correct' : 'incorrect',
+                org: (secretOrg && guessOrg && secretOrg === guessOrg) ? 'correct' : 'incorrect',
+                nationality: nationalityStatus,
+                role: roleStatus,
+                debut: debutMetric.check,
+                age: ageMetric.check,
+                height: heightMetric.check,
+            },
+            arrows: {
+                debut: debutMetric.arrow,
+                age: ageMetric.arrow,
+                height: heightMetric.arrow,
+            }
+        };
+
+        setGuesses(prev => [newRow, ...prev]);
+        setSearchQuery('');
+        setShowDropdown(false);
+
+        if (guessedEntity.id === secretEntity.id) {
+            setGameOver(true);
+        }
+    }, [secretEntity, gameOver, getOrganizationName, getAgeFromDateString]);
+
+    if (!secretEntity) {
+        return <div style={{ color: '#fff', padding: '20px' }}>Loading dynamic records...</div>;
+    }
+
+    return (
+        <GuessWhoView
+            theme={theme}
+            secretEntity={secretEntity}
+            searchQuery={searchQuery}
+            guesses={guesses}
+            gameOver={gameOver}
+            showDropdown={showDropdown}
+            filteredDropdownOptions={filteredDropdownOptions}
+            setSearchQuery={setSearchQuery}
+            setShowDropdown={setShowDropdown}
+            startNewGame={startNewGame}
+            handleSelectGuess={handleSelectGuess}
+            getAgeFromDateString={getAgeFromDateString}
+        />
+    );
+};

@@ -5,6 +5,7 @@ import { fetchThemes } from './core/api';
 import { Navbar } from "./core/components/Navbar/Navbar";
 import { ScrollToTop } from './core/helpers/scrollToTop';
 import Home from "./views/Home/Home";
+import { GuessWhoViewPage } from './views/Games/GuessWho/GuessWhoViewPage';
 
 // Layer views representing different hierarchy levels (L1 down to L4)
 import { L1View, L2View, L3View, L4View } from "./views/Layers/index";
@@ -39,7 +40,7 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
 
   // Matches the URL theme name with database configurations. Falls back to the first available theme.
   const activeTheme = loadedThemes.find(t => t.id === themeName) || loadedThemes[0];
-  
+
   // Track whether dark mode styling is enabled (defaults to dark mode)
   const [isDark, setIsDark] = useState<boolean>(true);
 
@@ -108,7 +109,7 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
     <div className="app-container">
       {/* Forces browser scroll positions back to top coordinates whenever navigating to a new route */}
       <ScrollToTop />
-      
+
       {/* Main navigation control menu header component */}
       <Navbar
         loadedThemes={loadedThemes}
@@ -123,6 +124,9 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
         {/* Base route redirection inside a theme: redirects /:themeName to /:themeName/home */}
         <Route path="/" element={<Navigate to="home" replace />} />
         <Route path="home" element={<Home theme={activeTheme} isDark={isDark} />} />
+
+        {/* In App.tsx inside <Routes> */}
+        <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} />} />
 
         {/* Dynamic Layer Route Guards: Checks if a layer exists. If not, safely redirects somewhere else */}
         <Route path="l1" element={hasLayer('l1') ? <L1View theme={activeTheme} /> : <Navigate to="../home" replace />} />
@@ -218,10 +222,10 @@ export default function App() {
       <Routes>
         {/* Absolute root layout routing configuration rules. Redirects clean browser connections to theme zero */}
         <Route path="/" element={<Navigate to={`/${loadedThemes[0].id}/home`} replace />} />
-        
+
         {/* Dynamic catch-all route mapping that delivers the request directly into the theme sub-views controller context */}
         <Route path="/:themeName/*" element={<AppContent loadedThemes={loadedThemes} refreshThemes={refreshThemes} />} />
-        
+
         {/* Safety catch-all fallback pattern route redirect rule */}
         <Route path="*" element={<Navigate to={`/${loadedThemes[0].id}/home`} replace />} />
       </Routes>

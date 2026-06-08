@@ -1,7 +1,9 @@
+import type { ThemeGameSettings } from './core/gamesConfig';
 /**
  * Identifiers for the available games within the portal.
  */
 export type GameID = "guesswho" | "sorter" | "blindranking";
+
 
 /**
  * Core identifiers for the organizational layers.
@@ -110,6 +112,7 @@ export interface Theme {
   darkNavbarColor?: string;
 
   games: GameID[];
+  gameSettings?: ThemeGameSettings;
   navbarItems: string[];
 
   /** The complete dataset containing all hydrated nodes for this theme graph */

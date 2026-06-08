@@ -14,7 +14,7 @@ interface Props {
 
 /**
  * L4View renders the individual performers operating at the active base of the framework.
- * Analogy: Drivers or Idols (e.g., Lewis Hamilton, Max Verstappen, Wonyoung, Sakura).
+ * Analogy: Drivers or Artist (e.g., Lewis Hamilton, Max Verstappen, Olivia Rodrigo).
  */
 export const L4View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
