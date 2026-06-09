@@ -48,7 +48,7 @@ model Entity {
 }
 
 model EntityConnection {
-  id             String @id 
+  id             String @id @default(cuid())
   themeId        String
   sourceEntityId String
   targetEntityId String
@@ -59,4 +59,11 @@ model EntityConnection {
 
   @@index([sourceEntityId])
   @@index([targetEntityId])
+}
+
+model GameSetting {
+  id        String   @id @default(cuid())
+  themeId   String   @unique
+  gameName  String   @default("guesswho")
+  settings  Json     
 }

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Theme, HydratedEntity, HydratedEntityConnection, BaseEntity } from '../../types';
 import { entityService } from './EntityService';
+import styles from './AdminGlobal.module.css';
 
 interface Props {
   theme: Theme;
@@ -9,11 +10,16 @@ interface Props {
   onCancel: () => void;
 }
 
+interface TriggerConfig {
+  key: string;
+  value: string;
+}
+
 interface LayerConfig {
   badgeKey?: string;
   subtitleKey?: string;
   gridKeys?: string[];
-  statusTriggers?: Record<string, { key: string; value: string }>;
+  statusTriggers?: Record<string, TriggerConfig>;
 }
 
 interface LayerMetadataMap {
@@ -28,17 +34,48 @@ interface UnifiedConnection {
   status: string;
 }
 
+type MetadataValue = string | number | boolean | string[] | undefined;
+
 const LAYER_ORDER: Record<string, number> = { l1: 1, l2: 2, l3: 3, l4: 4 };
+const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
 
 export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCancel }) => {
   const originalEntity = useMemo(() => {
     return (theme.entities || []).find(e => e.id === entityId);
   }, [theme, entityId]);
 
-  const [name, setName] = useState<string>(originalEntity?.name || '');
-  const [status, setStatus] = useState<string>(originalEntity?.status || 'active');
-  const [isStandalone, setIsStandalone] = useState<boolean>(originalEntity?.isStandalone || false);
+  // --- Form Local States ---
+  const [name, setName] = useState<string>('');
+  const [status, setStatus] = useState<string>('active');
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+  const [imageInputs, setImageInputs] = useState<Record<string, string>>({});
+  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>({});
+  const [localConnections, setLocalConnections] = useState<HydratedEntityConnection[]>([]);
+  const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>([]);
 
+  // Referentie-state om prop/data wijzigingen tijdens de render-fase te detecteren
+  const [prevEntity, setPrevEntity] = useState<HydratedEntity | null>(null);
+
+  // --- Fast-track Provisioning Pool ---
+  const [quickCreatedEntities, setQuickCreatedEntities] = useState<HydratedEntity[]>([]);
+
+  // Gecombineerde pool via Derived State
+  const entitiesPool = useMemo(() => {
+    return [...(theme.entities || []), ...quickCreatedEntities];
+  }, [theme.entities, quickCreatedEntities]);
+
+  // --- UI Control States ---
+  const [newImageKey, setNewImageKey] = useState<string>('');
+  const [newMetadataKey, setNewMetadataKey] = useState<string>('');
+  const [quickCreateName, setQuickCreateName] = useState<string>('');
+  const [quickCreateLayer, setQuickCreateLayer] = useState<string>('l4');
+  const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
+
+  const [connectionSearchTerm, setConnectionSearchTerm] = useState<string>('');
+  const [isConnectionDropdownOpen, setIsConnectionDropdownOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // --- Layer Config Resolution ---
   const layerConfig = useMemo<LayerConfig | undefined>(() => {
     const currentLayer = originalEntity?.type?.toLowerCase() || '';
     if (!theme.layerMetadata) return undefined;
@@ -53,11 +90,11 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
   }, [theme.layerMetadata, originalEntity?.type]);
 
+  const dynamicTriggers = useMemo(() => layerConfig?.statusTriggers || {}, [layerConfig]);
+
   const triggerFieldsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    if (!layerConfig?.statusTriggers) return map;
-
-    Object.values(layerConfig.statusTriggers).forEach(trigger => {
+    Object.values(dynamicTriggers).forEach(trigger => {
       if (trigger && trigger.key) {
         if (!map[trigger.key]) map[trigger.key] = [];
         if (!map[trigger.key].includes(trigger.value)) {
@@ -66,66 +103,79 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       }
     });
     return map;
-  }, [layerConfig]);
+  }, [dynamicTriggers]);
 
-  const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
-    const inputs: Record<string, string> = {};
-    if (originalEntity?.image) {
+  // --- SYNCHRONISATIE TIJDENS RENDER ---
+  if (originalEntity && originalEntity !== prevEntity) {
+    setPrevEntity(originalEntity);
+    setName(originalEntity.name || '');
+    setStatus(originalEntity.status || 'active');
+    setIsStandalone(originalEntity.isStandalone || false);
+
+    // Sync Images
+    const imgInputs: Record<string, string> = {};
+    if (originalEntity.image) {
       Object.entries(originalEntity.image).forEach(([key, val]) => {
-        inputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+        imgInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
       });
     }
-    return inputs;
-  });
+    setImageInputs(imgInputs);
 
-  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
-    const inputs: Record<string, string> = {};
+    // --- Sync Metadata Framework ---
+    const metaInputs: Record<string, string> = {};
+    const currentType = originalEntity.type?.toLowerCase() || '';
 
-    if (layerConfig) {
-      const defaultKeys: string[] = [];
-      if (layerConfig.badgeKey) defaultKeys.push(layerConfig.badgeKey);
-      if (layerConfig.subtitleKey) defaultKeys.push(layerConfig.subtitleKey);
-      if (Array.isArray(layerConfig.gridKeys)) {
-        defaultKeys.push(...layerConfig.gridKeys);
-      }
-      if (layerConfig.statusTriggers) {
-        Object.values(layerConfig.statusTriggers).forEach(t => {
-          if (t?.key) defaultKeys.push(t.key);
-        });
-      }
-
-      defaultKeys.forEach((key: string) => {
-        if (key) inputs[key] = '';
+    // 1. Initialiseer verplichte L4 velden als leeg
+    if (currentType === 'l4') {
+      REQUIRED_L4_FIELDS.forEach(field => {
+        metaInputs[field] = '';
       });
     }
 
-    if (originalEntity?.metadata) {
+    // 2. Vul de inputs met bestaande data, maar wees slim met hoofdletters
+    if (originalEntity.metadata) {
+      Object.entries(originalEntity.metadata).forEach(([dbKey, val]) => {
+        // Zoek of de dbKey overeenkomt met een van onze verplichte velden (case-insensitive)
+        const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
+
+        // Gebruik de 'juiste' casing voor de key, anders gebruik de dbKey
+        const targetKey = match || dbKey;
+        metaInputs[targetKey] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+      });
+    }
+
+    // 3. Reeds opgeslagen waarden uit database overschrijven over de blauwdruk heen
+    if (originalEntity.metadata) {
       Object.entries(originalEntity.metadata).forEach(([key, val]) => {
-        inputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+        metaInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
       });
     }
+    setMetadataInputs(metaInputs);
 
-    return inputs;
-  });
+    // Sync Relational Connections
+    setLocalConnections(originalEntity.connections || []);
+    setLocalTargetConnections(originalEntity.targetConnections || []);
+  }
 
-  const [localConnections, setLocalConnections] = useState<HydratedEntityConnection[]>(
-    originalEntity?.connections || []
-  );
-  const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>(
-    originalEntity?.targetConnections || []
-  );
+  // Scheiding van velden voor de interface om Required en Dynamic los te koppelen
+  const partitionedMetadataKeys = useMemo(() => {
+    const allKeys = Object.keys(metadataInputs);
+    const isL4 = originalEntity?.type?.toLowerCase() === 'l4';
 
-  const [entitiesPool, setEntitiesPool] = useState<HydratedEntity[]>(() => theme.entities || []);
-  const [newImageKey, setNewImageKey] = useState<string>('');
-  const [newMetadataKey, setNewMetadataKey] = useState<string>('');
-  const [quickCreateName, setQuickCreateName] = useState<string>('');
-  const [quickCreateLayer, setQuickCreateLayer] = useState<string>('l4');
-  const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
+    return {
+      requiredKeys: allKeys.filter(key =>
+        isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())
+      ),
+      // Pas deze regel aan: voeg PassingDate toe aan de uitsluiting
+      dynamicKeys: allKeys.filter(key => {
+        const isRequired = isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
+        const isPassingDate = key.toLowerCase() === 'passingdate'; // <--- HIER
+        return !isRequired && !isPassingDate;
+      })
+    };
+  }, [metadataInputs, originalEntity?.type]);
 
-  const [connectionSearchTerm, setConnectionSearchTerm] = useState<string>('');
-  const [isConnectionDropdownOpen, setIsConnectionDropdownOpen] = useState<boolean>(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
+  // --- Target Filter Logic ---
   const sortedAvailableTargets = useMemo(() => {
     return entitiesPool
       .filter(e => e.id !== entityId)
@@ -180,6 +230,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     return <div style={{ color: 'red', padding: '20px' }}>Target entity record not found.</div>;
   }
 
+  // --- Handlers ---
   const handleImageInputChange = (key: string, value: string) => {
     setImageInputs(prev => ({ ...prev, [key]: value }));
   };
@@ -197,25 +248,35 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
   const handleAddMetadataField = () => {
     const cleanKey = newMetadataKey.trim();
-    if (!cleanKey || metadataInputs[cleanKey] !== undefined) return;
+    if (!cleanKey) return;
+
+    // 1. Check op exact bestaan in state
+    if (metadataInputs[cleanKey] !== undefined) {
+      alert("Dit veld bestaat al.");
+      return;
+    }
+
+    // 2. ANTI-COLLISION: Voorkom dat gebruikers core-velden overschrijven
+    const isCoreField = REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase());
+    if (isCoreField) {
+      alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld (Core Game Metric). Je kunt deze niet toevoegen als dynamisch attribuut.`);
+      return;
+    }
+
     setMetadataInputs(prev => ({ ...prev, [cleanKey]: '' }));
     setNewMetadataKey('');
   };
 
   const handleRemoveImageField = (key: string) => {
-    setImageInputs(prev => {
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
+    setImageInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
   const handleRemoveMetadataField = (key: string) => {
-    setMetadataInputs(prev => {
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
+    if (originalEntity.type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
+      alert(`Field "${key}" is strictly required for the trivia logic engine and cannot be stripped.`);
+      return;
+    }
+    setMetadataInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
   const handleConnectionStatusChange = (connId: number, newStatus: string) => {
@@ -298,7 +359,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
     try {
       const savedEntityFromDb: HydratedEntity = await entityService.create(theme.id, newSkeletonEntity);
-      setEntitiesPool(prev => [...prev, savedEntityFromDb]);
+      setQuickCreatedEntities(prev => [...prev, savedEntityFromDb]);
 
       const allExistingIds = [
         ...localConnections.map(c => c.id),
@@ -325,212 +386,385 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
   };
 
-  type MetadataValue = string | number | boolean | string[] | undefined;
-
   const reconstructObject = (
     currentInputs: Record<string, string>,
     originalObject: Record<string, unknown>
   ): Record<string, MetadataValue> => {
     const result: Record<string, MetadataValue> = {};
+    const isL4 = originalEntity.type.toLowerCase() === 'l4';
+
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
-      const originalValue = originalObject ? originalObject[key] : undefined;
 
-      if (!rawValue.trim() && !originalValue) return;
+      // Sla lege waarden over
+      if (!rawValue || !rawValue.trim()) return;
 
-      if (
-        key.toLowerCase() === 'nationality' ||
-        Array.isArray(originalValue) ||
-        (rawValue.includes(',') && !originalValue)
-      ) {
+      // --- EXPLICIETE UITZONDERING VOOR DATES ---
+      // Zorg dat PassingDate en Birthday ALTIJD strings blijven
+      if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
+        result[key] = rawValue.trim();
+        return;
+      }
+
+      // --- REST VAN DE LOGICA ---
+      if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
         result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
-      } else if (typeof originalValue === 'number') {
+      } else if (isL4 && (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear')) {
+        result[key] = Number(rawValue.trim()) || 0;
+      } else if (typeof originalObject[key] === 'number') {
         result[key] = Number(rawValue) || 0;
-      } else if (typeof originalValue === 'boolean') {
+      } else if (typeof originalObject[key] === 'boolean') {
         result[key] = rawValue.toLowerCase() === 'true';
       } else {
-        result[key] = rawValue;
+        result[key] = rawValue.trim();
       }
     });
     return result;
   };
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    console.log("Huidige metadata state:", metadataInputs);
+    console.log("Is DebutYear gevuld?", metadataInputs['DebutYear']);
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
+    if (!name.trim()) {
+      alert("Please enter a valid name.");
+      return;
+    }
+
+    // 1. Validatie voor L4
+    if (originalEntity.type.toLowerCase() === 'l4') {
+      for (const field of REQUIRED_L4_FIELDS) {
+        // Zoek naar de key, ongeacht hoofdletters
+        const foundKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === field.toLowerCase());
+        const value = foundKey ? metadataInputs[foundKey] : undefined;
+
+        if (!value || !value.trim()) {
+          alert(`Game Error: The field "${field}" is strictly required for Layer 4 entities.`);
+          return;
+        }
+      }
+
+      // Check Datum Formaat voor Birthday (Altijd verplicht voor L4)
+      const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
+      if (!dateRegex.test(metadataInputs['Birthday'].trim())) {
+        alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
+        return;
+      }
+
+      // Check optionele PassingDate (ALLEEN als ingevuld)
+      const passingDate = metadataInputs['PassingDate']?.trim();
+      if (passingDate && !dateRegex.test(passingDate)) {
+        alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
+        return;
+      }
+
+      // Check Numerieke velden
+      if (isNaN(Number(metadataInputs['Height']?.trim()))) {
+        alert("Format Error: Height must be a number.");
+        return;
+      }
+      if (isNaN(Number(metadataInputs['DebutYear']?.trim()))) {
+        alert("Format Error: Debut Year must be a number.");
+        return;
+      }
+    }
+
+    // 2. Data opbouw
     const updatedMetadata = reconstructObject(metadataInputs, originalEntity.metadata || {});
+
+    if (dynamicTriggers[status]) {
+      const trigger = dynamicTriggers[status];
+      updatedMetadata[trigger.key] = trigger.value;
+    }
 
     const updatedEntity: HydratedEntity = {
       ...originalEntity,
-      name,
+      name: name.trim(),
       status,
       isStandalone,
-      image: imageInputs as Record<string, string | string[] | undefined> as HydratedEntity['image'],
-      metadata: updatedMetadata as Record<string, string | number | boolean | string[] | undefined> as HydratedEntity['metadata'],
+      image: imageInputs as HydratedEntity['image'],
+      metadata: updatedMetadata as HydratedEntity['metadata'],
       connections: localConnections,
       targetConnections: localTargetConnections
     };
 
-    if (onSave) {
-      await onSave(updatedEntity);
+    // 3. Save
+    try {
+      if (onSave) {
+        await onSave(updatedEntity);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Could not update the entity modifications.");
     }
   };
 
   return (
-    <div style={{ padding: '20px', background: '#1e1e1e', color: '#fff', borderRadius: '8px', marginBottom: '20px' }}>
-      <h2>Modify {originalEntity.type.toUpperCase()}: <span style={{ color: '#deff9a' }}>{name}</span></h2>
+    <div className={styles.formCard}>
+      <h2 className={styles.formCardTitle}>
+        Modify {originalEntity.type.toUpperCase()}: <span className={styles.textPrimary}>{name}</span>
+      </h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '15px', marginBottom: '25px' }}>
+      {/* Core Base Info Grid */}
+      <div className={styles.editInfoGrid}>
         <div>
-          <div style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#aaa' }}>Name</div>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} />
+          <div className={styles.fieldLabel}>Name</div>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className={styles.inputField}
+          />
         </div>
+
         <div>
-          <div style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#aaa' }}>Status</div>
-          <select value={status} onChange={e => setStatus(e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}>
+          <div className={styles.fieldLabel}>Status</div>
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value)}
+            className={styles.inputField}
+          >
             <option value="active">Active</option>
             <option value="disbanded">Disbanded</option>
             <option value="inactive">Inactive</option>
             <option value="retired">Retired</option>
+            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => (
+              <option key={triggerKey} value={triggerKey}>
+                {triggerConfig.value.charAt(0).toUpperCase() + triggerConfig.value.slice(1)} (Schema Trigger)
+              </option>
+            ))}
           </select>
         </div>
+
         <div>
-          <div style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#aaa', cursor: 'help' }} title="Enable if this entity holds an unlinked, standalone location coordinates position on the main registry layout maps.">
-            Standalone Layer Node? <span style={{ color: '#b3e5fc', fontSize: '12px' }}>Information</span>
-          </div>
-          <input type="checkbox" checked={isStandalone} onChange={e => setIsStandalone(e.target.checked)} style={{ marginTop: '14px', transform: 'scale(1.4)' }} />
+          <div className={styles.fieldLabel}>Passing Date</div>
+          <input
+            type="text"
+            placeholder="DD-MM-YYYY"
+            value={metadataInputs['PassingDate'] || ''}
+            onChange={e => handleMetadataInputChange('PassingDate', e.target.value)}
+            className={styles.inputField}
+          />
+        </div>
+
+        <div>
+          <div className={styles.fieldLabel}>Standalone Node</div>
+          <input
+            type="checkbox"
+            checked={isStandalone}
+            onChange={e => setIsStandalone(e.target.checked)}
+            className={styles.checkbox}
+          />
         </div>
       </div>
 
-      <h3>Media Assets (Graphics & Visual Broadcast Feeds)</h3>
-      <div style={{ background: '#151515', padding: '15px', borderRadius: '6px', marginBottom: '25px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+      {/* SECTIE A: CORE REQUIRED GAME FIELDS (Zichtbaar bij Layer 4) */}
+      {originalEntity.type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
+        <div className={styles.requiredSection}>
+          <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
+          <p className={`${styles.labelSubText} ${styles.textMuted}`}>These attributes are strictly required by the GuessWho game configuration engine.</p>
+          <div className={styles.twoColumnGrid}>
+            {partitionedMetadataKeys.requiredKeys.map(key => (
+              <div key={key}>
+                <div className={styles.requiredLabel}>
+                  {key} {key.toLowerCase() === 'nationality' && <small className={styles.textMuted}>(Comma separated list)</small>}
+                </div>
+                <input
+                  type="text"
+                  placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
+                  value={metadataInputs[key] || ''}
+                  onChange={e => handleMetadataInputChange(key, e.target.value)}
+                  className={`${styles.inputField} ${styles.requiredInput}`}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* SECTIE B: DYNAMIC THEME ATTRIBUTES */}
+      <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Populated via {originalEntity.type.toUpperCase()} Theme Schema)</h3>
+      <div className={styles.innerSection}>
+        {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
+          <p className={`${styles.textMuted} ${styles.labelSubText}`}>No specific layout metadata schema properties injected for this layer. Append custom fields below:</p>
+        ) : (
+          <div className={styles.twoColumnGrid}>
+            {partitionedMetadataKeys.dynamicKeys.map(key => {
+              const triggerValues = triggerFieldsMap[key];
+              const isList = key.toLowerCase() === 'nationality' || (metadataInputs[key] && metadataInputs[key].includes(','));
+
+              return (
+                <div key={key}>
+                  <div className={styles.labelActionRow}>
+                    <span>
+                      {key}
+                      {isList && <small className={styles.textDimmed}> (Array List)</small>}
+                      {triggerValues && <small className={styles.textWarning}> (Schema Controlled 🔒)</small>}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMetadataField(key)}
+                      className={styles.btnRemove}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {triggerValues ? (
+                    <select
+                      value={metadataInputs[key]}
+                      onChange={e => handleMetadataInputChange(key, e.target.value)}
+                      className={styles.inputField}
+                    >
+                      <option value="">-- Active / Normal --</option>
+                      {triggerValues.map(val => (
+                        <option key={val} value={val}>
+                          {val.charAt(0).toUpperCase() + val.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={metadataInputs[key] || ''}
+                      onChange={e => handleMetadataInputChange(key, e.target.value)}
+                      className={styles.inputField}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className={styles.innerActionRow}>
+          <input
+            type="text"
+            placeholder="e.g., Twitter, Instagram or SquadNumber"
+            value={newMetadataKey}
+            onChange={e => setNewMetadataKey(e.target.value)}
+            className={styles.inlineInput}
+          />
+          <button
+            type="button"
+            onClick={handleAddMetadataField}
+            className={`${styles.btn} ${styles.btnPrimary}`}
+          >
+            Add Attribute Property
+          </button>
+        </div>
+      </div>
+
+      {/* Media Assets */}
+      <h3 className={styles.sectionTitle}>Media Assets</h3>
+      <div className={styles.innerSection}>
+        <div className={styles.twoColumnGrid}>
           {Object.keys(imageInputs).map(key => (
             <div key={key}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '13px', color: '#b3e5fc' }}>
-                <span>{key} {Array.isArray(originalEntity.image?.[key]) && <small style={{ color: '#888' }}>(Array List)</small>}</span>
-                <button type="button" onClick={() => handleRemoveImageField(key)} style={{ background: 'transparent', color: '#ff4d4d', border: 'none', cursor: 'pointer', fontSize: '11px' }}>Remove Field</button>
+              <div className={styles.labelActionRow}>
+                <span>
+                  {key} {Array.isArray(originalEntity.image?.[key]) && <small className={styles.textDimmed}>(Array List)</small>}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImageField(key)}
+                  className={styles.btnRemove}
+                >
+                  Remove
+                </button>
               </div>
-              <input type="text" value={imageInputs[key]} onChange={e => handleImageInputChange(key, e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} />
+              <input
+                type="text"
+                value={imageInputs[key]}
+                onChange={e => handleImageInputChange(key, e.target.value)}
+                className={styles.inputField}
+              />
             </div>
           ))}
         </div>
-        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center', background: '#222', padding: '10px', borderRadius: '4px' }}>
-          <input type="text" placeholder="e.g., streamingTeaser or liveries" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} style={{ padding: '6px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', flex: 1 }} />
-          <button type="button" onClick={handleAddImageField} style={{ background: '#b3e5fc', color: '#000', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>Add Media Key Class</button>
+        <div className={styles.innerActionRow}>
+          <input
+            type="text"
+            placeholder="e.g., streamingTeaser or liveries"
+            value={newImageKey}
+            onChange={e => setNewImageKey(e.target.value)}
+            className={styles.inlineInput}
+          />
+          <button
+            type="button"
+            onClick={handleAddImageField}
+            className={`${styles.btn} ${styles.btnOutline}`}
+          >
+            Add Asset Field
+          </button>
         </div>
       </div>
 
-      <h3>Dynamic Profile Parameters (Metadata)</h3>
-      <div style={{ background: '#151515', padding: '15px', borderRadius: '6px', marginBottom: '25px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          {Object.keys(metadataInputs).map(key => {
-            const triggerValues = triggerFieldsMap[key];
-            const isList = Array.isArray(originalEntity.metadata?.[key]) || metadataInputs[key].includes(',');
-
-            return (
-              <div key={key}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '13px', color: '#deff9a' }}>
-                  <span>
-                    {key} 
-                    {isList && <small style={{ color: '#888' }}> (Array List)</small>}
-                    {triggerValues && <small style={{ color: '#ffb300' }}> (Schema Controlled 🔒)</small>}
-                  </span>
-                  <button type="button" onClick={() => handleRemoveMetadataField(key)} style={{ background: 'transparent', color: '#ff4d4d', border: 'none', cursor: 'pointer', fontSize: '11px' }}>Remove Field</button>
-                </div>
-
-                {triggerValues ? (
-                  <select
-                    value={metadataInputs[key]}
-                    onChange={e => handleMetadataInputChange(key, e.target.value)}
-                    style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}
-                  >
-                    <option value="">-- Active / Normal --</option>
-                    {triggerValues.map(val => {
-                      const displayLabel = theme.labels[val] || (val.charAt(0).toUpperCase() + val.slice(1));
-                      return (
-                        <option key={val} value={val}>
-                          {displayLabel}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <input 
-                    type="text" 
-                    value={metadataInputs[key]} 
-                    onChange={e => handleMetadataInputChange(key, e.target.value)} 
-                    style={{ width: '100%', padding: '10px', background: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} 
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center', background: '#222', padding: '10px', borderRadius: '4px' }}>
-          <input type="text" placeholder="e.g., Twitter, Instagram or SquadNumber" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} style={{ padding: '6px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', flex: 1 }} />
-          <button type="button" onClick={handleAddMetadataField} style={{ background: '#deff9a', color: '#000', border: 'none', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>Add Parameter Field</button>
-        </div>
-      </div>
-
-      <h3>Mapped Registry Entity Connections (Direction Agnostic)</h3>
-      <div style={{ background: '#2d2d2d', padding: '15px', borderRadius: '6px', marginBottom: '25px' }}>
+      {/* Mapped Registry Entity Connections */}
+      <h3 className={styles.sectionTitle}>Mapped Registry Entity Connections (Direction Agnostic)</h3>
+      <div className={styles.innerSection}>
         {unifiedConnections.map(conn => {
           const isL4ToL4 = originalEntity.type.toLowerCase() === 'l4' && conn.relatedEntity?.type?.toLowerCase() === 'l4';
           const isExpanded = expandedChildId === conn.relatedEntityId;
 
           return (
-            <div key={conn.id} style={{ borderBottom: '1px solid #444', padding: '12px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div key={conn.id} className={styles.connectionRow}>
+              <div className={styles.connectionHeader}>
+                <span className={styles.connectionRowLeft}>
                   <button
                     type="button"
                     onClick={() => setExpandedChildId(isExpanded ? null : conn.relatedEntityId)}
-                    style={{ background: isExpanded ? '#555' : '#444', color: '#deff9a', border: 'none', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                    className={styles.filterBtn}
+                    style={{ padding: '2px 8px', fontSize: '13px' }}
                   >
                     {isExpanded ? 'Collapse' : 'Expand'}
                   </button>
-                  <span style={{ background: conn.direction === 'incoming' ? '#2e4053' : '#1e3f20', color: '#fff', padding: '2px 5px', borderRadius: '3px', fontSize: '10px', fontWeight: 'bold' }}>
+                  <span className={conn.direction === 'incoming' ? styles.badgeInbound : styles.badgeOutbound}>
                     {conn.direction === 'incoming' ? 'INBOUND' : 'OUTBOUND'}
                   </span>
-                  <span style={{ background: '#151515', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', color: '#aaa' }}>
+                  <span className={styles.layerBadge}>
                     {conn.relatedEntity?.type?.toUpperCase() || 'L4'}
                   </span>
-                  <strong style={{ color: '#deff9a' }}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
+                  <strong className={styles.textPrimary}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
                   {isL4ToL4 && (
-                    <span style={{ color: '#ffb300', fontSize: '12px', marginLeft: '5px' }}>Cross-individual connection (L4 to L4 Peer)</span>
+                    <span className={styles.textWarning}>Cross-individual connection (L4 to L4 Peer)</span>
                   )}
                 </span>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div className={styles.buttonGroup} style={{ gap: '10px' }}>
                   <select
                     value={conn.status}
                     onChange={e => handleConnectionStatusChange(conn.id, e.target.value)}
-                    style={{ padding: '6px 10px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}
+                    className={styles.inputField}
+                    style={{ padding: '6px 10px', width: 'auto' }}
                   >
                     <option value="active">Active</option>
                     <option value="former">Former</option>
                     <option value="inactive">Inactive</option>
                     <option value="retired">Retired</option>
                   </select>
-                  <button type="button" onClick={() => handleRemoveConnection(conn.id)} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', cursor: 'pointer', borderRadius: '4px', fontWeight: 'bold' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveConnection(conn.id)}
+                    className={styles.btnUnlink}
+                  >
                     Unlink
                   </button>
                 </div>
               </div>
 
               {isExpanded && conn.relatedEntity && (
-                <div style={{ marginTop: '15px', padding: '15px', background: '#151515', borderRadius: '6px', borderLeft: '4px solid #deff9a' }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#b3e5fc' }}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
+                <div className={styles.portalSection}>
+                  <h4 className={styles.portalTitle}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
                   <AdminEntityEdit
                     theme={theme}
                     entityId={conn.relatedEntityId}
                     onSave={async (updatedChild) => {
                       try {
                         await entityService.update(theme.id, updatedChild.id, updatedChild);
-                        setEntitiesPool(prev => prev.map(e => e.id === updatedChild.id ? updatedChild : e));
+                        setQuickCreatedEntities(prev => prev.map(e => e.id === updatedChild.id ? updatedChild : e));
                         setLocalConnections(prev => prev.map(c => c.targetEntityId === updatedChild.id ? { ...c, targetEntity: updatedChild } : c));
                         setLocalTargetConnections(prev => prev.map(c => c.sourceEntityId === updatedChild.id ? { ...c, sourceEntity: updatedChild } : c));
                         window.dispatchEvent(new Event('refresh-database'));
@@ -548,8 +782,9 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
           );
         })}
 
-        <div ref={dropdownRef} style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #555', position: 'relative' }}>
-          <div style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#aaa' }}>
+        {/* Search & Selection Dropdown */}
+        <div ref={dropdownRef} className={styles.dropdownWrapper}>
+          <div className={`${styles.fieldLabel} ${styles.labelSubText}`}>
             Link Existing Component Entity Record (Search by Name, Layer or ID)
           </div>
           <input
@@ -561,11 +796,11 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
               setConnectionSearchTerm(e.target.value);
               setIsConnectionDropdownOpen(true);
             }}
-            style={{ width: '100%', padding: '10px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px', boxSizing: 'border-box' }}
+            className={styles.inputField}
           />
 
           {isConnectionDropdownOpen && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: '250px', overflowY: 'auto', background: '#1e1e1e', border: '1px solid #444', borderRadius: '4px', marginTop: '5px', zIndex: 999, boxShadow: '0px 4px 12px rgba(0,0,0,0.5)' }}>
+            <div className={styles.dropdownMenu}>
               {filteredAvailableTargets.length > 0 ? (
                 filteredAvailableTargets.map(t => (
                   <div
@@ -575,38 +810,72 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                       setConnectionSearchTerm('');
                       setIsConnectionDropdownOpen(false);
                     }}
-                    style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid #2d2d2d', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#252525' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#2d2d2d')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = '#252525')}
+                    className={styles.dropdownItem}
                   >
-                    <span style={{ color: '#fff', fontWeight: '500' }}>{t.name}</span>
-                    <span style={{ background: '#151515', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', color: '#aaa' }}>{t.type.toUpperCase()}</span>
+                    <span className={styles.textBold}>{t.name}</span>
+                    <span className={styles.layerBadge}>{t.type.toUpperCase()}</span>
                   </div>
                 ))
               ) : (
-                <div style={{ padding: '12px 15px', color: '#888', fontStyle: 'italic', background: '#252525' }}>No matching entities found in workspace...</div>
+                <div className={styles.dropdownNoResults}>
+                  No matching entities found in workspace...
+                </div>
               )}
             </div>
           )}
         </div>
 
-        <div style={{ marginTop: '20px', padding: '15px', background: '#222', borderRadius: '6px', border: '1px dashed #444' }}>
-          <div style={{ display: 'block', fontSize: '13px', marginBottom: '8px', color: '#b3e5fc', fontWeight: 'bold' }}>Fast-track Provisioning: Create New Entity & Link Instantly</div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input type="text" placeholder="Entry Name" value={quickCreateName} onChange={e => setQuickCreateName(e.target.value)} style={{ flex: 2, padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }} />
-            <select value={quickCreateLayer} onChange={e => setQuickCreateLayer(e.target.value)} style={{ flex: 1, padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}>
+        {/* Fast-track Provisioning Section */}
+        <div className={styles.provisionBox}>
+          <div className={styles.provisionTitle}>Fast-track Provisioning: Create New Entity & Link Instantly</div>
+          <div className={styles.buttonGroup} style={{ gap: '10px' }}>
+            <input
+              type="text"
+              placeholder="Entry Name"
+              value={quickCreateName}
+              onChange={e => setQuickCreateName(e.target.value)}
+              className={styles.inputField}
+              style={{ flex: 2 }}
+            />
+            <select
+              value={quickCreateLayer}
+              onChange={e => setQuickCreateLayer(e.target.value)}
+              className={styles.inputField}
+              style={{ flex: 1 }}
+            >
               <option value="l2">Layer 2 (Governing Body / Association)</option>
               <option value="l3">Layer 3 (Team / Club / Constructor)</option>
               <option value="l4">Layer 4 (Driver / Player / Individual)</option>
             </select>
-            <button type="button" onClick={() => { void handleInlineQuickCreate(); }} style={{ background: '#b3e5fc', color: '#000', border: 'none', padding: '8px 16px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '4px' }}>Provision Record</button>
+            <button
+              type="button"
+              onClick={() => { void handleInlineQuickCreate(); }}
+              className={`${styles.btn} ${styles.btnOutline}`}
+              style={{ background: '#b3e5fc', color: '#000', border: 'none' }}
+            >
+              Provision Record
+            </button>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} style={{ padding: '10px 20px', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-        <button type="button" onClick={(e) => { void handleSubmit(e); }} style={{ padding: '10px 20px', background: '#deff9a', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Save Commit Changes</button>
+      {/* Action Footers */}
+      <div className={styles.footerActions}>
+        <button
+          type="button"
+          onClick={onCancel}
+          className={`${styles.btn} ${styles.btnBack}`}
+          style={{ marginBottom: 0 }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { void handleSubmit(e); }}
+          className={`${styles.btn} ${styles.btnPrimary}`}
+        >
+          Save Commit Changes
+        </button>
       </div>
     </div>
   );

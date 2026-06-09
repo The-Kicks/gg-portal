@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AdminEntityEdit } from './AdminEntityEdit';
 import { entityService } from './EntityService';
 import type { Theme } from '../../types';
+import styles from './AdminGlobal.module.css'; // Importeer het centrale css-bestand
 
 interface Props { 
   theme: Theme; 
@@ -14,25 +15,17 @@ export const AdminEditPage: React.FC<Props> = ({ theme }) => {
 
   if (!id) {
     return (
-      <div style={{ padding: '40px', background: '#121212', color: '#fff' }}>
+      <div className={styles.container}>
         No valid entity or squad member ID provided.
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '40px', background: '#121212', minHeight: '100vh' }}>
+    <div className={styles.container}>
       <button
         onClick={() => navigate(-1)}
-        style={{ 
-          marginBottom: '20px', 
-          background: '#333', 
-          color: '#fff', 
-          border: 'none', 
-          padding: '8px 16px', 
-          cursor: 'pointer',
-          fontWeight: 'bold'
-        }}
+        className={`${styles.btn} ${styles.btnBack}`}
       >
         Back to Dashboard
       </button>
@@ -43,7 +36,7 @@ export const AdminEditPage: React.FC<Props> = ({ theme }) => {
         /**
          * Handles the persistence of updated entity details (e.g., driver, team, or player stats).
          * Dispatches a global event to trigger data re-fetching across the application upon success.
-         * * @param updated - The modified entity data payload.
+         * @param updated - The modified entity data payload.
          */
         onSave={async (updated) => {
           try {

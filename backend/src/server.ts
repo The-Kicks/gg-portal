@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-
 interface EntityImages {
     profileCard: string;
     heroBanner: string;
@@ -37,7 +36,7 @@ interface BaseEntity {
 }
 
 interface HydratedEntityConnection {
-    id: number;
+    id: string;
     themeId: string;
     sourceEntityId: string;
     targetEntityId: string;
@@ -56,6 +55,15 @@ interface MetaDataStandard {
     subtitleKey: string;
     gridKeys: string[];
     statusTriggers?: Record<string, unknown>;
+}
+
+interface GuessWhoSettings {
+    disabledColumns: string[];
+}
+
+interface GameSettings {
+    guesswho?: GuessWhoSettings;
+    [key: string]: unknown;
 }
 
 interface FullThemeResponse {
@@ -78,6 +86,7 @@ interface FullThemeResponse {
     navbarItems: string[];
     labels: Record<string, string | undefined>;
     layerMetadata: Record<string, MetaDataStandard | undefined>;
+    gameSettings: GameSettings; // Gecombineerd in de response voor het front-end
     entities: HydratedEntity[];
 }
 
@@ -95,7 +104,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
         const fullThemesResult: FullThemeResponse[] = [];
 
         for (const theme of themes) {
-            // 1. Haal alle platte entiteiten en connecties op voor dit specifieke thema
+            // 1. Haal data op uit de gekoppelde tabellen (inclusief de losse GameSetting tabel)
             const dbEntities = await prisma.entity.findMany({
                 where: { themeId: theme.id }
             });
@@ -104,11 +113,14 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 where: { themeId: theme.id }
             });
 
+            // 🌟 NIEUW: Haal de settings op uit de GameSetting tabel via het unieke themeId
+            const dbGameSetting = await prisma.gameSetting.findUnique({
+                where: { themeId: theme.id }
+            });
+
             // 2. Map DB-data naar initiële HydratedEntity objecten
             const hydratedEntities: HydratedEntity[] = dbEntities.map((e) => {
                 const entityMetadata = (e.metadata || {}) as Record<string, unknown>;
-
-                // 🌟 Kijk eerst naar de echte database kolom 'e.status'
                 const extractedStatus = e.status
                     ? e.status
                     : (typeof entityMetadata.status === 'string' ? entityMetadata.status : 'active');
@@ -118,7 +130,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                     themeId: e.themeId,
                     name: e.name,
                     type: e.type,
-                    status: extractedStatus, // Nu pakt hij keurig 'disbanded' uit de database!
+                    status: extractedStatus,
                     isStandalone: e.isStandalone,
                     image: (e.image || { profileCard: '', heroBanner: '' }) as unknown as EntityImages,
                     metadata: entityMetadata,
@@ -127,7 +139,6 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 };
             });
 
-            // Maak een snelle Map voor O(1) opzoeken tijdens het hydrateren
             const entityMap = new Map<string, HydratedEntity>(
                 hydratedEntities.map((e) => [e.id, e])
             );
@@ -169,14 +180,11 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                     targetEntity: baseTarget
                 };
 
-                // Voeg toe aan uitgaande connecties van de bron (bv. Rijder -> Team)
                 if (source) source.connections.push(hydratedConn);
-
-                // Voeg toe aan inkomende connecties van het doel (bv. Team <- Rijder)
                 if (target) target.targetConnections.push(hydratedConn);
             }
 
-            // 4. Voeg het gecompleteerde thema toe aan het eindresultaat
+            // 4. Bouw de complete response op
             fullThemesResult.push({
                 id: theme.id,
                 title: theme.title,
@@ -197,6 +205,8 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 navbarItems: (theme.navbarItems || []) as unknown as string[],
                 labels: (theme.labels || {}) as Record<string, string | undefined>,
                 layerMetadata: (theme.layerMetadata || {}) as Record<string, MetaDataStandard | undefined>,
+                // 🌟 Voeg de settings toe (als de database rij bestaat, pakken we de 'settings' JSON kolom)
+                gameSettings: dbGameSetting ? (dbGameSetting.settings as unknown as GameSettings) : {},
                 entities: hydratedEntities
             });
         }
@@ -214,8 +224,6 @@ app.get('/api/themes/:themeId/entities/check/:entityId', async (req: Request, re
         const existingEntity = await prisma.entity.findUnique({
             where: { id: entityId }
         });
-        
-        // Als existingEntity bestaat sturen we 'exists: true', anders 'false'
         res.json({ exists: !!existingEntity });
     } catch (error) {
         console.error("Fout bij controleren ID:", error);
@@ -229,36 +237,46 @@ app.post('/api/themes', async (req: Request, res: Response) => {
             id, title, description, orgLayer, miniViewLayers,
             primaryColor, secondaryColor, backgroundColor, navbarColor, textColor,
             darkPrimaryColor, darkSecondaryColor, darkBackgroundColor, darkTextColor, darkNavbarColor,
-            games, navbarItems, labels, layerMetadata
+            games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        const newTheme = await prisma.theme.create({
-            data: {
-                id,
-                title,
-                description,
-                orgLayer,
-                miniViewLayers: miniViewLayers as Prisma.InputJsonValue,
-                primaryColor,
-                secondaryColor,
-                backgroundColor,
-                navbarColor,
-                textColor,
-                darkPrimaryColor,
-                darkSecondaryColor,
-                darkBackgroundColor,
-                darkTextColor,
-                darkNavbarColor,
-                games: games as Prisma.InputJsonValue,
-                navbarItems: navbarItems as Prisma.InputJsonValue,
-                labels: labels as Prisma.InputJsonValue,
-                layerMetadata: layerMetadata as Prisma.InputJsonValue
-            }
-        });
+        // 🌟 Sla op in beide tabellen via een database transactie
+        const [newTheme] = await prisma.$transaction([
+            prisma.theme.create({
+                data: {
+                    id,
+                    title,
+                    description,
+                    orgLayer,
+                    miniViewLayers: miniViewLayers as Prisma.InputJsonValue,
+                    primaryColor,
+                    secondaryColor,
+                    backgroundColor,
+                    navbarColor,
+                    textColor,
+                    darkPrimaryColor,
+                    darkSecondaryColor,
+                    darkBackgroundColor,
+                    darkTextColor,
+                    darkNavbarColor,
+                    games: games as Prisma.InputJsonValue,
+                    navbarItems: navbarItems as Prisma.InputJsonValue,
+                    labels: labels as Prisma.InputJsonValue,
+                    layerMetadata: layerMetadata as Prisma.InputJsonValue
+                }
+            }),
+            prisma.gameSetting.create({
+                data: {
+                    themeId: id,
+                    gameName: "guesswho",
+                    settings: (gameSettings || {}) as Prisma.InputJsonValue
+                }
+            })
+        ]);
 
         res.status(201).json(newTheme);
     } catch (error) {
-        console.error("Fout bij aanmaken thema:", error);
+        console.error("Fout bij aanmaken thema en/of gamesettings:", error);
         res.status(500).json({ error: "Kon het thema niet aanmaken. Bestaat deze ID al?" });
     }
 });
@@ -270,36 +288,50 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             title, description, orgLayer, miniViewLayers,
             primaryColor, secondaryColor, backgroundColor, navbarColor, textColor,
             darkPrimaryColor, darkSecondaryColor, darkBackgroundColor, darkTextColor, darkNavbarColor,
-            games, navbarItems, labels, layerMetadata
+            games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        const updatedTheme = await prisma.theme.update({
-            where: { id },
-            data: {
-                title,
-                description,
-                orgLayer,
-                miniViewLayers: miniViewLayers as Prisma.InputJsonValue,
-                primaryColor,
-                secondaryColor,
-                backgroundColor,
-                navbarColor,
-                textColor,
-                darkPrimaryColor,
-                darkSecondaryColor,
-                darkBackgroundColor,
-                darkTextColor,
-                darkNavbarColor,
-                games: games as Prisma.InputJsonValue,
-                navbarItems: navbarItems as Prisma.InputJsonValue,
-                labels: labels as Prisma.InputJsonValue,
-                layerMetadata: layerMetadata as Prisma.InputJsonValue
-            }
-        });
+        // 🌟 Update het thema én voer een upsert uit op de GameSetting tabel
+        const [updatedTheme] = await prisma.$transaction([
+            prisma.theme.update({
+                where: { id },
+                data: {
+                    title,
+                    description,
+                    orgLayer,
+                    miniViewLayers: miniViewLayers as Prisma.InputJsonValue,
+                    primaryColor,
+                    secondaryColor,
+                    backgroundColor,
+                    navbarColor,
+                    textColor,
+                    darkPrimaryColor,
+                    darkSecondaryColor,
+                    darkBackgroundColor,
+                    darkTextColor,
+                    darkNavbarColor,
+                    games: games as Prisma.InputJsonValue,
+                    navbarItems: navbarItems as Prisma.InputJsonValue,
+                    labels: labels as Prisma.InputJsonValue,
+                    layerMetadata: layerMetadata as Prisma.InputJsonValue
+                }
+            }),
+            prisma.gameSetting.upsert({
+                where: { themeId: id },
+                update: {
+                    settings: (gameSettings || {}) as Prisma.InputJsonValue
+                },
+                create: {
+                    themeId: id,
+                    gameName: "guesswho",
+                    settings: (gameSettings || {}) as Prisma.InputJsonValue
+                }
+            })
+        ]);
 
         res.json(updatedTheme);
     } catch (error) {
-        console.error("Fout bij updaten thema:", error);
+        console.error("Fout bij updaten thema en/of gamesettings:", error);
         res.status(500).json({ error: "Kon het thema niet bijwerken." });
     }
 });
@@ -307,10 +339,14 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
 app.delete('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        await prisma.theme.delete({
-            where: { id }
-        });
-        res.json({ success: true, message: "Thema en alle gekoppelde entiteiten/connecties succesvol verwijderd." });
+        // Omdat GameSetting geen 'onDelete: Cascade' in de schema definitie heeft staan t.o.v Theme, 
+        // verwijderen we deze hier handmatig mee in een transactie om ghost-data te voorkomen.
+        await prisma.$transaction([
+            prisma.gameSetting.deleteMany({ where: { themeId: id } }),
+            prisma.theme.delete({ where: { id } })
+        ]);
+        
+        res.json({ success: true, message: "Thema en alle gekoppelde entiteiten/connecties/instellingen succesvol verwijderd." });
     } catch (error) {
         console.error("Fout bij verwijderen thema:", error);
         res.status(500).json({ error: "Kon het thema niet verwijderen." });

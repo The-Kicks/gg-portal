@@ -76,27 +76,49 @@ export const EntityCard: React.FC<EntityCardProps> = ({
    * If an entity values matches a target requirement rule, a system badge payload object is generated.
    */
   const activeBadges = useMemo(() => {
-    if (!triggers || !safeMetadata) return [];
+    let badges: Array<{ key: string; value: string; label: string }> = [];
 
-    return Object.entries(triggers).map(([triggerKey, triggerConfig]) => {
-      if (!triggerConfig) return null;
-      
-      // Forces comparison targets down to clean flat string evaluations
-      const currentValue = String(safeMetadata[triggerConfig.key] || '');
-      
-      // High flexibility case-insensitive rule check verification match sequences
-      if (currentValue.toLowerCase() === String(triggerConfig.value).toLowerCase()) {
-        // Attempts to map values to custom friendly display dictionary definitions, defaulting back to capitalized strings
-        const displayLabel = labels[currentValue] || labels[triggerKey] || (currentValue.charAt(0).toUpperCase() + currentValue.slice(1));
+    // Stap 1: Loop door de database triggers heen als deze bestaan
+    if (triggers && safeMetadata) {
+      badges = Object.entries(triggers).map(([triggerKey, triggerConfig]) => {
+        if (!triggerConfig) return null;
         
-        return {
-          key: triggerKey.toLowerCase(),
-          value: currentValue,
-          label: displayLabel
-        };
-      }
-      return null;
-    }).filter(Boolean) as Array<{ key: string; value: string; label: string }>;
+        // Forces comparison targets down to clean flat string evaluations
+        const currentValue = String(safeMetadata[triggerConfig.key] || '');
+        
+        // High flexibility case-insensitive rule check verification match sequences
+        if (currentValue.toLowerCase() === String(triggerConfig.value).toLowerCase()) {
+          // Attempts to map values to custom friendly display dictionary definitions, defaulting back to capitalized strings
+          const displayLabel = labels[currentValue] || labels[triggerKey] || (currentValue.charAt(0).toUpperCase() + currentValue.slice(1));
+          
+          return {
+            key: triggerKey.toLowerCase(),
+            value: currentValue,
+            label: displayLabel
+          };
+        }
+        return null;
+      }).filter(Boolean) as Array<{ key: string; value: string; label: string }>;
+    }
+
+    // 🛡️ Stap 2: HARD FORCED FALLBACK PROTECTION
+    // Als de upstream view (L4View) of de database deze entiteit expliciet als 'former' heeft gemarkeerd,
+    // en er is nog geen 'former' badge gegenereerd via de triggers, dan injecteren we deze hier handmatig.
+    const isExplicitFormer = 
+      String(safeMetadata.membershipStatus).toLowerCase() === 'former' ||
+      String(safeMetadata.groupStatus).toLowerCase() === 'former' ||
+      String(safeMetadata.status).toLowerCase() === 'former' ||
+      safeMetadata.isFormer === true;
+
+    if (isExplicitFormer && !badges.some(b => b.key === 'former')) {
+      badges.push({
+        key: 'former',
+        value: 'former',
+        label: labels['former'] || labels['Former'] || 'Former'
+      });
+    }
+
+    return badges;
   }, [triggers, safeMetadata, labels]);
 
   // Extracts explicit specific localized card fields according to layout configurations schema blueprints
