@@ -1,18 +1,29 @@
 import React, { useMemo } from 'react';
+import ReactCountryFlag from 'react-country-flag';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { GuessRow } from './GuessWhoViewPage';
 import styles from './GuessWho.module.css';
 
-interface GuessWhoViewProps {
-  // Uitgebreid met optionele spelinstellingen vanuit de database Json
-  theme: Theme & {
-    settings?: {
-      guesswho?: {
-        disabledColumns?: string[];
-        ignoredMetadata?: string[];
-      };
+// We definiëren een gedeeld, strikt type voor de Theme-extensies binnen Guess Who
+export type GuessWhoTheme = Theme & {
+  title?: string;
+  orgLayer?: string;
+  labels?: {
+    l3?: string;
+    l4?: string;
+    Role?: string;
+    DebutYear?: string;
+  };
+  gameSettings?: {
+    guesswho?: {
+      disabledColumns?: string[];
+      ignoredMetadata?: string[];
     };
   };
+};
+
+interface GuessWhoViewProps {
+  theme: GuessWhoTheme;
   secretEntity: HydratedEntity;
   searchQuery: string;
   guesses: GuessRow[];
@@ -51,25 +62,43 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   };
 
   /**
-   * Safely formats nationalities. Returns '-' token if empty.
+   * Vertaalt de nationaliteit (ISO-2 code) direct naar een vlag via react-country-flag
    */
-  const renderNationalityCell = (entity: HydratedEntity): string => {
-    // Als nationaliteit uitgeschakeld is in de instellingen, negeer deze dan direct
-    if (theme.gameSettings?.guesswho?.disabledColumns?.includes('nationality')) return '-';
-
+  const renderNationalityCell = (entity: HydratedEntity): React.ReactNode => {
     const meta = (entity.metadata || {}) as Record<string, unknown>;
+    let nationalities: string[] = [];
+
     if (Array.isArray(meta.Nationality)) {
-      const list = meta.Nationality.map(n => String(n).trim()).filter(Boolean);
-      return list.length > 0 ? list.join(', ') : '-';
+      nationalities = meta.Nationality.map(n => String(n).trim()).filter(Boolean);
+    } else if (typeof meta.Nationality === 'string') {
+      nationalities = meta.Nationality.split(',').map(n => n.trim()).filter(Boolean);
+    } else if (meta.Nationality) {
+      nationalities = [String(meta.Nationality).trim()];
     }
-    return String(meta.Nationality || '').trim() || '-';
+
+    if (nationalities.length === 0) return '-';
+
+    return (
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+        {nationalities.map((nat, i) => (
+          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }} title={nat}>
+            <ReactCountryFlag
+              countryCode={nat.toUpperCase()} // react-country-flag verwacht ISO (bijv. NL, GB, US)
+              svg
+              style={{ width: '1.4em', height: '1em', borderRadius: '2px', objectFit: 'cover' }}
+            />
+            <span>{nat}</span>
+          </span>
+        ))}
+      </div>
+    );
   };
 
   /**
-   * General string parser checking for valid textual properties.
+   * Algemene string parser voor metadata velden
    */
   const renderMetadataString = (entity: HydratedEntity, key: string): string => {
-    const ignoredMeta = (theme.gameSettings?.guesswho?.ignoredMetadata || []) as string[];
+    const ignoredMeta = theme.gameSettings?.guesswho?.ignoredMetadata || [];
     if (ignoredMeta.includes(key)) return '-';
 
     const meta = (entity.metadata || {}) as Record<string, unknown>;
@@ -77,7 +106,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   };
 
   /**
-   * Formats numeric metrics like Debut and Height cleanly without unit-spill glitches.
+   * Formatteert numerieke waarden netjes
    */
   const renderNumericDisplay = (value: unknown, suffix = ''): string => {
     const num = Number(value || 0);
@@ -94,8 +123,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   };
 
   /**
-   * DYNAMISCH KOLOMMEN BLUEPRINT
-   * Filtert automatisch kolommen weg die in `theme.settings.disabledColumns` staan gedefinieerd.
+   * Dynamische kolommen blueprint (dubbele check op nationality hier opgeschoond)
    */
   const activeColumns = useMemo(() => {
     const allColumns = [
@@ -109,7 +137,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
       { id: 'height', label: 'Height' },
     ];
 
-    const disabledList = (theme.gameSettings?.guesswho?.disabledColumns || []) as string[];
+    const disabledList = theme.gameSettings?.guesswho?.disabledColumns || [];
     return allColumns.filter(col => !disabledList.includes(col.id));
   }, [theme.labels, theme.gameSettings?.guesswho?.disabledColumns]);
 
@@ -124,7 +152,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
 
       {gameOver ? (
         <div className={styles.victoryCard}>
-          <h2>🎉 Congratulations!</h2>
+          <h2>🎉 Congratulations! 🎉</h2>
           <p>You correctly guessed <strong>{secretEntity.name}</strong>!</p>
           <button className={styles.actionBtn} onClick={startNewGame}>Play Again</button>
         </div>
@@ -168,8 +196,6 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
         <table className={styles.gameTable}>
           <thead>
             <tr>
-
-              {/*  Genereer alleen th-koppen voor kolommen die niet verborgen zijn */}
               {activeColumns.map(col => (
                 <th key={col.id}>{col.label}</th>
               ))}
@@ -180,54 +206,46 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
               return (
                 <tr key={idx}>
                   {activeColumns.map(col => {
-                    // Definieer metadata veilig bovenaan
                     const meta = row.entity.metadata as Record<string, unknown> | undefined;
 
                     switch (col.id) {
-                      case 'profile': {
+                      case 'profile':
                         return (
                           <td key={col.id} className={styles.cellProfile}>
                             <img src={getProfileImage(row.entity)} alt="" className={styles.tableAvatar} />
                           </td>
                         );
-                      }
-                      case 'name': {
+                      case 'name':
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.name]}`}>
                             {row.entity.name || '-'}
                           </td>
                         );
-                      }
-                      case 'org': {
+                      case 'org':
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.org]}`}>
                             {row.displayOrg || '-'}
                           </td>
                         );
-                      }
-                      case 'nationality': {
+                      case 'nationality':
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.nationality]}`}>
                             {renderNationalityCell(row.entity)}
                           </td>
                         );
-                      }
-                      case 'role': {
+                      case 'role':
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.role]}`}>
                             {renderMetadataString(row.entity, 'Role')}
                           </td>
                         );
-                      }
-                      case 'debut': {
+                      case 'debut':
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.debut]}`}>
                             {renderNumericDisplay(meta?.DebutYear)} {row.arrows.debut}
                           </td>
                         );
-                      }
                       case 'age': {
-                        // Gebruik de 2 argumenten, TypeScript klaagt nu niet meer
                         const ageVal = getAgeFromDateString(meta?.Birthday, meta?.PassingDate);
                         const hasPassingDate = !!meta?.PassingDate;
 
@@ -242,13 +260,12 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
                           </td>
                         );
                       }
-                      case 'height': {
+                      case 'height':
                         return (
                           <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.height]}`}>
                             {renderNumericDisplay(meta?.Height, 'cm')} {row.arrows.height}
                           </td>
                         );
-                      }
                       default:
                         return null;
                     }

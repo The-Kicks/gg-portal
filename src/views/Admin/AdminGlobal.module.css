@@ -1,11 +1,28 @@
 /* AdminGlobal.module.css */
 
+:root {
+  --bg-main: #0f172a;        /* Diep corporate slate-900 */
+  --bg-surface: #1e293b;     /* Iets lichtere slate-800 voor kaarten/tabellen */
+  --bg-inner: #0b0f19;       /* Extra diepe contrastkleur voor binnensecties */
+  --adminprimary: #3b82f6;        /* Professioneel helderblauw (interactive) */
+  --adminprimary-hover: #2563eb;  /* Focus/hover blauw */
+  --border-color: #334155;   /* Subtiele slate-700 randen */
+  --text-main: #f8fafc;      /* Helder off-white voor rustige hi-res tekst */
+  --text-muted: #94a3b8;     /* Zacht leigrijs voor sublabels */
+  --text-dimmed: #64748b;    /* Donkerder grijs voor minder belangrijke meta-data */
+  
+  /* Statuskleuren volgens enterprise standaarden */
+  --color-success: #10b981;  /* Emerald Groen */
+  --color-error: #ef4444;    /* Crimson Rood */
+  --color-warning: #f59e0b;  /* Amber Geel */
+}
+
 .container {
   padding: 40px;
-  background-color: var(--bg, #121212);
-  color: var(--text, #fff);
+  background-color: var(--bg-main);
+  color: var(--text-main);
   min-height: 100vh;
-  font-family: sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .header {
@@ -17,6 +34,9 @@
 
 .title {
   margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .buttonGroup {
@@ -26,33 +46,35 @@
 
 /* Algemene knop-basis */
 .btn {
-  padding: 12px 24px;
-  font-size: 15px;
-  font-weight: bold;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition: all 0.15s ease-in-out;
 }
 
 .btnOutline {
-  background-color: var(--secondary, #2d2d2d);
-  color: var(--primary, #deff9a);
-  border: 1px solid var(--primary, #deff9a);
+  background-color: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
 }
 
 .btnOutline:hover {
-  opacity: 0.9;
+  background-color: var(--bg-surface);
+  border-color: var(--text-muted);
 }
 
 .btnPrimary {
-  background-color: var(--primary, #deff9a);
-  color: #000;
+  background-color: var(--adminprimary);
+  color: #ffffff;
   border: none;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .btnPrimary:hover {
-  opacity: 0.9;
+  background-color: var(--adminprimary-hover);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .filterGroup {
@@ -63,135 +85,171 @@
 
 .filterBtn {
   padding: 8px 16px;
-  background-color: var(--secondary, #2d2d2d);
-  color: var(--text, #fff);
-  border: none;
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
   cursor: pointer;
-  font-weight: bold;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.filterBtn:hover {
+  color: var(--text-main);
+  border-color: var(--text-muted);
 }
 
 .filterBtnActive {
-  background-color: var(--primary, #deff9a);
-  color: #000;
-  border: none;
+  background-color: var(--adminprimary);
+  color: #ffffff;
+  border: 1px solid var(--adminprimary);
   cursor: pointer;
-  font-weight: bold;
-  border-radius: 4px;
+  font-weight: 600;
+  border-radius: 6px;
 }
 
 /* Tabel styles */
 .table {
   width: 100%;
   border-collapse: collapse;
-  background-color: #1e1e1e; /* Basis donkere tabelkleur */
+  background-color: var(--bg-surface);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
 .tableHeaderRow {
-  border-bottom: 2px solid #333;
+  background-color: rgba(15, 23, 42, 0.6);
+  border-bottom: 2px solid var(--border-color);
   text-align: left;
 }
 
-.th, .td {
-  padding: 12px;
+.th {
+  padding: 14px 16px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.td {
+  padding: 14px 16px;
+  font-size: 14px;
 }
 
 .rowNormal {
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.15s ease;
+}
+
+.rowNormal:hover {
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 .rowSectionEnd {
-  border-bottom: 3px solid var(--primary, #deff9a);
+  border-bottom: 2px solid var(--adminprimary);
 }
 
 .btnEdit {
-  background-color: var(--secondary, #2d2d2d);
-  color: var(--primary, #deff9a);
-  border: 1px solid var(--primary, #deff9a);
-  padding: 6px 12px;
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--adminprimary);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: 6px 14px;
   cursor: pointer;
-  font-weight: bold;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .btnEdit:hover {
-  background-color: var(--primary, #deff9a);
-  color: #000;
+  background-color: var(--adminprimary);
+  color: #ffffff;
+  border-color: var(--adminprimary);
 }
 
 /* Helper Text Utilities */
 .textBold {
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .textMuted {
-  color: #aaa;
+  color: var(--text-muted);
 }
 
 .textPrimary {
-  color: var(--primary, #deff9a);
+  color: #60a5fa; /* Iets lichtere variant voor tekst op donkere ondergrond */
 }
 
 .textDimmed {
-  color: #666;
+  color: var(--text-dimmed);
 }
 
 .textCenter {
   text-align: center;
 }
 
-/* Uniforme Input Fields (Gelijk voor alle formulieren in je admin-bestanden) */
+/* Uniforme Input Fields */
 .inputField {
   width: 100%;
   padding: 10px 14px;
   font-size: 14px;
   font-family: sans-serif;
-  background-color: var(--secondary, #2d2d2d);
-  color: var(--text, #fff);
-  border: 1px solid #444;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .inputField::placeholder {
-  color: #777;
+  color: var(--text-dimmed);
 }
 
 .inputField:focus {
-  border-color: var(--primary, #deff9a);
-  box-shadow: 0 0 0 2px rgba(222, 255, 154, 0.2);
+  border-color: var(--adminprimary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 
 .btnBack {
-  background-color: var(--secondary, #333);
-  color: var(--text, #fff);
+  background-color: #334155;
+  color: var(--text-main);
   border: none;
-  padding: 8px 16px;
+  padding: 10px 20px;
   margin-bottom: 20px;
 }
 
-/* Extra toevoegingen voor formulieren in AdminGlobal.module.css */
+.btnBack:hover {
+  background-color: #475569;
+}
 
+/* Form Cards */
 .formCard {
-  padding: 20px;
-  background-color: #242424;
-  color: var(--text, #fff);
+  padding: 24px;
+  background-color: var(--bg-surface);
+  color: var(--text-main);
   border-radius: 8px;
   margin-bottom: 20px;
-  border: 2px solid var(--primary, #deff9a);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 
 .formCardTitle {
   margin-top: 0;
-  color: var(--primary, #deff9a);
+  font-size: 18px;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
 }
 
 .sectionTitle {
-  margin-top: 20px;
-  margin-bottom: 10px;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 /* Grids */
@@ -211,67 +269,78 @@
 /* Labels en info */
 .fieldLabel {
   display: block;
-  margin-bottom: 5px;
-  font-size: 14px;
-  color: #aaa;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .labelSubText {
   font-size: 12px;
+  color: var(--text-dimmed);
 }
 
 .labelActionRow {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   font-size: 13px;
-  color: var(--primary, #deff9a);
+  color: var(--text-muted);
 }
 
 /* Validatie modificaties voor inputFields */
 .inputAvailable {
-  border: 2px solid #4caf50 !important;
+  border: 1px solid var(--color-success) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
 }
 
 .inputTaken {
-  border: 2px solid #f44336 !important;
+  border: 1px solid var(--color-error) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
 
 .textError {
-  color: #f44336;
+  color: var(--color-error);
   font-size: 12px;
+  margin-top: 4px;
 }
 
-/* Speciale secties */
+/* Speciale secties (Gevaar / Verplicht) */
 .requiredSection {
-  border: 2px dashed #ffb300;
-  padding: 15px;
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  padding: 16px;
   border-radius: 6px;
   margin-bottom: 25px;
-  background-color: #2e2516;
+  background-color: rgba(245, 158, 11, 0.04);
 }
 
 .requiredTitle {
-  margin: 0 0 5px 0;
-  color: #ffb300;
+  margin: 0 0 6px 0;
+  color: var(--color-warning);
+  font-size: 15px;
 }
 
 .requiredLabel {
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   font-size: 13px;
-  color: #ffb300;
-  font-weight: bold;
+  color: var(--color-warning);
+  font-weight: 600;
 }
 
 .requiredInput {
-  border: 1px solid #ffb300 !important;
+  border: 1px solid rgba(245, 158, 11, 0.5) !important;
+}
+
+.requiredInput:focus {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2) !important;
 }
 
 .innerSection {
-  background-color: #151515;
-  padding: 15px;
+  background-color: var(--bg-inner);
+  padding: 16px;
   border-radius: 6px;
   margin-bottom: 25px;
+  border: 1px solid var(--border-color);
 }
 
 .innerActionRow {
@@ -279,42 +348,52 @@
   display: flex;
   gap: 10px;
   align-items: center;
-  background-color: #222;
-  padding: 10px;
-  border-radius: 4px;
+  background-color: var(--bg-surface);
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
 }
 
 .inlineInput {
-  padding: 6px;
-  background-color: #1e1e1e;
-  color: #fff;
-  border: 1px solid #444;
+  padding: 8px 12px;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
   flex: 1;
 }
 
 /* Knoppen & Checkbox */
 .checkbox {
   margin-top: 14px;
-  transform: scale(1.4);
+  cursor: pointer;
 }
 
 .btnRemove {
   background: transparent;
-  color: #ff4d4d;
+  color: var(--color-error);
   border: none;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 500;
   padding: 0;
+  opacity: 0.8;
+}
+
+.btnRemove:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .footerActions {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+  margin-top: 10px;
 }
 
-/* Specifieke toevoegingen voor de Edit/Modificatie Portal */
-
+/* Specific Edit Portal overrides */
 .editInfoGrid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -324,8 +403,8 @@
 
 /* Connection Badges & Rows */
 .connectionRow {
-  border-bottom: 1px solid #444;
-  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 0;
 }
 
 .connectionHeader {
@@ -341,50 +420,58 @@
 }
 
 .badgeInbound {
-  background-color: #2e4053;
-  color: #fff;
-  padding: 2px 5px;
-  border-radius: 3px;
-  font-Size: 10px;
-  font-weight: bold;
+  background-color: rgba(30, 58, 138, 0.5);
+  color: #93c5fd;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .badgeOutbound {
-  background-color: #1e3f20;
-  color: #fff;
-  padding: 2px 5px;
-  border-radius: 3px;
-  font-Size: 10px;
-  font-weight: bold;
+  background-color: rgba(6, 78, 59, 0.5);
+  color: #6ee7b7;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .layerBadge {
-  background-color: #151515;
-  padding: 3px 6px;
+  background-color: var(--bg-main);
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 11px;
-  color: #aaa;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
 }
 
 /* Nesting / Portal UI */
 .portalSection {
   margin-top: 15px;
-  padding: 15px;
-  background-color: #151515;
-  border-radius: 6px;
-  border-left: 4px solid var(--primary, #deff9a);
+  padding: 20px;
+  background-color: var(--bg-inner);
+  border-radius: 8px;
+  border-left: 4px solid var(--adminprimary);
+  border: 1px solid var(--border-color);
+  border-left-width: 4px;
 }
 
 .portalTitle {
   margin: 0 0 15px 0;
-  color: #b3e5fc;
+  color: #60a5fa;
+  font-size: 15px;
 }
 
 /* Autocomplete Search Dropdown */
 .dropdownWrapper {
   margin-top: 20px;
   padding-top: 15px;
-  border-top: 1px solid #555;
+  border-top: 1px solid var(--border-color);
   position: relative;
 }
 
@@ -395,95 +482,102 @@
   right: 0;
   max-height: 250px;
   overflow-y: auto;
-  background-color: #1e1e1e;
-  border: 1px solid #444;
-  border-radius: 4px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
   margin-top: 5px;
   z-index: 999;
-  box-shadow: 0px 4px 12px rgba(0,0,0,0.5);
+  box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .dropdownItem {
-  padding: 10px 15px;
+  padding: 12px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #2d2d2d;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #252525;
-  transition: background-color 0.2s ease;
+  background-color: var(--bg-surface);
+  transition: background-color 0.15s ease;
 }
 
-/* Vervangt de JS mouse enter/leave handlers met pure CSS! */
 .dropdownItem:hover {
-  background-color: #2d2d2d;
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 .dropdownNoResults {
-  padding: 12px 15px;
-  color: #888;
+  padding: 14px 16px;
+  color: var(--text-dimmed);
   font-style: italic;
-  background-color: #252525;
+  background-color: var(--bg-surface);
 }
 
-/* Fast-track box & speciale knoppen */
+/* Fast-track Provisioning Box */
 .provisionBox {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #222;
-  border-radius: 6px;
-  border: 1px dashed #444;
+  margin-top: 24px;
+  padding: 16px;
+  background-color: var(--bg-inner);
+  border-radius: 8px;
+  border: 1px dashed var(--border-color);
 }
 
 .provisionTitle {
   display: block;
   font-size: 13px;
-  margin-bottom: 8px;
-  color: #b3e5fc;
-  font-weight: bold;
+  margin-bottom: 10px;
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .btnUnlink {
-  background-color: #ff4d4d;
-  color: #fff;
-  border: none;
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   padding: 6px 12px;
   cursor: pointer;
   border-radius: 4px;
-  font-weight: bold;
-  transition: opacity 0.2s ease;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.15s ease;
 }
 
 .btnUnlink:hover {
-  opacity: 0.9;
+  background-color: var(--color-error);
+  color: #ffffff;
+  border-color: var(--color-error);
 }
 
 .textWarning {
-  color: #ffb300;
+  color: var(--color-warning);
   font-size: 12px;
   margin-left: 5px;
 }
 
-/* Specifieke toevoegingen voor Theme / Brand Manager */
-
+/* Theme / Brand Manager Additions */
 .formContainer {
-  background-color: #1e1e1e;
+  background-color: var(--bg-surface);
   padding: 30px;
   border-radius: 8px;
-  border: 1px solid #333;
+  border: 1px solid var(--border-color);
 }
 
 .formContainer h3 {
   margin-top: 0;
   margin-bottom: 20px;
+  font-size: 20px;
+  letter-spacing: -0.3px;
 }
 
 .accentHeading {
-  margin-top: 30px;
-  margin-bottom: 15px;
-  color: var(--primary, #deff9a);
-  border-bottom: 1px solid #333;
-  padding-bottom: 6px;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #60a5fa;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Grids extensies */
@@ -495,60 +589,65 @@
 }
 
 .configSectionBlock {
-  background-color: #161616;
+  background-color: var(--bg-inner);
   padding: 20px;
-  border-radius: 6px;
+  border-radius: 8px;
   margin-bottom: 20px;
-  border: 1px solid #333;
+  border: 1px solid var(--border-color);
 }
 
 .configSectionBlock h5 {
   margin: 0 0 15px 0;
-  color: var(--primary, #deff9a);
+  color: var(--text-main);
   font-size: 14px;
-  text-transform: uppercase;
-  border-bottom: 1px dashed #444;
-  padding-bottom: 6px;
+  font-weight: 600;
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 8px;
 }
 
 .configSectionBlock h6 {
   margin: 0 0 15px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-/* Textarea variant die past bij de uniforme inputField */
+/* Textarea Variant */
 .textareaField {
   width: 100%;
   padding: 10px 14px;
   font-size: 14px;
   font-family: sans-serif;
-  background-color: var(--secondary, #2d2d2d);
-  color: var(--text, #fff);
-  border: 1px solid #555;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
-  height: 60px;
+  height: 80px;
   resize: vertical;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .textareaField:focus {
-  border-color: var(--primary, #deff9a);
-  box-shadow: 0 0 0 2px rgba(222, 255, 154, 0.2);
+  border-color: var(--adminprimary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 
-/* Inline flex selecties (zoals checkboxes) */
+/* Inline flex selecties (Checkboxes) */
 .checkboxLabelInline {
   display: inline-flex;
   align-items: center;
-  margin-right: 15px;
+  margin-right: 20px;
   cursor: pointer;
   font-size: 14px;
+  color: var(--text-main);
 }
 
 .checkboxLabelInline input[type="checkbox"] {
-  margin-right: 6px;
+  margin-right: 8px;
+  cursor: pointer;
 }
 
 /* Guess Who game checklist stack */
@@ -563,26 +662,25 @@
   align-items: center;
   cursor: pointer;
   font-size: 13px;
-  color: #fff;
-  transition: opacity 0.2s ease, color 0.2s ease;
+  color: var(--text-main);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .guessWhoLabel input {
-  margin-right: 8px;
-  cursor: pointer;
+  margin-right: 10px;
 }
 
 /* Afwijkende condities op basis van statusklassen */
 .guessWhoLabel.isChecked {
-  color: #ff6b6b;
+  color: #fca5a5; /* Gedimd rood voor uitgesloten items */
+  background-color: rgba(239, 68, 68, 0.05);
 }
 
 .guessWhoLabel.isMandatory {
   cursor: not-allowed;
-  opacity: 0.6;
-  color: #888;
-}
-
-.guessWhoLabel.isMandatory input {
-  cursor: not-allowed;
+  opacity: 0.5;
+  color: var(--text-dimmed);
+  background-color: transparent;
 }
