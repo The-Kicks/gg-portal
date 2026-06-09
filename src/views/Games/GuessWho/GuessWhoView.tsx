@@ -50,7 +50,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   handleSelectGuess,
   getAgeFromDateString
 }) => {
-
+  console.log("LOG: disabledColumns in View:", theme?.gameSettings?.guesswho?.disabledColumns);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (filteredDropdownOptions.length > 0) {
@@ -136,9 +136,11 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
       { id: 'height', label: 'Height' },
     ];
 
-    const disabledList = theme.gameSettings?.guesswho?.disabledColumns || [];
-    return allColumns.filter(col => !disabledList.includes(col.id));
-  }, [theme.labels, theme.gameSettings?.guesswho?.disabledColumns]);
+    const rawDisabled = theme?.gameSettings?.guesswho?.disabledColumns;
+    const disabledList = Array.isArray(rawDisabled) ? rawDisabled.map(s => String(s).trim().toLowerCase()) : [];
+
+    return allColumns.filter(col => !disabledList.includes(col.id.toLowerCase()));
+  }, [theme]);
 
   return (
     <div className={styles.container}>

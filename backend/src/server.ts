@@ -206,7 +206,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 labels: (theme.labels || {}) as Record<string, string | undefined>,
                 layerMetadata: (theme.layerMetadata || {}) as Record<string, MetaDataStandard | undefined>,
                 // 🌟 Voeg de settings toe (als de database rij bestaat, pakken we de 'settings' JSON kolom)
-                gameSettings: dbGameSetting ? (dbGameSetting.settings as unknown as GameSettings) : {},
+                gameSettings: dbGameSetting ? (dbGameSetting.gameSettings as unknown as GameSettings) : {},
                 entities: hydratedEntities
             });
         }
@@ -269,7 +269,7 @@ app.post('/api/themes', async (req: Request, res: Response) => {
                 data: {
                     themeId: id,
                     gameName: "guesswho",
-                    settings: (gameSettings || {}) as Prisma.InputJsonValue
+                    gameSettings: (gameSettings || {}) as Prisma.InputJsonValue
                 }
             })
         ]);
@@ -319,12 +319,12 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             prisma.gameSetting.upsert({
                 where: { themeId: id },
                 update: {
-                    settings: (gameSettings || {}) as Prisma.InputJsonValue
+                    gameSettings: (gameSettings || {}) as Prisma.InputJsonValue
                 },
                 create: {
                     themeId: id,
                     gameName: "guesswho",
-                    settings: (gameSettings || {}) as Prisma.InputJsonValue
+                    gameSettings: (gameSettings || {}) as Prisma.InputJsonValue
                 }
             })
         ]);

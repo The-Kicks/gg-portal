@@ -65,5 +65,5 @@ model GameSetting {
   id        String   @id @default(cuid())
   themeId   String   @unique
   gameName  String   @default("guesswho")
-  settings  Json     
+  gameSettings  Json     
 }
