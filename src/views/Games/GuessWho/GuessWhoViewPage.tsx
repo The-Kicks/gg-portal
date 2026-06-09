@@ -30,38 +30,36 @@ interface Props {
 // STANDALONE PURE UTILITY FUNCTIONS 
 // ============================================================================
 
-const parseMetaArray = (value: unknown): string[] => {
+/**
+ * Split strings of arrays op basis van zowel slashes (/) als komma's (,) zonder regex literals
+ */
+const parseMetaToCleanArray = (value: unknown): string[] => {
   if (!value) return [];
-  if (Array.isArray(value)) {
-    return value.map(v => String(v).trim().toLowerCase()).filter(Boolean);
-  }
-  if (typeof value === 'string') {
-    return value.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
-  }
-  const serialized = String(value).trim().toLowerCase();
-  return serialized ? [serialized] : [];
+  
+  const rawString = Array.isArray(value) ? value.join('/') : String(value);
+  
+  return rawString
+    .split(',')
+    .flatMap(v => v.split('/'))
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean);
 };
 
+/**
+ * Evalueert arrays (posities, nationaliteiten) op exact, partial of incorrect
+ */
 const evaluateArrayMatch = (guessArr: string[], secretArr: string[]): 'correct' | 'partial' | 'incorrect' => {
-  if (guessArr.length === 0 || secretArr.length === 0) return 'correct';
+  if (guessArr.length === 0 || secretArr.length === 0) {
+    return guessArr.length === secretArr.length ? 'correct' : 'incorrect';
+  }
+
+  const isExact = guessArr.length === secretArr.length && guessArr.every(item => secretArr.includes(item));
+  if (isExact) return 'correct';
 
   const hasMatch = guessArr.some(item => secretArr.includes(item));
-  const isExact = secretArr.length === guessArr.length && secretArr.every(item => guessArr.includes(item));
-
-  if (isExact) return 'correct';
   if (hasMatch) return 'partial';
+
   return 'incorrect';
-};
-
-const evaluateRoleMatch = (guessRole: unknown, secretRole: unknown): 'correct' | 'partial' | 'incorrect' => {
-  const gStr = String(guessRole || '').toLowerCase().trim();
-  const sStr = String(secretRole || '').toLowerCase().trim();
-
-  if (!gStr || !sStr || gStr === sStr) return 'correct';
-
-  const segments = gStr.split('/');
-  const hasPartial = segments.some(seg => seg.trim() && sStr.includes(seg.trim()));
-  return hasPartial ? 'partial' : 'incorrect';
 };
 
 const evaluateNumericMetric = (guessNum: number, secretNum: number, invertLogic = false) => {
@@ -124,9 +122,6 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
     return connection?.sourceEntity?.name || '';
   }, [theme.orgLayer]);
 
-  /**
-   * Berekent de exacte leeftijd op basis van de huidige datum van NU (of datum van overlijden)
-   */
   const getAgeFromDateString = useCallback((birthDateStr?: unknown, passingDateStr?: unknown): number => {
     if (typeof birthDateStr !== 'string') return 0;
 
@@ -134,14 +129,13 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
     if (birthParts.length !== 3) return 0;
 
     const birthDay = parseInt(birthParts[0], 10);
-    const birthMonth = parseInt(birthParts[1], 10) - 1; // JS maanden lopen van 0 t/m 11
+    const birthMonth = parseInt(birthParts[1], 10) - 1;
     const birthYear = parseInt(birthParts[2], 10);
 
     if (isNaN(birthDay) || isNaN(birthMonth) || isNaN(birthYear)) return 0;
 
     const birthDate = new Date(birthYear, birthMonth, birthDay);
     
-    // Bepaal de einddatum (vandaag óf overlijdensdatum)
     let endDate = new Date();
     if (typeof passingDateStr === 'string') {
       const passingParts = passingDateStr.split('-');
@@ -158,7 +152,6 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
     let age = endDate.getFullYear() - birthDate.getFullYear();
     const monthDiff = endDate.getMonth() - birthDate.getMonth();
     
-    // Corrigeer als de persoon dit jaar zijn/haar verjaardag nog niet heeft gehad ten opzichte van de einddatum
     if (monthDiff < 0 || (monthDiff === 0 && endDate.getDate() < birthDate.getDate())) {
       age--;
     }
@@ -190,8 +183,8 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
     const sMeta = (secretEntity.metadata || {}) as Record<string, unknown>;
     const gMeta = (guessedEntity.metadata || {}) as Record<string, unknown>;
 
-    const nationalityStatus = evaluateArrayMatch(parseMetaArray(gMeta.Nationality), parseMetaArray(sMeta.Nationality));
-    const roleStatus = evaluateRoleMatch(gMeta.Role, sMeta.Role);
+    const nationalityStatus = evaluateArrayMatch(parseMetaToCleanArray(gMeta.Nationality), parseMetaToCleanArray(sMeta.Nationality));
+    const roleStatus = evaluateArrayMatch(parseMetaToCleanArray(gMeta.Role), parseMetaToCleanArray(sMeta.Role));
 
     const debutMetric = evaluateNumericMetric(Number(gMeta.DebutYear || 0), Number(sMeta.DebutYear || 0));
     const ageMetric = evaluateNumericMetric(

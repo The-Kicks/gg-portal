@@ -4,7 +4,6 @@ import type { Theme, HydratedEntity } from '../../../types';
 import type { GuessRow } from './GuessWhoViewPage';
 import styles from './GuessWho.module.css';
 
-// We definiëren een gedeeld, strikt type voor de Theme-extensies binnen Guess Who
 export type GuessWhoTheme = Theme & {
   title?: string;
   orgLayer?: string;
@@ -62,18 +61,27 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   };
 
   /**
-   * Vertaalt de nationaliteit (ISO-2 code) direct naar een vlag via react-country-flag
+   * Vertaalt de nationaliteit naar vlaggen via pure string splitting (geen regex)
    */
   const renderNationalityCell = (entity: HydratedEntity): React.ReactNode => {
     const meta = (entity.metadata || {}) as Record<string, unknown>;
     let nationalities: string[] = [];
 
-    if (Array.isArray(meta.Nationality)) {
-      nationalities = meta.Nationality.map(n => String(n).trim()).filter(Boolean);
-    } else if (typeof meta.Nationality === 'string') {
-      nationalities = meta.Nationality.split(',').map(n => n.trim()).filter(Boolean);
-    } else if (meta.Nationality) {
-      nationalities = [String(meta.Nationality).trim()];
+    const rawValue = meta.Nationality;
+    if (Array.isArray(rawValue)) {
+      nationalities = rawValue
+        .flatMap(n => String(n).split(','))
+        .flatMap(n => n.split('/'))
+        .map(n => n.trim())
+        .filter(Boolean);
+    } else if (typeof rawValue === 'string') {
+      nationalities = rawValue
+        .split(',')
+        .flatMap(n => n.split('/'))
+        .map(n => n.trim())
+        .filter(Boolean);
+    } else if (rawValue) {
+      nationalities = [String(rawValue).trim()];
     }
 
     if (nationalities.length === 0) return '-';
@@ -83,7 +91,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
         {nationalities.map((nat, i) => (
           <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }} title={nat}>
             <ReactCountryFlag
-              countryCode={nat.toUpperCase()} // react-country-flag verwacht ISO (bijv. NL, GB, US)
+              countryCode={nat.toUpperCase()}
               svg
               style={{ width: '1.4em', height: '1em', borderRadius: '2px', objectFit: 'cover' }}
             />
@@ -94,9 +102,6 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
     );
   };
 
-  /**
-   * Algemene string parser voor metadata velden
-   */
   const renderMetadataString = (entity: HydratedEntity, key: string): string => {
     const ignoredMeta = theme.gameSettings?.guesswho?.ignoredMetadata || [];
     if (ignoredMeta.includes(key)) return '-';
@@ -105,9 +110,6 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
     return String(meta[key] || '').trim() || '-';
   };
 
-  /**
-   * Formatteert numerieke waarden netjes
-   */
   const renderNumericDisplay = (value: unknown, suffix = ''): string => {
     const num = Number(value || 0);
     if (!num || isNaN(num)) return '-';
@@ -122,9 +124,6 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
     return 'https://via.placeholder.com/50';
   };
 
-  /**
-   * Dynamische kolommen blueprint (dubbele check op nationality hier opgeschoond)
-   */
   const activeColumns = useMemo(() => {
     const allColumns = [
       { id: 'profile', label: 'Profile' },
@@ -152,7 +151,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
 
       {gameOver ? (
         <div className={styles.victoryCard}>
-          <h2>🎉 Congratulations! 🎉</h2>
+          <h2>🎉 Congratulations!</h2>
           <p>You correctly guessed <strong>{secretEntity.name}</strong>!</p>
           <button className={styles.actionBtn} onClick={startNewGame}>Play Again</button>
         </div>
