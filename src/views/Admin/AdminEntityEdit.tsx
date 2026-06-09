@@ -121,32 +121,26 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
     setImageInputs(imgInputs);
 
-    // Sync Metadata Framework
+    // --- Sync Metadata Framework ---
     const metaInputs: Record<string, string> = {};
     const currentType = originalEntity.type?.toLowerCase() || '';
 
-    // 1. Garandeer dat verplichte L4 velden altijd als (lege) input bestaan
+    // 1. Initialiseer verplichte L4 velden als leeg
     if (currentType === 'l4') {
       REQUIRED_L4_FIELDS.forEach(field => {
         metaInputs[field] = '';
       });
     }
 
-    // 2. Bestaande schema-metadata uit lay-out toevoegen
-    if (layerConfig) {
-      const defaultKeys: string[] = [];
-      if (layerConfig.badgeKey) defaultKeys.push(layerConfig.badgeKey);
-      if (layerConfig.subtitleKey) defaultKeys.push(layerConfig.subtitleKey);
-      if (Array.isArray(layerConfig.gridKeys)) {
-        defaultKeys.push(...layerConfig.gridKeys);
-      }
-      if (layerConfig.statusTriggers) {
-        Object.values(layerConfig.statusTriggers).forEach(t => {
-          if (t?.key) defaultKeys.push(t.key);
-        });
-      }
-      defaultKeys.forEach((key: string) => {
-        if (key) metaInputs[key] = metaInputs[key] !== undefined ? metaInputs[key] : '';
+    // 2. Vul de inputs met bestaande data, maar wees slim met hoofdletters
+    if (originalEntity.metadata) {
+      Object.entries(originalEntity.metadata).forEach(([dbKey, val]) => {
+        // Zoek of de dbKey overeenkomt met een van onze verplichte velden (case-insensitive)
+        const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
+
+        // Gebruik de 'juiste' casing voor de key, anders gebruik de dbKey
+        const targetKey = match || dbKey;
+        metaInputs[targetKey] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
       });
     }
 
@@ -169,8 +163,15 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     const isL4 = originalEntity?.type?.toLowerCase() === 'l4';
 
     return {
-      requiredKeys: allKeys.filter(key => isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())),
-      dynamicKeys: allKeys.filter(key => !(isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())))
+      requiredKeys: allKeys.filter(key =>
+        isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())
+      ),
+      // Pas deze regel aan: voeg PassingDate toe aan de uitsluiting
+      dynamicKeys: allKeys.filter(key => {
+        const isRequired = isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
+        const isPassingDate = key.toLowerCase() === 'passingdate'; // <--- HIER
+        return !isRequired && !isPassingDate;
+      })
     };
   }, [metadataInputs, originalEntity?.type]);
 
@@ -247,10 +248,18 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
   const handleAddMetadataField = () => {
     const cleanKey = newMetadataKey.trim();
-    if (!cleanKey || metadataInputs[cleanKey] !== undefined) return;
+    if (!cleanKey) return;
 
-    if (originalEntity.type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase())) {
-      alert(`Field "${cleanKey}" is already configured inside the required system attributes.`);
+    // 1. Check op exact bestaan in state
+    if (metadataInputs[cleanKey] !== undefined) {
+      alert("Dit veld bestaat al.");
+      return;
+    }
+
+    // 2. ANTI-COLLISION: Voorkom dat gebruikers core-velden overschrijven
+    const isCoreField = REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase());
+    if (isCoreField) {
+      alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld (Core Game Metric). Je kunt deze niet toevoegen als dynamisch attribuut.`);
       return;
     }
 
@@ -386,26 +395,36 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
-      const originalValue = originalObject ? originalObject[key] : undefined;
 
-      if (!rawValue.trim()) return;
+      // Sla lege waarden over
+      if (!rawValue || !rawValue.trim()) return;
 
+      // --- EXPLICIETE UITZONDERING VOOR DATES ---
+      // Zorg dat PassingDate en Birthday ALTIJD strings blijven
+      if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
+        result[key] = rawValue.trim();
+        return;
+      }
+
+      // --- REST VAN DE LOGICA ---
       if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
         result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
       } else if (isL4 && (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear')) {
         result[key] = Number(rawValue.trim()) || 0;
-      } else if (typeof originalValue === 'number') {
+      } else if (typeof originalObject[key] === 'number') {
         result[key] = Number(rawValue) || 0;
-      } else if (typeof originalValue === 'boolean') {
+      } else if (typeof originalObject[key] === 'boolean') {
         result[key] = rawValue.toLowerCase() === 'true';
       } else {
-        result[key] = rawValue;
+        result[key] = rawValue.trim();
       }
     });
     return result;
   };
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    console.log("Huidige metadata state:", metadataInputs);
+    console.log("Is DebutYear gevuld?", metadataInputs['DebutYear']);
     if (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -416,32 +435,45 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       return;
     }
 
-    // Valideer L4 specifieke vereisten analoog aan de Create pagina logica
+    // 1. Validatie voor L4
     if (originalEntity.type.toLowerCase() === 'l4') {
       for (const field of REQUIRED_L4_FIELDS) {
-        if (!metadataInputs[field] || !metadataInputs[field].trim()) {
+        // Zoek naar de key, ongeacht hoofdletters
+        const foundKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === field.toLowerCase());
+        const value = foundKey ? metadataInputs[foundKey] : undefined;
+
+        if (!value || !value.trim()) {
           alert(`Game Error: The field "${field}" is strictly required for Layer 4 entities.`);
           return;
         }
       }
 
+      // Check Datum Formaat voor Birthday (Altijd verplicht voor L4)
       const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
       if (!dateRegex.test(metadataInputs['Birthday'].trim())) {
-        alert("Format Error: Birthday must use the DD-MM-YYYY standard layout (e.g., 25-04-1947).");
+        alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
         return;
       }
 
-      if (isNaN(Number(metadataInputs['Height'].trim()))) {
-        alert("Format Error: Height must be a valid numeric configuration in cm (e.g., 184).");
+      // Check optionele PassingDate (ALLEEN als ingevuld)
+      const passingDate = metadataInputs['PassingDate']?.trim();
+      if (passingDate && !dateRegex.test(passingDate)) {
+        alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
         return;
       }
 
-      if (isNaN(Number(metadataInputs['DebutYear'].trim()))) {
-        alert("Format Error: Debut Year must be a valid numeric configuration year (e.g., 2015).");
+      // Check Numerieke velden
+      if (isNaN(Number(metadataInputs['Height']?.trim()))) {
+        alert("Format Error: Height must be a number.");
+        return;
+      }
+      if (isNaN(Number(metadataInputs['DebutYear']?.trim()))) {
+        alert("Format Error: Debut Year must be a number.");
         return;
       }
     }
 
+    // 2. Data opbouw
     const updatedMetadata = reconstructObject(metadataInputs, originalEntity.metadata || {});
 
     if (dynamicTriggers[status]) {
@@ -454,19 +486,20 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       name: name.trim(),
       status,
       isStandalone,
-      image: imageInputs as Record<string, string | string[] | undefined> as HydratedEntity['image'],
-      metadata: updatedMetadata as Record<string, string | number | boolean | string[] | undefined> as HydratedEntity['metadata'],
+      image: imageInputs as HydratedEntity['image'],
+      metadata: updatedMetadata as HydratedEntity['metadata'],
       connections: localConnections,
       targetConnections: localTargetConnections
     };
 
+    // 3. Save
     try {
       if (onSave) {
         await onSave(updatedEntity);
       }
     } catch (err) {
       console.error(err);
-      alert("Could not update the entity modifications inside the database engine.");
+      alert("Could not update the entity modifications.");
     }
   };
 
@@ -480,19 +513,19 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       <div className={styles.editInfoGrid}>
         <div>
           <div className={styles.fieldLabel}>Name</div>
-          <input 
-            type="text" 
-            value={name} 
-            onChange={e => setName(e.target.value)} 
-            className={styles.inputField} 
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className={styles.inputField}
           />
         </div>
 
         <div>
           <div className={styles.fieldLabel}>Status</div>
-          <select 
-            value={status} 
-            onChange={e => setStatus(e.target.value)} 
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value)}
             className={styles.inputField}
           >
             <option value="active">Active</option>
@@ -520,11 +553,11 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
         <div>
           <div className={styles.fieldLabel}>Standalone Node</div>
-          <input 
-            type="checkbox" 
-            checked={isStandalone} 
-            onChange={e => setIsStandalone(e.target.checked)} 
-            className={styles.checkbox} 
+          <input
+            type="checkbox"
+            checked={isStandalone}
+            onChange={e => setIsStandalone(e.target.checked)}
+            className={styles.checkbox}
           />
         </div>
       </div>
@@ -572,9 +605,9 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                       {isList && <small className={styles.textDimmed}> (Array List)</small>}
                       {triggerValues && <small className={styles.textWarning}> (Schema Controlled 🔒)</small>}
                     </span>
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveMetadataField(key)} 
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMetadataField(key)}
                       className={styles.btnRemove}
                     >
                       Remove
@@ -608,16 +641,16 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
           </div>
         )}
         <div className={styles.innerActionRow}>
-          <input 
-            type="text" 
-            placeholder="e.g., Twitter, Instagram or SquadNumber" 
-            value={newMetadataKey} 
-            onChange={e => setNewMetadataKey(e.target.value)} 
-            className={styles.inlineInput} 
+          <input
+            type="text"
+            placeholder="e.g., Twitter, Instagram or SquadNumber"
+            value={newMetadataKey}
+            onChange={e => setNewMetadataKey(e.target.value)}
+            className={styles.inlineInput}
           />
-          <button 
-            type="button" 
-            onClick={handleAddMetadataField} 
+          <button
+            type="button"
+            onClick={handleAddMetadataField}
             className={`${styles.btn} ${styles.btnPrimary}`}
           >
             Add Attribute Property
@@ -635,34 +668,34 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                 <span>
                   {key} {Array.isArray(originalEntity.image?.[key]) && <small className={styles.textDimmed}>(Array List)</small>}
                 </span>
-                <button 
-                  type="button" 
-                  onClick={() => handleRemoveImageField(key)} 
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImageField(key)}
                   className={styles.btnRemove}
                 >
                   Remove
                 </button>
               </div>
-              <input 
-                type="text" 
-                value={imageInputs[key]} 
-                onChange={e => handleImageInputChange(key, e.target.value)} 
-                className={styles.inputField} 
+              <input
+                type="text"
+                value={imageInputs[key]}
+                onChange={e => handleImageInputChange(key, e.target.value)}
+                className={styles.inputField}
               />
             </div>
           ))}
         </div>
         <div className={styles.innerActionRow}>
-          <input 
-            type="text" 
-            placeholder="e.g., streamingTeaser or liveries" 
-            value={newImageKey} 
-            onChange={e => setNewImageKey(e.target.value)} 
-            className={styles.inlineInput} 
+          <input
+            type="text"
+            placeholder="e.g., streamingTeaser or liveries"
+            value={newImageKey}
+            onChange={e => setNewImageKey(e.target.value)}
+            className={styles.inlineInput}
           />
-          <button 
-            type="button" 
-            onClick={handleAddImageField} 
+          <button
+            type="button"
+            onClick={handleAddImageField}
             className={`${styles.btn} ${styles.btnOutline}`}
           >
             Add Asset Field
@@ -712,9 +745,9 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                     <option value="inactive">Inactive</option>
                     <option value="retired">Retired</option>
                   </select>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveConnection(conn.id)} 
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveConnection(conn.id)}
                     className={styles.btnUnlink}
                   >
                     Unlink
@@ -796,17 +829,17 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
         <div className={styles.provisionBox}>
           <div className={styles.provisionTitle}>Fast-track Provisioning: Create New Entity & Link Instantly</div>
           <div className={styles.buttonGroup} style={{ gap: '10px' }}>
-            <input 
-              type="text" 
-              placeholder="Entry Name" 
-              value={quickCreateName} 
-              onChange={e => setQuickCreateName(e.target.value)} 
+            <input
+              type="text"
+              placeholder="Entry Name"
+              value={quickCreateName}
+              onChange={e => setQuickCreateName(e.target.value)}
               className={styles.inputField}
-              style={{ flex: 2 }} 
+              style={{ flex: 2 }}
             />
-            <select 
-              value={quickCreateLayer} 
-              onChange={e => setQuickCreateLayer(e.target.value)} 
+            <select
+              value={quickCreateLayer}
+              onChange={e => setQuickCreateLayer(e.target.value)}
               className={styles.inputField}
               style={{ flex: 1 }}
             >
@@ -814,9 +847,9 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
               <option value="l3">Layer 3 (Team / Club / Constructor)</option>
               <option value="l4">Layer 4 (Driver / Player / Individual)</option>
             </select>
-            <button 
-              type="button" 
-              onClick={() => { void handleInlineQuickCreate(); }} 
+            <button
+              type="button"
+              onClick={() => { void handleInlineQuickCreate(); }}
               className={`${styles.btn} ${styles.btnOutline}`}
               style={{ background: '#b3e5fc', color: '#000', border: 'none' }}
             >
@@ -828,17 +861,17 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
       {/* Action Footers */}
       <div className={styles.footerActions}>
-        <button 
-          type="button" 
-          onClick={onCancel} 
+        <button
+          type="button"
+          onClick={onCancel}
           className={`${styles.btn} ${styles.btnBack}`}
           style={{ marginBottom: 0 }}
         >
           Cancel
         </button>
-        <button 
-          type="button" 
-          onClick={(e) => { void handleSubmit(e); }} 
+        <button
+          type="button"
+          onClick={(e) => { void handleSubmit(e); }}
           className={`${styles.btn} ${styles.btnPrimary}`}
         >
           Save Commit Changes

@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Theme, HydratedEntity, BaseEntity } from '../../types';
+import type { Theme, HydratedEntity, BaseEntity, MetaDataStandard } from '../../types';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
 import styles from './LayerView.module.css';
 
@@ -14,7 +15,6 @@ interface Props {
 
 /**
  * L4View renders the individual performers operating at the active base of the framework.
- * Analogy: Drivers or Artist (e.g., Lewis Hamilton, Max Verstappen, Olivia Rodrigo).
  */
 export const L4View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
@@ -22,6 +22,27 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
   // Extract all individual Level 4 operational node data models
   const endpoints = theme.entities?.filter((e) => e.type === 'l4') || [];
+
+  /**
+   * Dynamic Status Trigger Scanner:
+   * We lezen hier de configuratie uit exact zoals EntityCard dat straks ook gaat doen.
+   */
+  const layerStandard = useMemo(() => {
+    if (!theme.layerMetadata) return undefined;
+    if (typeof theme.layerMetadata === 'string') {
+      try {
+        const parsed = JSON.parse(theme.layerMetadata) as Record<string, MetaDataStandard | undefined>;
+        return parsed['l4'];
+      } catch (err) {
+        console.log(err);
+        return undefined;
+      }
+    }
+    const record = theme.layerMetadata as Record<string, MetaDataStandard | undefined>;
+    return record['l4'] || record['L4'];
+  }, [theme.layerMetadata]);
+
+  const triggers = layerStandard?.statusTriggers;
 
   if (endpoints.length === 0) {
     return (
@@ -34,8 +55,24 @@ export const L4View: React.FC<Props> = ({ theme }) => {
     );
   }
 
-  // Filters down clean standalone performers profiles (Official Solo Acts)
-  const standaloneEntities = endpoints.filter((endpoint) => endpoint.isStandalone);
+  // 🛡️ GECORRIGEERD: Filters down clean standalone performers profiles en verrijkt inactieve solo-acts direct met de isFormer-tag
+  const standaloneEntities = endpoints
+    .filter((endpoint) => endpoint.isStandalone)
+    .map((entity) => {
+      const l4Status = (entity.status || '').toLowerCase().trim();
+      const isDeceased = !!entity.metadata?.PassingDate;
+      
+      if (['retired', 'inactive'].includes(l4Status) || isDeceased) {
+        return {
+          ...entity,
+          metadata: {
+            ...(entity.metadata || {}),
+            isFormer: true // Schiet direct door naar de EntityCard-fallback
+          }
+        };
+      }
+      return entity;
+    });
 
   // MAPPING ANALYSIS SYSTEM: Routes personnel rosters contract connections into explicit L3 Team folders
   endpoints.forEach((l4Entity) => {
@@ -55,27 +92,27 @@ export const L4View: React.FC<Props> = ({ theme }) => {
       const connectionStatus = (conn.metadata?.status || '').toLowerCase().trim();
       const parentStatus = (l3Entity.status || '').toLowerCase().trim();
       const l4Status = (l4Entity.status || '').toLowerCase().trim();
+      const isDeceased = !!l4Entity.metadata?.PassingDate;
 
       // Relational check 1: Verifies if a person's explicit team contract link is broken/past history
-      const isFormerConnection = 
-        connectionStatus.includes('former') || 
-        connectionStatus === 'ex' || 
-        connectionStatus === 'retired' || 
-        conn.metadata?.isFormer === true;
+      const isFormerConnection =
+        connectionStatus.includes('former') ||
+        connectionStatus === 'ex' ||
+        connectionStatus === 'retired' ||
+        conn.metadata?.isFormer === true ||
+        isDeceased;
 
       // Relational check 2: Verifies if the individual person is globally retired/inactive themselves
-      const isL4EntityInactive = ['retired', 'inactive'].includes(l4Status);
+      const isL4EntityInactive = ['retired', 'inactive'].includes(l4Status) || isDeceased;
 
       // Relational check 3: Verifies if the parent constructor group itself is officially active
       const isParentInactive = ['disbanded', 'inactive', 'retired', 'historical'].includes(parentStatus);
       const isParentActive = !isParentInactive;
 
-      // AUTOMATIC FILTERING HIDE ENGINE: 
-      // Hides old historical connections if the target team is still active in the real world.
+      // AUTOMATIC FILTERING HIDE ENGINE
       const autoHide = (isFormerConnection || isL4EntityInactive) && isParentActive;
 
-      // CRITICAL DATA ENGINE OVERRIDE: 
-      // Defunct teams (e.g. IZ*ONE) bypass autoHide rules to lock and display their entire historical roster intact.
+      // CRITICAL DATA ENGINE OVERRIDE
       const isHidden = !isParentInactive && (conn.metadata?.hideFromGrid === true || autoHide);
 
       if (!isHidden) {
@@ -83,8 +120,38 @@ export const L4View: React.FC<Props> = ({ theme }) => {
           parentMap.set(l3Entity.id, { parent: l3Entity, children: [] });
         }
         const bucket = parentMap.get(l3Entity.id)!;
-        if (!bucket.children.some((c) => c.id === l4Entity.id)) {
-          bucket.children.push(l4Entity);
+
+        // Kopieer de bestaande metadata om mutatie-side-effects te voorkomen
+        const enrichedMetadata = { ...(l4Entity.metadata || {}) };
+
+        // 🛡️ DYNAMISCHE INJECTIE: Als het een oud-lid/connectie is, markeren we dit ALTIJD
+        if (isFormerConnection) {
+          enrichedMetadata.isFormer = true; // Dit activeert direct de nieuwe achterwacht in EntityCard!
+        }
+
+        // Als er database-triggers zijn, vullen we ook de specifieke key-value paren aan
+        if (isFormerConnection && triggers) {
+          const formerTriggerEntry = Object.entries(triggers).find(
+            ([key]) => key.toLowerCase() === 'former'
+          );
+
+          if (formerTriggerEntry) {
+            const [, triggerConfig] = formerTriggerEntry;
+
+            if (triggerConfig && typeof triggerConfig === 'object' && 'key' in triggerConfig && 'value' in triggerConfig) {
+              // Injecteer de exacte configuratie-key en bijbehorende waarde (bijv. racingStatus: 'Retired')
+              enrichedMetadata[String(triggerConfig.key)] = String(triggerConfig.value);
+            }
+          }
+        }
+
+        const enrichedChild: HydratedEntity = {
+          ...l4Entity,
+          metadata: enrichedMetadata
+        };
+
+        if (!bucket.children.some((c) => c.id === enrichedChild.id)) {
+          bucket.children.push(enrichedChild);
         }
       }
     });
@@ -94,11 +161,6 @@ export const L4View: React.FC<Props> = ({ theme }) => {
   const isInactiveStatus = (status: string) =>
     ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
 
-  /**
-   * LINE-UP ROSTER SORTER FUNCTION (BEST PRACTICE)
-   * Alphabetically orders children elements, but explicitly pushes reserve/test personnel positions 
-   * to the back of the team queue block rows.
-   */
   const sortGroupChildren = (children: HydratedEntity[]) => {
     return [...children].sort((a, b) => {
       const roleA = String(a.metadata?.role || '').toLowerCase();
@@ -112,13 +174,11 @@ export const L4View: React.FC<Props> = ({ theme }) => {
     });
   };
 
-  // Compiles active racing squads currently competing on the live circuits grid
   const activeBuckets = allBuckets
     .filter((b) => !isInactiveStatus(b.parent.status || ''))
     .sort((a, b) => a.parent.name.localeCompare(b.parent.name))
     .map(bucket => ({ ...bucket, children: sortGroupChildren(bucket.children) }));
 
-  // Compiles defunct/historical constructor rosters archives lines
   const inactiveBuckets = allBuckets
     .filter((b) => isInactiveStatus(b.parent.status || ''))
     .sort((a, b) => a.parent.name.localeCompare(b.parent.name))
@@ -131,8 +191,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
   return (
     <div className={styles.layerContainer}>
-      
-      {/* SECTION 1: Active Constructors & Their Drivers */}
+      {/* SECTION 1: Active Constructors */}
       {activeBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{parent.name}</h2>
@@ -157,7 +216,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
         </div>
       ))}
 
-      {/* SECTION 2: Independent / Standalone Drivers (Solo Artists) */}
+      {/* SECTION 2: Standalone Drivers */}
       {standaloneEntities.length > 0 && (
         <div className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{standaloneLabel}</h2>
@@ -181,7 +240,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
         </div>
       )}
 
-      {/* SECTION 3: Defunct & Historical Constructors Archives */}
+      {/* SECTION 3: Defunct & Historical Constructors */}
       {inactiveBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{parent.name} ({inactiveLabel})</h2>

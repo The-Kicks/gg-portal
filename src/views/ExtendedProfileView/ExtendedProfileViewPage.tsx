@@ -53,11 +53,9 @@ const isStringValid = (url: string): boolean => {
 
 /**
  * Decides how much grid space a media item needs based on its type and loaded dimensions.
- * By default: images are vertical (1 slot), videos are horizontal (2 slots).
- * Once the media loads, 'mediaDimensions' will overwrite this with the real aspect ratio.
  */
 const mapMediaItemToGridSpace = (
-  file: string, 
+  file: string,
   mediaDimensions: Record<string, boolean>
 ): {
   file: string;
@@ -69,14 +67,12 @@ const mapMediaItemToGridSpace = (
   const defaultIsHorizontal = mediaType !== 'image';
   let isHorizontal = defaultIsHorizontal;
 
-  // If we already detected the actual dimensions of this file, use that instead
   if (mediaDimensions[file] !== undefined) {
-    isHorizontal = mediaDimensions[file]; // true = landscape, false = portrait
+    isHorizontal = mediaDimensions[file];
   }
 
   const gridSpanSpaces = isHorizontal ? 2 : 1;
-  
-  // Assign the correct CSS module class name based on type and shape
+
   const itemClassKey = (mediaType === 'video-file' || mediaType === 'video-embed')
     ? (isHorizontal ? 'videoItem' : 'imageItem')
     : (isHorizontal ? 'horizontalImageItem' : 'imageItem');
@@ -86,7 +82,6 @@ const mapMediaItemToGridSpace = (
 
 /**
  * Adds beautiful placeholder cards to fill up remaining empty spaces in a 4-column grid row.
- * This keeps the grid lines perfectly straight and aligned.
  */
 const fillRowGapsWithPlaceholders = (
   structuredRowItems: PreparedMediaItem[],
@@ -104,7 +99,6 @@ const fillRowGapsWithPlaceholders = (
     isPlaceholder: true
   });
 
-  // Returns the updated counter and how many slots this placeholder consumed (1 or 2)
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
@@ -112,16 +106,11 @@ const fillRowGapsWithPlaceholders = (
 // HOOKS
 // ==========================================================================
 
-/**
- * Manages image loading errors for the profile picture and banner.
- * If the user switches to a different profile, it resets the error states back to normal.
- */
 const useProfileAssetValidator = (targetEntity: BaseEntity | undefined) => {
   const [profileImageError, setProfileImageError] = useState(false);
   const [heroImageError, setHeroImageError] = useState(false);
   const [prevEntityId, setPrevEntityId] = useState(targetEntity?.id);
 
-  // Reset errors automatically if the profile ID changes
   if (targetEntity?.id !== prevEntityId) {
     setPrevEntityId(targetEntity?.id);
     setProfileImageError(false);
@@ -155,10 +144,9 @@ const useProfileAssetValidator = (targetEntity: BaseEntity | undefined) => {
 
 export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
   const { id } = useParams<{ id: string }>();
-  // Stores whether a file is landscape (true) or portrait (false) using its URL as the key
   const [mediaDimensions, setMediaDimensions] = useState<Record<string, boolean>>({});
 
-  // 1. Find the current profile entity and calculate its parent hierarchy trail (breadcrumbs)
+  // 1. Find the current profile entity and calculate its parent hierarchy trail
   const profileDetails = useMemo(() => {
     if (!id || !theme.entities) return null;
     const targetEntity = theme.entities.find(e => e.id === id);
@@ -168,7 +156,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
     const parentsMap = new Map<string, BaseEntity>();
 
-    // Look through connections to find parent organizations (layers l1, l2, or l3)
     allConns.forEach(conn => {
       const potentialParent = conn.sourceEntity?.id !== id ? conn.sourceEntity : conn.targetEntity;
       if (potentialParent && potentialParent.id !== id) {
@@ -178,23 +165,21 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       }
     });
 
-    // Sort parents by layer type so they show up in order: L1 -> L2 -> L3
     const parents = Array.from(parentsMap.values()).sort((a, b) => a.type.localeCompare(b.type));
 
     return { targetEntity, activeLayer, parents };
   }, [id, theme.entities]);
 
-  // 2. Validate profile assets (checks if images exist or are broken)
+  // 2. Validate profile assets
   const assets = useProfileAssetValidator(profileDetails?.targetEntity);
 
-  // 3. Find and process all teammates (L4 entities sharing the same L3 groups)
+  // 3. Find and process all teammates
   const relatedTeammates = useMemo<TeammateStructure[]>(() => {
     if (!profileDetails || !id || !theme.entities) return [];
 
     const targetEntity = profileDetails.targetEntity;
     const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
 
-    // Find all L3 groups that the current active profile belongs to
     const parentL3s: BaseEntity[] = [];
     allConns.forEach(conn => {
       const parent = conn.sourceEntity?.type === 'l3'
@@ -207,7 +192,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
     const teammatesMap = new Map<string, TeammateStructure>();
 
-    // Scan all entities to find other L4 players that belong to these same L3 groups
     theme.entities.forEach(entity => {
       if (entity.type !== 'l4') return;
 
@@ -218,7 +202,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
           ? conn.sourceEntity
           : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
 
-        // If this player shares one of our active parent groups, add them as a teammate
         if (p && parentL3s.some(parentL3 => parentL3.id === p.id)) {
           const membershipStatus = conn.metadata?.status || 'active';
 
@@ -240,7 +223,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     const STANDALONE_KEYWORDS = ['soloist', 'retired', 'free agent', 'independent', 'solo', 'none'];
     const badgeKey = theme.layerMetadata?.['l4']?.badgeKey;
 
-    // Filter status keywords to flag former/retired members vs active ones
     return rawTeammates.map(member => {
       const explicitStatus = String(member.l4?.metadata?.['membershipStatus'] || '').toLowerCase();
       const badgeValue = badgeKey ? String(member.l4?.metadata?.[badgeKey] || '').toLowerCase() : '';
@@ -263,7 +245,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [id, profileDetails, theme.entities, theme.layerMetadata]);
 
-  // 4. Group the processed teammates by their L3 Group ID for UI sectioning
+  // 4. Group the processed teammates by their L3 Group ID
   const groupedTeammates = useMemo(() => {
     const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
     relatedTeammates.forEach(member => {
@@ -277,7 +259,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     return groups;
   }, [relatedTeammates]);
 
-  // 5. Sort the group headers so active teams show up first, followed by alphabetical order
+  // 5. Sort the group headers
   const groupKeys = useMemo(() => {
     return Object.keys(groupedTeammates).sort((a, b) => {
       const groupA = groupedTeammates[a].members[0].l3?.[0];
@@ -289,26 +271,72 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [groupedTeammates]);
 
-  // 6. Generate text label for the sticky sidebar header (usually the closest parent name)
+  // 6. Generate text label for the sticky sidebar header
   const sidebarSubLabel = useMemo(() => {
     if (!profileDetails) return '';
     const { parents, activeLayer } = profileDetails;
     return parents.length > 0 ? parents[parents.length - 1].name : (theme.labels[activeLayer] ?? activeLayer);
   }, [profileDetails, theme.labels]);
 
-  // 7. Clean up metadata attributes into a displayable list of stats, ignoring descriptions/status fields
+  // 7. Clean up metadata attributes into a displayable list of stats, UNIVERSALLY ignoring any status fields
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!profileDetails?.targetEntity) return [];
-    return Object.entries(profileDetails.targetEntity.metadata || {})
-      .filter(([key, value]) => key !== 'description' && key !== 'status' && key !== 'membershipStatus' && !!value)
+
+    const { targetEntity, activeLayer } = profileDetails;
+
+    // Alleen velden die géén status zijn, maar wel altijd verborgen moeten blijven
+    const standardExclusions = new Set<string>(['description']);
+
+    // Verzamel dynamisch alle keys die dit specifieke thema gebruikt voor status-triggers
+    const dynamicStatusKeys = new Set<string>();
+    const layerMeta = theme.layerMetadata?.[activeLayer];
+
+    if (layerMeta?.statusTriggers && typeof layerMeta.statusTriggers === 'object') {
+      // 1. Check de waarden binnen de triggers (bijv. { trigger1: { key: 'clubStatus.member' } })
+      Object.values(layerMeta.statusTriggers).forEach((trigger) => {
+        if (trigger && typeof trigger === 'object' && 'key' in trigger) {
+          const triggerObject = trigger as { key?: unknown };
+          if (typeof triggerObject.key === 'string') {
+            const rawKey = triggerObject.key.toLowerCase();
+            dynamicStatusKeys.add(rawKey);
+            dynamicStatusKeys.add(rawKey.split('.')[0]); // Vangt ook de root 'clubstatus' op
+          }
+        }
+      });
+
+      // 2. Check de keys van de triggers zelf (voor het geval de structuur inline is: { 'clubStatus.member': {...} })
+      Object.keys(layerMeta.statusTriggers).forEach((triggerKey) => {
+        const rawKey = triggerKey.toLowerCase();
+        dynamicStatusKeys.add(rawKey);
+        dynamicStatusKeys.add(rawKey.split('.')[0]);
+      });
+    }
+
+    return Object.entries(targetEntity.metadata || {})
+      .filter(([key, value]) => {
+        const lowerKey = key.toLowerCase();
+
+        // Regel 1: Is het een standaard verborgen veld (zoals description)? -> Weg ermee.
+        if (standardExclusions.has(lowerKey)) return false;
+
+        // Regel 2: Zit het woord 'status' in de key? -> Direct weggooien.
+        // Dit vangt 'clubStatus.member', 'racingStatus', 'status', etc. universeel af.
+        if (lowerKey.includes('status')) return false;
+
+        // Regel 3: Is dit veld in het thema gekoppeld aan een status-trigger? -> Weg ermee.
+        if (dynamicStatusKeys.has(lowerKey)) return false;
+
+        // Alleen doorlaten als het veld een waarde heeft
+        return !!value;
+      })
       .map(([key, value]) => ({
         key,
         label: theme.labels[key] ?? key,
         displayValue: Array.isArray(value) ? value.join(', ') : String(value)
       }));
-  }, [profileDetails, theme.labels]);
+  }, [profileDetails, theme.labels, theme.layerMetadata]);
 
-  // 8. Tetris-Style layout logic: Processes media lists into neat rows of 4 columns
+  // 8. Tetris-Style layout logic
   const preparedMediaSections = useMemo(() => {
     const entityImages = profileDetails?.targetEntity.image as EntityImages | undefined;
     if (!profileDetails?.targetEntity || !entityImages) return {};
@@ -322,7 +350,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
       let rawAssetList: string[] = [];
 
-      // Accept both modern string arrays or legacy text blocks split by enters/spaces
       if (Array.isArray(sectionAssets)) {
         rawAssetList = sectionAssets.filter(Boolean) as string[];
       } else if (typeof sectionAssets === 'string') {
@@ -339,11 +366,8 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       let placeholderCounter = 0;
       let totalAssignedSpaces = 0;
 
-      // Loop until all media items are placed and the final row has no empty holes
       while (unplacedMediaPool.length > 0 || totalAssignedSpaces % 4 !== 0) {
         const spacesLeftOnCurrentLine = 4 - (totalAssignedSpaces % 4);
-        
-        // Find an item that fits perfectly in the remaining columns of this row
         const optimalMatchIndex = unplacedMediaPool.findIndex(item => item.spanSpaces <= spacesLeftOnCurrentLine);
 
         if (unplacedMediaPool.length > 0 && optimalMatchIndex !== -1) {
@@ -351,7 +375,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
           structuredRowItems.push({ file: matchedItem.file, type: matchedItem.type, itemClassKey: matchedItem.itemClassKey });
           totalAssignedSpaces += matchedItem.spanSpaces;
         } else {
-          // If no item fits, fill the gap with a beautifully customized placeholder card
           const res = fillRowGapsWithPlaceholders(structuredRowItems, totalAssignedSpaces, sectionKey, placeholderCounter);
           placeholderCounter = res.counter;
           totalAssignedSpaces += res.cost;
