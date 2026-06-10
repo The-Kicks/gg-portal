@@ -50,7 +50,6 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   handleSelectGuess,
   getAgeFromDateString
 }) => {
-  console.log("LOG: disabledColumns in View:", theme?.gameSettings?.guesswho?.disabledColumns);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (filteredDropdownOptions.length > 0) {

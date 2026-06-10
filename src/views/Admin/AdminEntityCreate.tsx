@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Theme, HydratedEntity, BaseEntity } from '../../types';
 import { entityService } from './EntityService';
-import styles from './AdminGlobal.module.css'; // Centrale styles importeren
+import styles from './AdminGlobal.module.css';
 
 interface Props {
   theme: Theme;
@@ -27,15 +27,15 @@ interface LayerMetadataMap {
 
 type MetadataValue = string | number | boolean | string[] | undefined;
 
-const L4_DEFAULT_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
 const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
 
 export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
+  // --- Form Local States ---
   const [name, setName] = useState('');
   const [customSuffix, setCustomSuffix] = useState('');
   const [type, setType] = useState('l4');
   const [status, setStatus] = useState('active');
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true);
   const [idStatus, setIdStatus] = useState<'idle' | 'available' | 'taken'>('idle');
 
   const [imageInputs, setImageInputs] = useState<Record<string, string>>({
@@ -43,7 +43,47 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     heroBanner: ''
   });
 
-  const activeLayerConfig = useMemo<LayerConfig | undefined>(() => {
+  // --- LAZY STATE INITIALIZATION ---
+  // Dit lost de linter-fout op: we berekenen de dynamic attributes direct synchroon bij het opstarten!
+  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
+    const nextInputs: Record<string, string> = {};
+    
+    // 1. Altijd de L4 core velden laden (omdat de initiële 'type' state 'l4' is)
+    REQUIRED_L4_FIELDS.forEach(field => {
+      nextInputs[field] = '';
+    });
+
+    // 2. Direct de dynamic attributes uit de theme injecteren indien aanwezig
+    if (theme.layerMetadata) {
+      try {
+        const parsed = typeof theme.layerMetadata === 'string'
+          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
+          : (theme.layerMetadata as unknown as LayerMetadataMap);
+        const initialConfig = parsed['l4']; // We weten dat we starten op l4
+
+        if (initialConfig) {
+          if (initialConfig.badgeKey) nextInputs[initialConfig.badgeKey] = '';
+          if (initialConfig.subtitleKey) nextInputs[initialConfig.subtitleKey] = '';
+          if (Array.isArray(initialConfig.gridKeys)) {
+            initialConfig.gridKeys.forEach(k => { if (k) nextInputs[k] = ''; });
+          }
+          if (initialConfig.statusTriggers) {
+            Object.values(initialConfig.statusTriggers).forEach(t => { if (t?.key) nextInputs[t.key] = ''; });
+          }
+        }
+      } catch (e: unknown) {
+        console.error("Error loading initial schema attributes in lazy state:", e);
+      }
+    }
+    return nextInputs;
+  });
+
+  // --- UI Control States ---
+  const [newImageKey, setNewImageKey] = useState('');
+  const [newMetadataKey, setNewMetadataKey] = useState('');
+
+  // --- Layer Config Resolution ---
+  const layerConfig = useMemo<LayerConfig | undefined>(() => {
     if (!theme.layerMetadata) return undefined;
     try {
       const parsedConfig = typeof theme.layerMetadata === 'string'
@@ -56,7 +96,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     }
   }, [theme.layerMetadata, type]);
 
-  const dynamicTriggers = useMemo(() => activeLayerConfig?.statusTriggers || {}, [activeLayerConfig]);
+  const dynamicTriggers = useMemo(() => layerConfig?.statusTriggers || {}, [layerConfig]);
 
   const triggerFieldsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -71,55 +111,24 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     return map;
   }, [dynamicTriggers]);
 
-  const buildDefaultKeysForLayer = (config: LayerConfig | undefined, currentType: string) => {
-    const inputs: Record<string, string> = {};
-
-    if (currentType.toLowerCase() === 'l4') {
-      L4_DEFAULT_FIELDS.forEach(field => {
-        inputs[field] = '';
-      });
-      inputs['PassingDate'] = '';
-    }
-
-    if (!config) return inputs;
-
-    const defaultKeys: string[] = [];
-    if (config.badgeKey) defaultKeys.push(config.badgeKey);
-    if (config.subtitleKey) defaultKeys.push(config.subtitleKey);
-    if (Array.isArray(config.gridKeys)) defaultKeys.push(...config.gridKeys);
-
-    if (config.statusTriggers) {
-      Object.values(config.statusTriggers).forEach(t => {
-        if (t?.key) defaultKeys.push(t.key);
-      });
-    }
-
-    defaultKeys.forEach((key) => {
-      if (key) inputs[key] = inputs[key] !== undefined ? inputs[key] : '';
-    });
-    return inputs;
-  };
-
-  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
-    const initialConfig = theme.layerMetadata
-      ? (typeof theme.layerMetadata === 'string' ? JSON.parse(theme.layerMetadata) : theme.layerMetadata)['l4']
-      : undefined;
-    return buildDefaultKeysForLayer(initialConfig, 'l4');
-  });
-
-  const [newImageKey, setNewImageKey] = useState('');
-  const [newMetadataKey, setNewMetadataKey] = useState('');
-
+  // --- Exact dezelfde partitionering als in de Edit-pagina ---
   const partitionedMetadataKeys = useMemo(() => {
     const allKeys = Object.keys(metadataInputs);
     const isL4 = type.toLowerCase() === 'l4';
 
     return {
-      requiredKeys: allKeys.filter(key => isL4 && L4_DEFAULT_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())),
-      dynamicKeys: allKeys.filter(key => !(isL4 && L4_DEFAULT_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())))
+      requiredKeys: allKeys.filter(key =>
+        isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())
+      ),
+      dynamicKeys: allKeys.filter(key => {
+        const isRequired = isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
+        const isPassingDate = key.toLowerCase() === 'passingdate';
+        return !isRequired && !isPassingDate;
+      })
     };
   }, [metadataInputs, type]);
 
+  // --- Debounced Async ID/Slug check ---
   useEffect(() => {
     const baseSlug = name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
     const suffix = customSuffix.trim() ? customSuffix.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') : '';
@@ -142,22 +151,44 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     return () => clearTimeout(delayDebounceFn);
   }, [name, customSuffix, theme.id]);
 
+  // --- Handlers ---
   const handleTypeChange = (newType: string) => {
     setType(newType);
-    setIsStandalone(newType === 'l4');
+    setIsStandalone(newType.toLowerCase() === 'l4');
     setStatus('active');
+
+    const nextInputs: Record<string, string> = {};
+    const currentLayer = newType.toLowerCase();
+
+    if (currentLayer === 'l4') {
+      REQUIRED_L4_FIELDS.forEach(field => {
+        nextInputs[field] = '';
+      });
+    }
 
     if (theme.layerMetadata) {
       try {
         const parsed = typeof theme.layerMetadata === 'string'
           ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
           : (theme.layerMetadata as unknown as LayerMetadataMap);
-        const nextConfig = parsed[newType.toLowerCase()];
-        setMetadataInputs(buildDefaultKeysForLayer(nextConfig, newType));
+        const nextConfig = parsed[currentLayer];
+
+        if (nextConfig) {
+          if (nextConfig.badgeKey) nextInputs[nextConfig.badgeKey] = '';
+          if (nextConfig.subtitleKey) nextInputs[nextConfig.subtitleKey] = '';
+          if (Array.isArray(nextConfig.gridKeys)) {
+            nextConfig.gridKeys.forEach(k => { if (k) nextInputs[k] = ''; });
+          }
+          if (nextConfig.statusTriggers) {
+            Object.values(nextConfig.statusTriggers).forEach(t => { if (t?.key) nextInputs[t.key] = ''; });
+          }
+        }
       } catch (e: unknown) {
-        console.error(e);
+        console.error("Error parsing schema metadata upon layer switch:", e);
       }
     }
+
+    setMetadataInputs(nextInputs);
   };
 
   const handleImageInputChange = (key: string, value: string) => {
@@ -177,10 +208,16 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
   const handleAddMetadataField = () => {
     const cleanKey = newMetadataKey.trim();
-    if (!cleanKey || metadataInputs[cleanKey] !== undefined) return;
+    if (!cleanKey) return;
 
-    if (type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase())) {
-      alert(`Field "${cleanKey}" is already configured inside the required system attributes.`);
+    if (metadataInputs[cleanKey] !== undefined) {
+      alert("Dit veld bestaat al.");
+      return;
+    }
+
+    const isCoreField = REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase());
+    if (isCoreField) {
+      alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld (Core Game Metric). Je kunt deze niet toevoegen als dynamisch attribuut.`);
       return;
     }
 
@@ -200,6 +237,32 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     setMetadataInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
+  const reconstructObject = (
+    currentInputs: Record<string, string>
+  ): Record<string, MetadataValue> => {
+    const result: Record<string, MetadataValue> = {};
+    const isL4 = type.toLowerCase() === 'l4';
+
+    Object.keys(currentInputs).forEach(key => {
+      const rawValue = currentInputs[key];
+      if (!rawValue || !rawValue.trim()) return;
+
+      if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
+        result[key] = rawValue.trim();
+        return;
+      }
+
+      if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
+        result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (isL4 && (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear')) {
+        result[key] = Number(rawValue.trim()) || 0;
+      } else {
+        result[key] = rawValue.trim();
+      }
+    });
+    return result;
+  };
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       alert("Please enter a valid name.");
@@ -213,30 +276,38 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
     if (type.toLowerCase() === 'l4') {
       for (const field of REQUIRED_L4_FIELDS) {
-        if (!metadataInputs[field] || !metadataInputs[field].trim()) {
+        const foundKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === field.toLowerCase());
+        const value = foundKey ? metadataInputs[foundKey] : undefined;
+
+        if (!value || !value.trim()) {
           alert(`Game Error: The field "${field}" is strictly required for Layer 4 entities.`);
           return;
         }
       }
 
-      if (metadataInputs['PassingDate'] && !/^\d{2}-\d{2}-\d{4}$/.test(metadataInputs['PassingDate'].trim())) {
-        alert("Format Warning: Passing Date should also use the DD-MM-YYYY format.");
-        return;
-      }
-
       const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
-      if (!dateRegex.test(metadataInputs['Birthday'].trim())) {
-        alert("Format Error: Birthday must use the DD-MM-YYYY standard layout (e.g., 25-04-1947).");
+      const birthdayKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'birthday') || 'Birthday';
+      if (!dateRegex.test(metadataInputs[birthdayKey]?.trim() || '')) {
+        alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
         return;
       }
 
-      if (isNaN(Number(metadataInputs['Height'].trim()))) {
-        alert("Format Error: Height must be a valid numeric configuration in cm (e.g., 184).");
+      const passingDateKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'passingdate') || 'PassingDate';
+      const passingDate = metadataInputs[passingDateKey]?.trim();
+      if (passingDate && !dateRegex.test(passingDate)) {
+        alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
         return;
       }
 
-      if (isNaN(Number(metadataInputs['DebutYear'].trim()))) {
-        alert("Format Error: Debut Year must be a valid numeric configuration year (e.g., 2015).");
+      const heightKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'height') || 'Height';
+      if (isNaN(Number(metadataInputs[heightKey]?.trim()))) {
+        alert("Format Error: Height must be a number.");
+        return;
+      }
+
+      const debutYearKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'debutyear') || 'DebutYear';
+      if (isNaN(Number(metadataInputs[debutYearKey]?.trim()))) {
+        alert("Format Error: Debut Year must be a number.");
         return;
       }
     }
@@ -245,24 +316,11 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     const suffix = customSuffix.trim() ? customSuffix.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') : '';
     const generatedId = suffix ? `${baseSlug}-${suffix}` : baseSlug;
 
-    const finalMetadata: Record<string, MetadataValue> = {};
-
-    Object.keys(metadataInputs).forEach(key => {
-      const rawValue = metadataInputs[key];
-      if (!rawValue.trim()) return;
-
-      if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
-        finalMetadata[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
-      } else if (type.toLowerCase() === 'l4' && (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear')) {
-        finalMetadata[key] = Number(rawValue.trim());
-      } else {
-        finalMetadata[key] = rawValue;
-      }
-    });
+    const updatedMetadata = reconstructObject(metadataInputs);
 
     if (dynamicTriggers[status]) {
       const trigger = dynamicTriggers[status];
-      finalMetadata[trigger.key] = trigger.value;
+      updatedMetadata[trigger.key] = trigger.value;
     }
 
     const newSkeleton: BaseEntity = {
@@ -273,7 +331,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       status: status,
       isStandalone: isStandalone,
       image: imageInputs as unknown as BaseEntity['image'],
-      metadata: finalMetadata
+      metadata: updatedMetadata
     };
 
     try {
@@ -286,7 +344,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     }
   };
 
-  // Helper om de juiste validatieklasse te bepalen voor de ID velden
   const getInputValidationClass = () => {
     if (idStatus === 'available') return styles.inputAvailable;
     if (idStatus === 'taken') return styles.inputTaken;
@@ -303,42 +360,51 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           <div className={styles.fieldLabel}>
             Name {idStatus === 'taken' && <span className={styles.textError}>(ID taken!)</span>}
           </div>
-          <input 
-            type="text" 
-            placeholder="e.g., Johan Cruijff" 
-            value={name} 
-            onChange={e => setName(e.target.value)} 
-            className={`${styles.inputField} ${getInputValidationClass()}`} 
+          <input
+            type="text"
+            placeholder="e.g., Johan Cruijff"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className={`${styles.inputField} ${getInputValidationClass()}`}
           />
         </div>
         <div>
           <div className={styles.fieldLabel}>Unique Suffix (Optional)</div>
-          <input 
-            type="text" 
-            placeholder="e.g., Ajax" 
-            value={customSuffix} 
-            onChange={e => setCustomSuffix(e.target.value)} 
-            className={`${styles.inputField} ${getInputValidationClass()}`} 
+          <input
+            type="text"
+            placeholder="e.g., Ajax"
+            value={customSuffix}
+            onChange={e => setCustomSuffix(e.target.value)}
+            className={`${styles.inputField} ${getInputValidationClass()}`}
           />
         </div>
         <div>
           <div className={styles.fieldLabel}>Tier / Layer Type</div>
-          <select 
-            value={type} 
-            onChange={e => handleTypeChange(e.target.value)} 
+          <select
+            value={type}
+            onChange={e => handleTypeChange(e.target.value)}
             className={styles.inputField}
           >
-            <option value="l1">Layer 1 (Main Category)</option>
-            <option value="l2">Layer 2 (Governing Body)</option>
-            <option value="l3">Layer 3 (Team / Club)</option>
-            <option value="l4">Layer 4 (Individual / Player)</option>
+            {[
+              { key: 'l1', fallback: 'Layer 1 (Main Category)' },
+              { key: 'l2', fallback: 'Layer 2 (Governing Body)' },
+              { key: 'l3', fallback: 'Layer 3 (Team / Club)' },
+              { key: 'l4', fallback: 'Layer 4 (Individual / Player)' },
+            ].map(({ key, fallback }) => {
+              const customLabel = theme?.labels?.[key];
+              return (
+                <option key={key} value={key}>
+                  {customLabel ? `${customLabel} (${key.toUpperCase()})` : fallback}
+                </option>
+              );
+            })}
           </select>
         </div>
         <div>
           <div className={styles.fieldLabel}>Status</div>
-          <select 
-            value={status} 
-            onChange={e => setStatus(e.target.value)} 
+          <select
+            value={status}
+            onChange={e => setStatus(e.target.value)}
             className={styles.inputField}
           >
             <option value="active">Active</option>
@@ -353,16 +419,16 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </select>
         </div>
         <div>
-          <div className={styles.fieldLabel}>Standalone</div>
-          <input 
-            type="checkbox" 
-            checked={isStandalone} 
-            onChange={e => setIsStandalone(e.target.checked)} 
-            className={styles.checkbox} 
+          <div className={styles.fieldLabel}>Standalone Node</div>
+          <input
+            type="checkbox"
+            checked={isStandalone}
+            onChange={e => setIsStandalone(e.target.checked)}
+            className={styles.checkbox}
           />
         </div>
         <div>
-          <div className={`${styles.fieldLabel} ${styles.labelSubText}`}>Passing Date (Optional)</div>
+          <div className={styles.fieldLabel}>Passing Date</div>
           <input
             type="text"
             placeholder="DD-MM-YYYY"
@@ -373,7 +439,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         </div>
       </div>
 
-      {/* SECTIE A: CORE REQUIRED GAME FIELDS (Zichtbaar bij Layer 4) */}
+      {/* SECTIE A: CORE REQUIRED GAME FIELDS */}
       {type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
         <div className={styles.requiredSection}>
           <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
@@ -387,7 +453,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                 <input
                   type="text"
                   placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
-                  value={metadataInputs[key]}
+                  value={metadataInputs[key] || ''}
                   onChange={e => handleMetadataInputChange(key, e.target.value)}
                   className={`${styles.inputField} ${styles.requiredInput}`}
                 />
@@ -406,7 +472,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           <div className={styles.twoColumnGrid}>
             {partitionedMetadataKeys.dynamicKeys.map(key => {
               const triggerValues = triggerFieldsMap[key];
-              const isList = key.toLowerCase() === 'nationality' || metadataInputs[key].includes(',');
+              const isList = key.toLowerCase() === 'nationality' || (metadataInputs[key] && metadataInputs[key].includes(','));
 
               return (
                 <div key={key}>
@@ -414,11 +480,11 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                     <span>
                       {key}
                       {isList && <small className={styles.textDimmed}> (Array List)</small>}
-                      {triggerValues && <small className={styles.textPrimary}> (Schema Controlled)</small>}
+                      {triggerValues && <small className={styles.textWarning}> (Schema Controlled 🔒)</small>}
                     </span>
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveMetadataField(key)} 
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMetadataField(key)}
                       className={styles.btnRemove}
                     >
                       Remove
@@ -426,9 +492,9 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                   </div>
 
                   {triggerValues ? (
-                    <select 
-                      value={metadataInputs[key]} 
-                      onChange={e => handleMetadataInputChange(key, e.target.value)} 
+                    <select
+                      value={metadataInputs[key]}
+                      onChange={e => handleMetadataInputChange(key, e.target.value)}
                       className={styles.inputField}
                     >
                       <option value="">-- Active / Normal --</option>
@@ -439,12 +505,11 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                       ))}
                     </select>
                   ) : (
-                    <input 
-                      type="text" 
-                      placeholder={`Metric value for ${key}`} 
-                      value={metadataInputs[key]} 
-                      onChange={e => handleMetadataInputChange(key, e.target.value)} 
-                      className={styles.inputField} 
+                    <input
+                      type="text"
+                      value={metadataInputs[key] || ''}
+                      onChange={e => handleMetadataInputChange(key, e.target.value)}
+                      className={styles.inputField}
                     />
                   )}
                 </div>
@@ -453,16 +518,16 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         )}
         <div className={styles.innerActionRow}>
-          <input 
-            type="text" 
-            placeholder="e.g., RacingNumber, Headquarters, TeamPrincipal" 
-            value={newMetadataKey} 
-            onChange={e => setNewMetadataKey(e.target.value)} 
-            className={styles.inlineInput} 
+          <input
+            type="text"
+            placeholder="e.g., Twitter, Instagram or SquadNumber"
+            value={newMetadataKey}
+            onChange={e => setNewMetadataKey(e.target.value)}
+            className={styles.inlineInput}
           />
-          <button 
-            type="button" 
-            onClick={handleAddMetadataField} 
+          <button
+            type="button"
+            onClick={handleAddMetadataField}
             className={`${styles.btn} ${styles.btnPrimary}`}
           >
             Add Attribute Property
@@ -478,35 +543,34 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
             <div key={key}>
               <div className={styles.labelActionRow}>
                 <span>{key}</span>
-                <button 
-                  type="button" 
-                  onClick={() => handleRemoveImageField(key)} 
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImageField(key)}
                   className={styles.btnRemove}
                 >
                   Remove
                 </button>
               </div>
-              <input 
-                type="text" 
-                placeholder="Asset target URL link" 
-                value={imageInputs[key]} 
-                onChange={e => handleImageInputChange(key, e.target.value)} 
-                className={styles.inputField} 
+              <input
+                type="text"
+                value={imageInputs[key]}
+                onChange={e => handleImageInputChange(key, e.target.value)}
+                className={styles.inputField}
               />
             </div>
           ))}
         </div>
         <div className={styles.innerActionRow}>
-          <input 
-            type="text" 
-            placeholder="e.g., brandLogo or teamLivery" 
-            value={newImageKey} 
-            onChange={e => setNewImageKey(e.target.value)} 
-            className={styles.inlineInput} 
+          <input
+            type="text"
+            placeholder="e.g., streamingTeaser or liveries"
+            value={newImageKey}
+            onChange={e => setNewImageKey(e.target.value)}
+            className={styles.inlineInput}
           />
-          <button 
-            type="button" 
-            onClick={handleAddImageField} 
+          <button
+            type="button"
+            onClick={handleAddImageField}
             className={`${styles.btn} ${styles.btnOutline}`}
           >
             Add Asset Field
@@ -516,17 +580,17 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
       {/* Action Footers */}
       <div className={styles.footerActions}>
-        <button 
-          type="button" 
-          onClick={onCancel} 
+        <button
+          type="button"
+          onClick={onCancel}
           className={`${styles.btn} ${styles.btnBack}`}
-          style={{ marginBottom: 0 }} // Reset eventueel top/bottom margin specifiek voor footer layout
+          style={{ marginBottom: 0 }}
         >
           Cancel
         </button>
-        <button 
-          type="button" 
-          onClick={handleSubmit} 
+        <button
+          type="button"
+          onClick={handleSubmit}
           className={`${styles.btn} ${styles.btnPrimary}`}
         >
           Create & Save

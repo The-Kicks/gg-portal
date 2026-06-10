@@ -73,7 +73,7 @@ export const L2View: React.FC<Props> = ({ theme }) => {
       {/* SECTION 1: Conglomerate-backed Sub-Agencies / Subsidiaries */}
       {activeBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{parent.name} Group Corporation</h2>
+          <h2 className={styles.groupHeader}>{parent.name}</h2>
           <div className={styles.cardGrid}>
             {children.map((child, idx) => (
               <div

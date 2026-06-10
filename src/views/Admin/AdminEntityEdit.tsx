@@ -44,17 +44,80 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     return (theme.entities || []).find(e => e.id === entityId);
   }, [theme, entityId]);
 
-  // --- Form Local States ---
-  const [name, setName] = useState<string>('');
-  const [status, setStatus] = useState<string>('active');
-  const [isStandalone, setIsStandalone] = useState<boolean>(false);
-  const [imageInputs, setImageInputs] = useState<Record<string, string>>({});
-  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>({});
-  const [localConnections, setLocalConnections] = useState<HydratedEntityConnection[]>([]);
-  const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>([]);
+  // --- LAZY STATE INITIALIZATION ---
+  // Alle hooks staan nu ALTIJD bovenaan, ongeacht of originalEntity bestaat.
+  const [name, setName] = useState<string>(() => originalEntity?.name || '');
+  const [status, setStatus] = useState<string>(() => originalEntity?.status || 'active');
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => originalEntity?.isStandalone || false);
 
-  // Referentie-state om prop/data wijzigingen tijdens de render-fase te detecteren
-  const [prevEntity, setPrevEntity] = useState<HydratedEntity | null>(null);
+  const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
+    const imgInputs: Record<string, string> = {};
+    if (originalEntity?.image) {
+      Object.entries(originalEntity.image).forEach(([key, val]) => {
+        imgInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+      });
+    }
+    return imgInputs;
+  });
+
+  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
+    const metaInputs: Record<string, string> = {};
+    if (!originalEntity) return metaInputs;
+
+    const currentType = originalEntity.type?.toLowerCase() || '';
+
+    // 1. Initialiseer verplichte L4 velden als lege string basis blueprint
+    if (currentType === 'l4') {
+      REQUIRED_L4_FIELDS.forEach(field => {
+        metaInputs[field] = '';
+      });
+    }
+
+    // 2. Vul de inputs met bestaande opgeslagen data uit de database
+    if (originalEntity.metadata) {
+      Object.entries(originalEntity.metadata).forEach(([dbKey, val]) => {
+        const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
+        const targetKey = match || dbKey;
+        metaInputs[targetKey] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+      });
+    }
+
+    // 3. MERGE MET THEME SCHEMA: Voeg direct ontbrekende dynamic attributes toe
+    if (theme.layerMetadata) {
+      try {
+        const parsed = typeof theme.layerMetadata === 'string'
+          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
+          : (theme.layerMetadata as unknown as LayerMetadataMap);
+        const currentLayerConfig = parsed[currentType];
+
+        if (currentLayerConfig) {
+          if (currentLayerConfig.badgeKey && metaInputs[currentLayerConfig.badgeKey] === undefined) {
+            metaInputs[currentLayerConfig.badgeKey] = '';
+          }
+          if (currentLayerConfig.subtitleKey && metaInputs[currentLayerConfig.subtitleKey] === undefined) {
+            metaInputs[currentLayerConfig.subtitleKey] = '';
+          }
+          if (Array.isArray(currentLayerConfig.gridKeys)) {
+            currentLayerConfig.gridKeys.forEach(k => {
+              if (k && metaInputs[k] === undefined) metaInputs[k] = '';
+            });
+          }
+          if (currentLayerConfig.statusTriggers) {
+            Object.values(currentLayerConfig.statusTriggers).forEach(t => {
+              if (t?.key && metaInputs[t.key] === undefined) metaInputs[t.key] = '';
+            });
+          }
+        }
+      } catch (e: unknown) {
+        console.error("Error patching theme schema fields into initial edit state:", e);
+      }
+    }
+
+    return metaInputs;
+  });
+
+  const [localConnections, setLocalConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.connections || []);
+  const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.targetConnections || []);
 
   // --- Fast-track Provisioning Pool ---
   const [quickCreatedEntities, setQuickCreatedEntities] = useState<HydratedEntity[]>([]);
@@ -105,58 +168,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     return map;
   }, [dynamicTriggers]);
 
-  // --- SYNCHRONISATIE TIJDENS RENDER ---
-  if (originalEntity && originalEntity !== prevEntity) {
-    setPrevEntity(originalEntity);
-    setName(originalEntity.name || '');
-    setStatus(originalEntity.status || 'active');
-    setIsStandalone(originalEntity.isStandalone || false);
-
-    // Sync Images
-    const imgInputs: Record<string, string> = {};
-    if (originalEntity.image) {
-      Object.entries(originalEntity.image).forEach(([key, val]) => {
-        imgInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
-      });
-    }
-    setImageInputs(imgInputs);
-
-    // --- Sync Metadata Framework ---
-    const metaInputs: Record<string, string> = {};
-    const currentType = originalEntity.type?.toLowerCase() || '';
-
-    // 1. Initialiseer verplichte L4 velden als leeg
-    if (currentType === 'l4') {
-      REQUIRED_L4_FIELDS.forEach(field => {
-        metaInputs[field] = '';
-      });
-    }
-
-    // 2. Vul de inputs met bestaande data, maar wees slim met hoofdletters
-    if (originalEntity.metadata) {
-      Object.entries(originalEntity.metadata).forEach(([dbKey, val]) => {
-        // Zoek of de dbKey overeenkomt met een van onze verplichte velden (case-insensitive)
-        const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
-
-        // Gebruik de 'juiste' casing voor de key, anders gebruik de dbKey
-        const targetKey = match || dbKey;
-        metaInputs[targetKey] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
-      });
-    }
-
-    // 3. Reeds opgeslagen waarden uit database overschrijven over de blauwdruk heen
-    if (originalEntity.metadata) {
-      Object.entries(originalEntity.metadata).forEach(([key, val]) => {
-        metaInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
-      });
-    }
-    setMetadataInputs(metaInputs);
-
-    // Sync Relational Connections
-    setLocalConnections(originalEntity.connections || []);
-    setLocalTargetConnections(originalEntity.targetConnections || []);
-  }
-
   // Scheiding van velden voor de interface om Required en Dynamic los te koppelen
   const partitionedMetadataKeys = useMemo(() => {
     const allKeys = Object.keys(metadataInputs);
@@ -166,10 +177,9 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       requiredKeys: allKeys.filter(key =>
         isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())
       ),
-      // Pas deze regel aan: voeg PassingDate toe aan de uitsluiting
       dynamicKeys: allKeys.filter(key => {
         const isRequired = isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
-        const isPassingDate = key.toLowerCase() === 'passingdate'; // <--- HIER
+        const isPassingDate = key.toLowerCase() === 'passingdate';
         return !isRequired && !isPassingDate;
       })
     };
@@ -226,10 +236,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     });
   }, [localConnections, localTargetConnections]);
 
-  if (!originalEntity) {
-    return <div style={{ color: 'red', padding: '20px' }}>Target entity record not found.</div>;
-  }
-
   // --- Handlers ---
   const handleImageInputChange = (key: string, value: string) => {
     setImageInputs(prev => ({ ...prev, [key]: value }));
@@ -250,13 +256,11 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     const cleanKey = newMetadataKey.trim();
     if (!cleanKey) return;
 
-    // 1. Check op exact bestaan in state
     if (metadataInputs[cleanKey] !== undefined) {
       alert("Dit veld bestaat al.");
       return;
     }
 
-    // 2. ANTI-COLLISION: Voorkom dat gebruikers core-velden overschrijven
     const isCoreField = REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase());
     if (isCoreField) {
       alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld (Core Game Metric). Je kunt deze niet toevoegen als dynamisch attribuut.`);
@@ -272,7 +276,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   };
 
   const handleRemoveMetadataField = (key: string) => {
-    if (originalEntity.type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
+    if (originalEntity && originalEntity.type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
       alert(`Field "${key}" is strictly required for the trivia logic engine and cannot be stripped.`);
       return;
     }
@@ -294,7 +298,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   };
 
   const handleAddConnection = (selectedEntityId: string) => {
-    if (!selectedEntityId) return;
+    if (!selectedEntityId || !originalEntity) return;
 
     const selectedNode = entitiesPool.find(e => e.id === selectedEntityId);
     if (!selectedNode) return;
@@ -341,7 +345,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   };
 
   const handleInlineQuickCreate = async (): Promise<void> => {
-    if (!quickCreateName.trim()) return;
+    if (!quickCreateName.trim() || !originalEntity) return;
     const baseSlug = quickCreateName.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
     const randomSuffix = Math.random().toString(36).substring(2, 6);
     const generatedId = `${baseSlug}-${randomSuffix}`;
@@ -391,22 +395,19 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     originalObject: Record<string, unknown>
   ): Record<string, MetadataValue> => {
     const result: Record<string, MetadataValue> = {};
+    if (!originalEntity) return result;
     const isL4 = originalEntity.type.toLowerCase() === 'l4';
 
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
 
-      // Sla lege waarden over
       if (!rawValue || !rawValue.trim()) return;
 
-      // --- EXPLICIETE UITZONDERING VOOR DATES ---
-      // Zorg dat PassingDate en Birthday ALTIJD strings blijven
       if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
         result[key] = rawValue.trim();
         return;
       }
 
-      // --- REST VAN DE LOGICA ---
       if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
         result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
       } else if (isL4 && (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear')) {
@@ -423,22 +424,20 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   };
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
-    console.log("Huidige metadata state:", metadataInputs);
-    console.log("Is DebutYear gevuld?", metadataInputs['DebutYear']);
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
+
+    if (!originalEntity) return;
 
     if (!name.trim()) {
       alert("Please enter a valid name.");
       return;
     }
 
-    // 1. Validatie voor L4
     if (originalEntity.type.toLowerCase() === 'l4') {
       for (const field of REQUIRED_L4_FIELDS) {
-        // Zoek naar de key, ongeacht hoofdletters
         const foundKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === field.toLowerCase());
         const value = foundKey ? metadataInputs[foundKey] : undefined;
 
@@ -448,21 +447,18 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
         }
       }
 
-      // Check Datum Formaat voor Birthday (Altijd verplicht voor L4)
       const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
       if (!dateRegex.test(metadataInputs['Birthday'].trim())) {
         alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
         return;
       }
 
-      // Check optionele PassingDate (ALLEEN als ingevuld)
       const passingDate = metadataInputs['PassingDate']?.trim();
       if (passingDate && !dateRegex.test(passingDate)) {
         alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
         return;
       }
 
-      // Check Numerieke velden
       if (isNaN(Number(metadataInputs['Height']?.trim()))) {
         alert("Format Error: Height must be a number.");
         return;
@@ -473,7 +469,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       }
     }
 
-    // 2. Data opbouw
     const updatedMetadata = reconstructObject(metadataInputs, originalEntity.metadata || {});
 
     if (dynamicTriggers[status]) {
@@ -492,7 +487,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       targetConnections: localTargetConnections
     };
 
-    // 3. Save
     try {
       if (onSave) {
         await onSave(updatedEntity);
@@ -503,6 +497,10 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
   };
 
+  // --- VEILIGE CONTROLE-CHECK (AAN HET EINDE VAN DE HOOKS) ---
+  if (!originalEntity) {
+    return <div style={{ color: 'red', padding: '20px' }}>Target entity record not found.</div>;
+  }
   return (
     <div className={styles.formCard}>
       <h2 className={styles.formCardTitle}>

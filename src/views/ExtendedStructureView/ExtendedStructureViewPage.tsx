@@ -8,6 +8,13 @@ interface Props {
   theme: Theme;
 }
 
+export interface PreparedMediaItem {
+  file: string;
+  type: 'image' | 'video-file' | 'video-embed';
+  itemClassKey: 'imageItem' | 'videoItem' | 'horizontalImageItem';
+  isPlaceholder?: boolean;
+}
+
 export interface FormattedStatItem {
   key: string;
   label: string;
@@ -17,9 +24,61 @@ export interface FormattedStatItem {
 // ==========================================================================
 // PURE UTILITY FUNCTIONS (Data Translators)
 // ==========================================================================
+const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
+  const lowerCaseFile = file.toLowerCase();
+  if (lowerCaseFile.includes('youtube.com') || lowerCaseFile.includes('youtu.be')) return 'video-embed';
+  if (lowerCaseFile.endsWith('.mp4') || lowerCaseFile.endsWith('.webm')) return 'video-file';
+  return 'image';
+};
+
 const isStringValid = (url: string): boolean => {
   const cleaned = url.trim().toLowerCase();
   return cleaned !== "" && cleaned !== "/placeholder.png" && cleaned !== "placeholder.png";
+};
+
+const mapMediaItemToGridSpace = (
+  file: string,
+  mediaDimensions: Record<string, boolean>
+): {
+  file: string;
+  type: 'image' | 'video-file' | 'video-embed';
+  itemClassKey: 'videoItem' | 'horizontalImageItem' | 'imageItem';
+  spanSpaces: number;
+} => {
+  const mediaType = getMediaType(file);
+  const defaultIsHorizontal = mediaType !== 'image';
+  let isHorizontal = defaultIsHorizontal;
+
+  if (mediaDimensions[file] !== undefined) {
+    isHorizontal = mediaDimensions[file];
+  }
+
+  const gridSpanSpaces = isHorizontal ? 2 : 1;
+
+  const itemClassKey = (mediaType === 'video-file' || mediaType === 'video-embed')
+    ? (isHorizontal ? 'videoItem' : 'imageItem')
+    : (isHorizontal ? 'horizontalImageItem' : 'imageItem');
+
+  return { file, type: mediaType, itemClassKey, spanSpaces: gridSpanSpaces };
+};
+
+const fillRowGapsWithPlaceholders = (
+  structuredRowItems: PreparedMediaItem[],
+  totalAssignedSpaces: number,
+  sectionKey: string,
+  counter: number
+): { counter: number; cost: number } => {
+  const spacesLeftOnCurrentLine = 4 - (totalAssignedSpaces % 4);
+  const isHorizontalPlaceholder = spacesLeftOnCurrentLine >= 2;
+
+  structuredRowItems.push({
+    file: `placeholder-${sectionKey}-${counter}`,
+    type: 'image',
+    itemClassKey: isHorizontalPlaceholder ? 'horizontalImageItem' : 'imageItem',
+    isPlaceholder: true
+  });
+
+  return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
 // ==========================================================================
@@ -29,11 +88,10 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
   const { id, themeName } = useParams<{ id: string; themeName: string }>();
   const navigate = useNavigate();
 
-  // Asset validation and image error lifecycle trackers
+  const [mediaDimensions, setMediaDimensions] = useState<Record<string, boolean>>({});
   const [profileImageError, setProfileImageError] = useState(false);
   const [heroImageError, setHeroImageError] = useState(false);
 
-  // Automatically flush and reset error trackers if a user jumps to a new view ID
   const [prevId, setPrevId] = useState(id);
   if (id !== prevId) {
     setPrevId(id);
@@ -41,36 +99,27 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     setHeroImageError(false);
   }
 
-  // --- TRAVERSAL CONTROLLER: Explores connections map to build the active structural branch ---
+  // --- TRAVERSAL CONTROLLER ---
   const structureData = useMemo(() => {
     if (!id || !theme.entities) return null;
 
-    // Locate the focus item matching either the URL routing UUID parameter or Name identifier
     const targetEntity = theme.entities.find((e) => e.id === id || e.name === id);
     if (!targetEntity) return null;
 
     const activeLayer = targetEntity.type as "l1" | "l2" | "l3" | "l4";
 
-    // Track up-tree historical parents to assemble clear structural trace views
     const l1ParentsMap = new Map<string, BaseEntity>();
     const l2ParentsMap = new Map<string, BaseEntity>();
     
-    // Store down-tree target children nodes grouped out by structural type levels
     const relatedL2sMap = new Map<string, BaseEntity>();
     const relatedL3sMap = new Map<string, BaseEntity>();
     const relatedL4sMap = new Map<string, BaseEntity>();
 
-    // Helper utility to merge inbound and outbound bidirectional nodes safely
     const getConnections = (ent: HydratedEntity) => [
       ...(ent.connections || []),
       ...(ent.targetConnections || []),
     ];
 
-    // =========================================================================
-    // BRANCH TRAVERSAL LOGIC: Filter maps depending on selected level
-    // =========================================================================
-    
-    // FOCUS LOOKUP: Intermediate operational node ($L3$)
     if (activeLayer === 'l3') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -79,7 +128,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         if (other.type === 'l2') l2ParentsMap.set(other.id, other);
         if (other.type === 'l1') l1ParentsMap.set(other.id, other);
         
-        // Map down-tree roster entries ($L4$) and update status parameters inline
         if (other.type === 'l4') {
           const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
           relatedL4sMap.set(other.id, {
@@ -93,7 +141,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         }
       });
 
-      // Secondary check: Trace vertically through $L2$ if there isn't a direct connection link up to $L1$
       if (l1ParentsMap.size === 0) {
         l2ParentsMap.forEach((l2Parent) => {
           const fullL2 = theme.entities!.find((e) => e.id === l2Parent.id);
@@ -106,7 +153,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         });
       }
     } 
-    // FOCUS LOOKUP: Mid-level Structural Division ($L2$)
     else if (activeLayer === 'l2') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -116,7 +162,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         if (other.type === 'l3') relatedL3sMap.set(other.id, other);
       });
 
-      // Dig down another level to find working elements ($L4$) linked underneath our sub-groups
       relatedL3sMap.forEach((l3Group) => {
         const fullL3 = theme.entities!.find((e) => e.id === l3Group.id);
         if (fullL3) {
@@ -124,7 +169,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
             const other = conn.sourceEntity?.id === fullL3.id ? conn.targetEntity : conn.sourceEntity;
             if (other && other.type === 'l4') {
               const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
-              if (relStatus === 'former' || relStatus === 'left') return; // Hide historic items from high level index
+              if (relStatus === 'former' || relStatus === 'left') return;
 
               relatedL4sMap.set(other.id, {
                 ...other,
@@ -139,7 +184,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         }
       });
     } 
-    // FOCUS LOOKUP: Structural Core Top Organization ($L1$)
     else if (activeLayer === 'l1') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -149,7 +193,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         if (other.type === 'l3') relatedL3sMap.set(other.id, other);
       });
 
-      // Discover floating operations ($L3$) mapped inside nested structural hubs ($L2$)
       relatedL2sMap.forEach((l2Agency) => {
         const fullL2 = theme.entities!.find((e) => e.id === l2Agency.id);
         if (fullL2) {
@@ -160,7 +203,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         }
       });
 
-      // Aggregate global underlying items ($L4$) avoiding nodes marked historically disconnected
       relatedL3sMap.forEach((l3Group) => {
         const fullL3 = theme.entities!.find((e) => e.id === l3Group.id);
         if (fullL3) {
@@ -184,7 +226,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       });
     }
 
-    // Sort parent arrays cleanly into breadcrumb paths chronologically: [$L1$ Parent -> $L2$ Parent]
     const parents: BaseEntity[] = [];
     const absoluteL1 = Array.from(l1ParentsMap.values())[0];
     const absoluteL2 = Array.from(l2ParentsMap.values())[0];
@@ -202,18 +243,60 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [id, theme.entities]);
 
-  // --- ROUTING CONTROL: Dynamically shifts paths depending on target layout goals ---
+  // --- ROUTING CONTROL ---
   const handleNavigation = useCallback((targetId: string, layer: "l1" | "l2" | "l3" | "l4") => {
     const isL4 = layer === 'l4';
-    
-    // Exception rules tracking empty nested components: Route $L3$ components straight into profile showcase if children lists don't exist
     const isL3AsProfile = (layer === 'l3' && structureData?.relatedL4s.length === 0 && structureData?.activeLayer === 'l2');
-
     const targetView = (isL4 || isL3AsProfile) ? 'profile' : 'structure';
     navigate(`/${themeName}/${targetView}/${targetId}`);
   }, [navigate, themeName, structureData]);
 
-  // Handle asset link configurations and handle media loading checks
+  // --- TETRIS-STYLE MEDIA GENERATOR ---
+  const preparedMediaSections = useMemo(() => {
+    const entityImages = structureData?.targetEntity.image as EntityImages | undefined;
+    if (!structureData?.targetEntity || !entityImages) return {};
+
+    const organizedSections: Record<string, PreparedMediaItem[]> = {};
+    const galleryKeys = Object.keys(entityImages).filter(k => k !== 'profileCard' && k !== 'heroBanner');
+
+    galleryKeys.forEach(sectionKey => {
+      const sectionAssets = entityImages[sectionKey];
+      if (!sectionAssets) return;
+
+      let rawAssetList: string[] = [];
+      if (Array.isArray(sectionAssets)) {
+        rawAssetList = sectionAssets.filter(Boolean) as string[];
+      } else if (typeof sectionAssets === 'string') {
+        rawAssetList = sectionAssets.split(/\s+/).map(file => file.trim()).filter(Boolean);
+      }
+
+      if (rawAssetList.length === 0) return;
+
+      const unplacedMediaPool = rawAssetList.map(file => mapMediaItemToGridSpace(file, mediaDimensions));
+      const structuredRowItems: PreparedMediaItem[] = [];
+      let placeholderCounter = 0;
+      let totalAssignedSpaces = 0;
+
+      while (unplacedMediaPool.length > 0 || totalAssignedSpaces % 4 !== 0) {
+        const spacesLeftOnCurrentLine = 4 - (totalAssignedSpaces % 4);
+        const optimalMatchIndex = unplacedMediaPool.findIndex(item => item.spanSpaces <= spacesLeftOnCurrentLine);
+
+        if (unplacedMediaPool.length > 0 && optimalMatchIndex !== -1) {
+          const matchedItem = unplacedMediaPool.splice(optimalMatchIndex, 1)[0];
+          structuredRowItems.push({ file: matchedItem.file, type: matchedItem.type, itemClassKey: matchedItem.itemClassKey });
+          totalAssignedSpaces += matchedItem.spanSpaces;
+        } else {
+          const res = fillRowGapsWithPlaceholders(structuredRowItems, totalAssignedSpaces, sectionKey, placeholderCounter);
+          placeholderCounter = res.counter;
+          totalAssignedSpaces += res.cost;
+        }
+      }
+      organizedSections[sectionKey] = structuredRowItems;
+    });
+
+    return organizedSections;
+  }, [structureData, mediaDimensions]);
+
   const assets = useMemo(() => {
     if (!structureData?.targetEntity) return null;
     const entityImages = structureData.targetEntity.image as EntityImages | undefined;
@@ -224,16 +307,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     const hasHeroBanner = isStringValid(heroBannerImageUrl) && !heroImageError;
     const shouldShowHeroSection = hasProfileCard || hasHeroBanner;
 
-    return {
-      profileCardImageUrl,
-      heroBannerImageUrl,
-      hasProfileCard,
-      hasHeroBanner,
-      shouldShowHeroSection,
-    };
+    return { profileCardImageUrl, heroBannerImageUrl, hasProfileCard, hasHeroBanner, shouldShowHeroSection };
   }, [structureData, profileImageError, heroImageError]);
 
-  // Compute text descriptors describing localized position settings for standard headers
   const sidebarSubLabel = useMemo(() => {
     if (!structureData) return '';
     const { activeLayer } = structureData;
@@ -246,7 +322,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       : (theme.labels[activeLayer] ?? activeLayer);
   }, [structureData, theme.labels]);
 
-  // Transform core entry settings keys out into clear arrays for UI grid components to process
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!structureData?.targetEntity?.metadata) return [];
     return Object.entries(structureData.targetEntity.metadata)
@@ -269,6 +344,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       relatedL3s={structureData.relatedL3s}
       relatedL4s={structureData.relatedL4s}
       theme={theme}
+      mediaSections={preparedMediaSections}
       sidebarSubLabel={sidebarSubLabel}
       formattedStatistics={formattedStatistics}
       profileCardImageUrl={assets.profileCardImageUrl}
@@ -276,6 +352,8 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       hasProfileCard={assets.hasProfileCard}
       hasHeroBanner={assets.hasHeroBanner}
       shouldShowHeroSection={assets.shouldShowHeroSection}
+      mediaDimensions={mediaDimensions}
+      setMediaDimensions={setMediaDimensions}
       setProfileImageError={setProfileImageError}
       setHeroImageError={setHeroImageError}
       onNavigate={handleNavigation}

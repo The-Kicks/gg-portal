@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
 import styles from './ExtendedStructureView.module.css';
 
 import type { BaseEntity, Theme } from '../../types';
-import type { FormattedStatItem } from './ExtendedStructureViewPage';
+import type { FormattedStatItem, PreparedMediaItem } from './ExtendedStructureViewPage';
 
 interface ExtendedStructureViewProps {
   entity: BaseEntity;
   activeLayer: "l1" | "l2" | "l3" | "l4";
   parents: BaseEntity[];
   theme: Theme;
+  mediaSections: Record<string, PreparedMediaItem[]>;
   sidebarSubLabel: string;
   formattedStatistics: FormattedStatItem[];
   relatedL2s: BaseEntity[];
@@ -20,6 +21,8 @@ interface ExtendedStructureViewProps {
   hasProfileCard: boolean;
   hasHeroBanner: boolean;
   shouldShowHeroSection: boolean;
+  mediaDimensions: Record<string, boolean>;
+  setMediaDimensions: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   setProfileImageError: (err: boolean) => void;
   setHeroImageError: (err: boolean) => void;
   onNavigate: (id: string, layer: "l1" | "l2" | "l3" | "l4") => void;
@@ -30,6 +33,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
   activeLayer,
   parents,
   theme,
+  mediaSections = {},
   sidebarSubLabel,
   formattedStatistics,
   relatedL2s,
@@ -40,12 +44,36 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
   hasProfileCard,
   hasHeroBanner,
   shouldShowHeroSection,
+  mediaDimensions,
+  setMediaDimensions,
   setProfileImageError,
   setHeroImageError,
   onNavigate,
 }) => {
-  // Check if this item has any lower-level children or sub-layers to display
   const hasChildren = relatedL2s.length > 0 || relatedL3s.length > 0 || relatedL4s.length > 0;
+
+  // Haal dynamisch alle gevulde media-albums op
+  const gallerySectionKeys = useMemo(() => {
+    return Object.keys(mediaSections).filter(key => mediaSections[key]?.length > 0);
+  }, [mediaSections]);
+
+  const hasMedia = gallerySectionKeys.length > 0;
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>, fileUrl: string) => {
+    const img = e.currentTarget;
+    const isHorizontal = img.naturalWidth > img.naturalHeight;
+    if (mediaDimensions[fileUrl] !== isHorizontal) {
+      setMediaDimensions(prev => ({ ...prev, [fileUrl]: isHorizontal }));
+    }
+  };
+
+  const handleVideoMetadata = (e: React.SyntheticEvent<HTMLVideoElement>, fileUrl: string) => {
+    const video = e.currentTarget;
+    const isHorizontal = video.videoWidth > video.videoHeight;
+    if (mediaDimensions[fileUrl] !== isHorizontal) {
+      setMediaDimensions(prev => ({ ...prev, [fileUrl]: isHorizontal }));
+    }
+  };
 
   return (
     <div className={styles.pageWrapper}>
@@ -74,7 +102,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
             <div className={styles.titleBox}>
               <span className={styles.layerLabel}>{theme.labels[activeLayer] ?? activeLayer}</span>
               <h1 className={styles.entityName}>{entity.name}</h1>
-              {/* Breadcrumb path displaying the vertical lineage trail */}
               {parents.length > 0 && (
                 <p className={styles.breadcrumbPath}>
                   {parents.map((p, idx) => (
@@ -89,7 +116,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
           </div>
         </section>
       ) : (
-        /* Plain fallback header if there are no brand visuals or images loaded */
         <div className={styles.standaloneTitleWrapper}>
           <div className={styles.titleBox}>
             <span className={styles.layerLabel}>{theme.labels[activeLayer] ?? activeLayer}</span>
@@ -121,8 +147,65 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
           </div>
         </aside>
 
-        {/* Dynamic Sub-layers Display Panels */}
+        {/* Dynamic Media & Children Content Area */}
         <main className={styles.contentArea}>
+          
+          {/* 1. DYNAMISCHE ALBUMS LOOP (TETRIS GRID) */}
+          {hasMedia && (
+            <div className={styles.mediaContainerWrapper} style={{ marginBottom: '2.5rem' }}>
+              {gallerySectionKeys.map(sectionKey => {
+                const galleryItems = mediaSections[sectionKey];
+                return (
+                  <section key={sectionKey} className={styles.mediaSection} style={{ marginBottom: '2rem' }}>
+                    <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
+                    <div className={styles.mediaGrid}>
+                      {galleryItems.map((item) => {
+                        if (item.isPlaceholder) {
+                          const placeholderSizeClass = item.itemClassKey === 'horizontalImageItem'
+                            ? styles.horizontalImageItem
+                            : styles.imageItem;
+
+                          return (
+                            <div key={item.file} className={`${styles.decorativePlaceholder} ${placeholderSizeClass}`}>
+                              <div className={styles.placeholderInner}>
+                                <span className={styles.placeholderLabel}>{entity.name}</span>
+                                <span className={styles.placeholderSub}>
+                                  {theme.labels[sectionKey] ?? sectionKey}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        const isHorizontal = item.itemClassKey !== 'imageItem';
+                        const itemLayoutClass = isHorizontal ? styles.horizontalImageItem : styles.imageItem;
+                        const mediaSourcePath = item.file.startsWith('http') ? item.file : `/${item.file}`;
+
+                        return (
+                          <div key={item.file} className={`${styles.mediaItem} ${itemLayoutClass}`}>
+                            {item.type === 'image' ? (
+                              <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
+                            ) : item.type === 'video-file' ? (
+                              <video
+                                src={mediaSourcePath}
+                                controls
+                                preload="metadata"
+                                onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
+                              />
+                            ) : (
+                              <iframe src={mediaSourcePath} title={`${sectionKey}-${item.file}`} allowFullScreen />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 2. KIND-ELEMENTEN EN SUB-LAYERS DISPLAY */}
           {hasChildren ? (
             <>
               {/* L3: Organizations / Groups Component Grid */}
@@ -131,7 +214,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                   <h2 className={styles.sectionHeading}>{theme.labels.l3 ?? 'Organizations'}</h2>
                   <div className={styles.teammatesGrid}>
                     {relatedL3s.map((child) => {
-                      // Determine if this organizational unit is no longer active or operating
                       const isDisbanded = ['disbanded', 'inactive', 'retired', 'historical'].includes(
                         (child.status || '').toLowerCase().trim()
                       ) || child.metadata?.groupStatus === 'disbanded' || child.metadata?.status === 'disbanded';
@@ -164,7 +246,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                   <h2 className={styles.sectionHeading}>{theme.labels.l4 ?? 'Endpoints'}</h2>
                   <div className={styles.teammatesGrid}>
                     {relatedL4s.map((child) => {
-                      // Check if a member is listed as former/ex-member to apply visual filters
                       const isFormer = child.metadata?.groupStatus === 'former' || child.metadata?.status === 'former';
                       return (
                         <div
@@ -215,10 +296,11 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
               )}
             </>
           ) : (
-            /* Fallback layout template when there are zero nested entities mapped */
-            <div className={styles.emptyMediaContainer}>
-              <h3>No data available</h3>
-            </div>
+            !hasMedia && (
+              <div className={styles.emptyMediaContainer}>
+                <h3>No data available</h3>
+              </div>
+            )
           )}
         </main>
       </div>

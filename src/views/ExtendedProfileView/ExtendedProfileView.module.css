@@ -288,6 +288,13 @@
   aspect-ratio: 16 / 9;
 }
 
+/* Voeg dit toe aan je CSS bestand */
+.verticalVideoItem {
+  grid-column: span 1;
+  aspect-ratio: 9 / 16; /* Perfect voor Shorts/Reels/TikToks */
+}
+
+
 .imageItem {
   grid-column: span 1;
   aspect-ratio: 3 / 4;

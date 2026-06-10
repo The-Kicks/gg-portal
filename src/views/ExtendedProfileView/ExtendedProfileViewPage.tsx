@@ -12,7 +12,7 @@ interface Props {
 export interface PreparedMediaItem {
   file: string;
   type: 'image' | 'video-file' | 'video-embed';
-  itemClassKey: 'imageItem' | 'videoItem' | 'horizontalImageItem';
+  itemClassKey: 'imageItem' | 'videoItem' | 'horizontalImageItem' | 'verticalVideoItem';
   isPlaceholder?: boolean;
 }
 
@@ -60,21 +60,28 @@ const mapMediaItemToGridSpace = (
 ): {
   file: string;
   type: 'image' | 'video-file' | 'video-embed';
-  itemClassKey: 'videoItem' | 'horizontalImageItem' | 'imageItem';
+  itemClassKey: 'videoItem' | 'horizontalImageItem' | 'imageItem' | 'verticalVideoItem';
   spanSpaces: number;
 } => {
   const mediaType = getMediaType(file);
-  const defaultIsHorizontal = mediaType !== 'image';
-  let isHorizontal = defaultIsHorizontal;
+
+  // Standaard gaan we nog uit van horizontaal voor video's, BEHALVE als de metadata-hook 
+  // (of een specifieke URL-check voor bijvoorbeeld shorts) vertelt dat hij verticaal is (false).
+  let isHorizontal = mediaType !== 'image';
 
   if (mediaDimensions[file] !== undefined) {
     isHorizontal = mediaDimensions[file];
   }
 
-  const gridSpanSpaces = isHorizontal ? 2 : 1;
+  // Als het een video is en hij is NIET horizontaal, dan is het een verticale video (span 1)
+  if ((mediaType === 'video-file' || mediaType === 'video-embed') && !isHorizontal) {
+    return { file, type: mediaType, itemClassKey: 'verticalVideoItem', spanSpaces: 1 };
+  }
 
+  // Normale afhandeling voor de rest
+  const gridSpanSpaces = isHorizontal ? 2 : 1;
   const itemClassKey = (mediaType === 'video-file' || mediaType === 'video-embed')
-    ? (isHorizontal ? 'videoItem' : 'imageItem')
+    ? 'videoItem'
     : (isHorizontal ? 'horizontalImageItem' : 'imageItem');
 
   return { file, type: mediaType, itemClassKey, spanSpaces: gridSpanSpaces };

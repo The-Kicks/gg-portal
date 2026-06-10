@@ -148,14 +148,14 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
       <div className={styles.mainLayout}>
         <aside className={styles.sidebar}>
           <div className={`${styles.stickyContainer} ${isHeroScrolledPast ? styles.isSticky : styles.isStatic}`}>
-            
+
             {/* This small mini-header fades into view inside the sidebar once you scroll past the big header */}
             <div className={`${styles.compactHeader} ${isHeroScrolledPast ? styles.visible : ''}`}>
               {hasProfileCard && <img src={profileCardImageUrl} className={styles.miniAvatar} alt="" />}
               <h2 className={styles.compactName}>{entity.name}</h2>
               <span className={styles.compactLabel}>{sidebarSubLabel}</span>
             </div>
-            
+
             {/* Main Information / Stats Card */}
             <div className={styles.infoCard}>
               <h3 className={styles.sidebarTitle}>Stats</h3>
@@ -195,7 +195,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                   <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
                   <div className={styles.mediaGrid}>
                     {galleryItems.map((item) => {
-                      
+
                       // Render empty placeholders to neatly balance out uneven rows
                       if (item.isPlaceholder) {
                         const placeholderSizeClass = item.itemClassKey === 'horizontalImageItem'
@@ -214,8 +214,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                         );
                       }
 
-                      const isHorizontal = item.itemClassKey !== 'imageItem';
-                      const itemLayoutClass = isHorizontal ? styles.horizontalImageItem : styles.imageItem;
+
+                      // Vervang dat (vlak boven de return van de mediaItem) door:
+                      let itemLayoutClass = styles.imageItem;
+                      if (item.itemClassKey === 'horizontalImageItem') itemLayoutClass = styles.horizontalImageItem;
+                      if (item.itemClassKey === 'videoItem') itemLayoutClass = styles.videoItem;
+                      if (item.itemClassKey === 'verticalVideoItem') itemLayoutClass = styles.verticalVideoItem;
                       const mediaSourcePath = item.file.startsWith('http') ? item.file : `/${item.file}`;
 
                       return (

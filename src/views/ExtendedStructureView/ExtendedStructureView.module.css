@@ -10,7 +10,7 @@
 
 .mainLayout {
   display: grid;
-  /* Splitting page: left side sets parameters block, right side populates content listings */
+  /* Links de metadata sidebar, rechts de dynamische content listings */
   grid-template-columns: clamp(280px, 22vw, 400px) 1fr;
   gap: 5vw;
   padding: 0 6vw 1vh 6vw;
@@ -126,7 +126,7 @@
 
 .sep { margin: 0 6px; opacity: 0.4; }
 
-/* Clean alternate fallback header config parameters when hero media fails or doesn't exist */
+/* Alternatieve fallback header zonder Hero Images */
 .standaloneTitleWrapper {
   padding: 60px 6vw 30px 6vw;
   background-color: var(--bg);
@@ -236,17 +236,103 @@
 .statBox span { font-size: 1.1rem; font-weight: 600; color: var(--secondary); }
 
 /* ==========================================================================
-   4. COMPONENT LEVEL STRUC CARDS DISPLAY GRID
+   4. MEDIA CONTENT & TETRIS GRID LAYOUT
+   ========================================================================== */
+.mediaSection { 
+  margin-bottom: 8vh; 
+}
+
+.mediaGrid { 
+  display: grid; 
+  grid-template-columns: repeat(4, 1fr); 
+  gap: 1.5rem; 
+  align-items: stretch;
+}
+
+.mediaItem { 
+  border-radius: 1.5rem; 
+  overflow: hidden; 
+  background: color-mix(in srgb, var(--text), transparent 95%);
+  width: 100%;
+  height: 100%; 
+  min-height: 0; 
+}
+
+.mediaItem img, 
+.mediaItem video, 
+.mediaItem iframe {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; 
+  object-position: center center;
+  display: block;
+  border: none;
+}
+
+.horizontalImageItem {
+  grid-column: span 2;
+  aspect-ratio: 16 / 10;
+}
+
+.videoItem {
+  grid-column: span 2;
+  aspect-ratio: 16 / 9;
+}
+
+.imageItem {
+  grid-column: span 1;
+  aspect-ratio: 3 / 4;
+}
+
+/* Tetris Opvullings-placeholders */
+.decorativePlaceholder {
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bg), #fff 2%), color-mix(in srgb, var(--bg), #000 2%));
+  border: 2px dashed color-mix(in srgb, var(--text), transparent 85%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 2rem;
+}
+
+.placeholderInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0.25;
+  text-align: center;
+}
+
+.placeholderLabel {
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+
+.placeholderSub {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+/* ==========================================================================
+   5. COMPONENT LEVEL STRUC CARDS DISPLAY GRID
    ========================================================================== */
 .teammatesSection {
-  margin-top: 4vh; /* Slightly tighter top spacing than profile layouts to cluster items cleanly */
+  margin-top: 4vh; 
   padding-top: 4vh;
   border-top: 1px solid color-mix(in srgb, var(--text), transparent 92%);
   animation: fadeIn 0.6s ease-out;
 }
 
-/* Strip top separator line borders from the first content section automatically */
-.contentArea > .teammatesSection:first-child {
+/* Verwijdert de bovenste border van de allereerste sectie in de content-area */
+.contentArea > .teammatesSection:first-child,
+.contentArea > .mediaContainerWrapper + .teammatesSection {
   margin-top: 0;
   padding-top: 0;
   border-top: none;
@@ -296,7 +382,7 @@
 }
 
 /* ==========================================================================
-   5. VISUAL ATTRIBUTES MUTATION FOR DISBANDED / HISTORIC NODES
+   6. VISUAL ATTRIBUTES MUTATION FOR DISBANDED / HISTORIC NODES
    ========================================================================== */
 .isFormerTeammate {
   opacity: 0.45;          
@@ -315,7 +401,7 @@
 }
 
 /* ==========================================================================
-   6. EMPTY STATES PLACEHOLDERS (Fallback screen layouts)
+   7. EMPTY STATES PLACEHOLDERS (Fallback layouts)
    ========================================================================== */
 .emptyMediaContainer {
   width: 100%;
@@ -332,7 +418,6 @@
   overflow: hidden;
 }
 
-/* Backlit styling glow effect behind empty states panel text */
 .emptyMediaContainer::before {
   content: '';
   position: absolute;
