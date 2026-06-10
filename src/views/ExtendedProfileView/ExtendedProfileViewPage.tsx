@@ -8,34 +8,24 @@ interface Props {
   theme: Theme;
 }
 
-// Represents a media item (image/video) that is ready to be rendered in the grid
 export interface PreparedMediaItem {
   file: string;
   type: 'image' | 'video-file' | 'video-embed';
-  itemClassKey: 'imageItem' | 'videoItem' | 'horizontalImageItem' | 'verticalVideoItem';
+  itemClassKey: 'imageItem' | 'videoItem' | 'horizontalImageItem' | 'verticalVideoItem' | 'tallImageItem';
   isPlaceholder?: boolean;
 }
 
-// Represents a single statistic row in the sidebar (e.g., Age: 25)
 export interface FormattedStatItem {
   key: string;
   label: string;
   displayValue: string;
 }
 
-// Structure to group team members under their respective organization or group
 export interface TeammateStructure {
   l4: HydratedEntity;
   l3: BaseEntity[];
 }
 
-// ==========================================================================
-// PURE UTILITY FUNCTIONS (Data Translators)
-// ==========================================================================
-
-/**
- * Checks the file URL or extension to determine if it's a YouTube video, a direct video file, or an image.
- */
 const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   const lowerCaseFile = file.toLowerCase();
   if (lowerCaseFile.includes('youtube.com') || lowerCaseFile.includes('youtu.be')) return 'video-embed';
@@ -43,75 +33,35 @@ const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   return 'image';
 };
 
-/**
- * Ensures a string contains a valid image path and is not just a default placeholder name.
- */
 const isStringValid = (url: string): boolean => {
   const cleaned = url.trim().toLowerCase();
   return cleaned !== "" && cleaned !== "/placeholder.png" && cleaned !== "placeholder.png";
 };
 
-/**
- * Decides how much grid space a media item needs based on its type and loaded dimensions.
- */
-const mapMediaItemToGridSpace = (
+const mapMediaItemToMasonry = (
   file: string,
   mediaDimensions: Record<string, boolean>
-): {
-  file: string;
-  type: 'image' | 'video-file' | 'video-embed';
-  itemClassKey: 'videoItem' | 'horizontalImageItem' | 'imageItem' | 'verticalVideoItem';
-  spanSpaces: number;
-} => {
+): PreparedMediaItem => {
   const mediaType = getMediaType(file);
-
-  // Standaard gaan we nog uit van horizontaal voor video's, BEHALVE als de metadata-hook 
-  // (of een specifieke URL-check voor bijvoorbeeld shorts) vertelt dat hij verticaal is (false).
   let isHorizontal = mediaType !== 'image';
-
   if (mediaDimensions[file] !== undefined) {
     isHorizontal = mediaDimensions[file];
   }
 
-  // Als het een video is en hij is NIET horizontaal, dan is het een verticale video (span 1)
-  if ((mediaType === 'video-file' || mediaType === 'video-embed') && !isHorizontal) {
-    return { file, type: mediaType, itemClassKey: 'verticalVideoItem', spanSpaces: 1 };
+  if (mediaType === 'video-file' || mediaType === 'video-embed') {
+    return {
+      file,
+      type: mediaType,
+      itemClassKey: isHorizontal ? 'videoItem' : 'verticalVideoItem'
+    };
   }
 
-  // Normale afhandeling voor de rest
-  const gridSpanSpaces = isHorizontal ? 2 : 1;
-  const itemClassKey = (mediaType === 'video-file' || mediaType === 'video-embed')
-    ? 'videoItem'
-    : (isHorizontal ? 'horizontalImageItem' : 'imageItem');
-
-  return { file, type: mediaType, itemClassKey, spanSpaces: gridSpanSpaces };
+  return {
+    file,
+    type: mediaType,
+    itemClassKey: isHorizontal ? 'horizontalImageItem' : 'tallImageItem'
+  };
 };
-
-/**
- * Adds beautiful placeholder cards to fill up remaining empty spaces in a 4-column grid row.
- */
-const fillRowGapsWithPlaceholders = (
-  structuredRowItems: PreparedMediaItem[],
-  totalAssignedSpaces: number,
-  sectionKey: string,
-  counter: number
-): { counter: number; cost: number } => {
-  const spacesLeftOnCurrentLine = 4 - (totalAssignedSpaces % 4);
-  const isHorizontalPlaceholder = spacesLeftOnCurrentLine >= 2;
-
-  structuredRowItems.push({
-    file: `placeholder-${sectionKey}-${counter}`,
-    type: 'image',
-    itemClassKey: isHorizontalPlaceholder ? 'horizontalImageItem' : 'imageItem',
-    isPlaceholder: true
-  });
-
-  return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
-};
-
-// ==========================================================================
-// HOOKS
-// ==========================================================================
 
 const useProfileAssetValidator = (targetEntity: BaseEntity | undefined) => {
   const [profileImageError, setProfileImageError] = useState(false);
@@ -145,15 +95,10 @@ const useProfileAssetValidator = (targetEntity: BaseEntity | undefined) => {
   }, [targetEntity, profileImageError, heroImageError]);
 };
 
-// ==========================================================================
-// MAIN COMPONENT
-// ==========================================================================
-
 export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
   const { id } = useParams<{ id: string }>();
   const [mediaDimensions, setMediaDimensions] = useState<Record<string, boolean>>({});
 
-  // 1. Find the current profile entity and calculate its parent hierarchy trail
   const profileDetails = useMemo(() => {
     if (!id || !theme.entities) return null;
     const targetEntity = theme.entities.find(e => e.id === id);
@@ -177,10 +122,8 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     return { targetEntity, activeLayer, parents };
   }, [id, theme.entities]);
 
-  // 2. Validate profile assets
   const assets = useProfileAssetValidator(profileDetails?.targetEntity);
 
-  // 3. Find and process all teammates
   const relatedTeammates = useMemo<TeammateStructure[]>(() => {
     if (!profileDetails || !id || !theme.entities) return [];
 
@@ -252,7 +195,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [id, profileDetails, theme.entities, theme.layerMetadata]);
 
-  // 4. Group the processed teammates by their L3 Group ID
   const groupedTeammates = useMemo(() => {
     const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
     relatedTeammates.forEach(member => {
@@ -266,7 +208,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     return groups;
   }, [relatedTeammates]);
 
-  // 5. Sort the group headers
   const groupKeys = useMemo(() => {
     return Object.keys(groupedTeammates).sort((a, b) => {
       const groupA = groupedTeammates[a].members[0].l3?.[0];
@@ -278,40 +219,32 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [groupedTeammates]);
 
-  // 6. Generate text label for the sticky sidebar header
   const sidebarSubLabel = useMemo(() => {
     if (!profileDetails) return '';
     const { parents, activeLayer } = profileDetails;
     return parents.length > 0 ? parents[parents.length - 1].name : (theme.labels[activeLayer] ?? activeLayer);
   }, [profileDetails, theme.labels]);
 
-  // 7. Clean up metadata attributes into a displayable list of stats, UNIVERSALLY ignoring any status fields
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!profileDetails?.targetEntity) return [];
 
     const { targetEntity, activeLayer } = profileDetails;
-
-    // Alleen velden die géén status zijn, maar wel altijd verborgen moeten blijven
     const standardExclusions = new Set<string>(['description']);
-
-    // Verzamel dynamisch alle keys die dit specifieke thema gebruikt voor status-triggers
     const dynamicStatusKeys = new Set<string>();
     const layerMeta = theme.layerMetadata?.[activeLayer];
 
     if (layerMeta?.statusTriggers && typeof layerMeta.statusTriggers === 'object') {
-      // 1. Check de waarden binnen de triggers (bijv. { trigger1: { key: 'clubStatus.member' } })
       Object.values(layerMeta.statusTriggers).forEach((trigger) => {
         if (trigger && typeof trigger === 'object' && 'key' in trigger) {
           const triggerObject = trigger as { key?: unknown };
           if (typeof triggerObject.key === 'string') {
             const rawKey = triggerObject.key.toLowerCase();
             dynamicStatusKeys.add(rawKey);
-            dynamicStatusKeys.add(rawKey.split('.')[0]); // Vangt ook de root 'clubstatus' op
+            dynamicStatusKeys.add(rawKey.split('.')[0]);
           }
         }
       });
 
-      // 2. Check de keys van de triggers zelf (voor het geval de structuur inline is: { 'clubStatus.member': {...} })
       Object.keys(layerMeta.statusTriggers).forEach((triggerKey) => {
         const rawKey = triggerKey.toLowerCase();
         dynamicStatusKeys.add(rawKey);
@@ -322,18 +255,9 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     return Object.entries(targetEntity.metadata || {})
       .filter(([key, value]) => {
         const lowerKey = key.toLowerCase();
-
-        // Regel 1: Is het een standaard verborgen veld (zoals description)? -> Weg ermee.
         if (standardExclusions.has(lowerKey)) return false;
-
-        // Regel 2: Zit het woord 'status' in de key? -> Direct weggooien.
-        // Dit vangt 'clubStatus.member', 'racingStatus', 'status', etc. universeel af.
         if (lowerKey.includes('status')) return false;
-
-        // Regel 3: Is dit veld in het thema gekoppeld aan een status-trigger? -> Weg ermee.
         if (dynamicStatusKeys.has(lowerKey)) return false;
-
-        // Alleen doorlaten als het veld een waarde heeft
         return !!value;
       })
       .map(([key, value]) => ({
@@ -343,7 +267,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       }));
   }, [profileDetails, theme.labels, theme.layerMetadata]);
 
-  // 8. Tetris-Style layout logic
+  // Vrijgemaakt van handmatige array-vulling: puur doorsturen naar de DOM handler
   const preparedMediaSections = useMemo(() => {
     const entityImages = profileDetails?.targetEntity.image as EntityImages | undefined;
     if (!profileDetails?.targetEntity || !entityImages) return {};
@@ -356,7 +280,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       if (!sectionAssets) return;
 
       let rawAssetList: string[] = [];
-
       if (Array.isArray(sectionAssets)) {
         rawAssetList = sectionAssets.filter(Boolean) as string[];
       } else if (typeof sectionAssets === 'string') {
@@ -368,26 +291,9 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
       if (rawAssetList.length === 0) return;
 
-      const unplacedMediaPool = rawAssetList.map(file => mapMediaItemToGridSpace(file, mediaDimensions));
-      const structuredRowItems: PreparedMediaItem[] = [];
-      let placeholderCounter = 0;
-      let totalAssignedSpaces = 0;
-
-      while (unplacedMediaPool.length > 0 || totalAssignedSpaces % 4 !== 0) {
-        const spacesLeftOnCurrentLine = 4 - (totalAssignedSpaces % 4);
-        const optimalMatchIndex = unplacedMediaPool.findIndex(item => item.spanSpaces <= spacesLeftOnCurrentLine);
-
-        if (unplacedMediaPool.length > 0 && optimalMatchIndex !== -1) {
-          const matchedItem = unplacedMediaPool.splice(optimalMatchIndex, 1)[0];
-          structuredRowItems.push({ file: matchedItem.file, type: matchedItem.type, itemClassKey: matchedItem.itemClassKey });
-          totalAssignedSpaces += matchedItem.spanSpaces;
-        } else {
-          const res = fillRowGapsWithPlaceholders(structuredRowItems, totalAssignedSpaces, sectionKey, placeholderCounter);
-          placeholderCounter = res.counter;
-          totalAssignedSpaces += res.cost;
-        }
-      }
-      organizedSections[sectionKey] = structuredRowItems;
+      organizedSections[sectionKey] = rawAssetList.map(file =>
+        mapMediaItemToMasonry(file, mediaDimensions)
+      );
     });
 
     return organizedSections;

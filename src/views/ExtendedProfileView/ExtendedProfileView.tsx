@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
 import styles from './ExtendedProfileView.module.css';
@@ -47,37 +47,34 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   groupedTeammates,
   groupKeys,
 }) => {
-  // Triggers when the user scrolls past the main hero banner section
   const [isHeroScrolledPast, setIsHeroScrolledPast] = useState(false);
   const heroSectionRef = useRef<HTMLDivElement>(null);
+
+  // Dynamische pixel-meting voor perfect uitgelijnde onderkanten
+  const [columnPaddings, setColumnPaddings] = useState<Record<string, number[]>>({});
+  const colContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const navigate = useNavigate();
   const { themeName } = useParams();
 
-  const gallerySectionKeys = Object.keys(mediaSections).filter(key => mediaSections[key]?.length > 0);
+  // Gefixt: Gewrapt in useMemo om een oneindige loop te voorkomen en linter tevreden te stellen
+  const gallerySectionKeys = useMemo(() => {
+    return Object.keys(mediaSections).filter(key => mediaSections[key]?.length > 0);
+  }, [mediaSections]);
+
   const hasMedia = gallerySectionKeys.length > 0;
 
-  /**
- * Triggers when an image finishes loading. Calculates if it's landscape or portrait
- * and saves this state to adjust grid item size dynamicly.
- */
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>, fileUrl: string) => {
     const img = e.currentTarget;
     const isHorizontal = img.naturalWidth > img.naturalHeight;
-
     if (mediaDimensions[fileUrl] !== isHorizontal) {
       setMediaDimensions(prev => ({ ...prev, [fileUrl]: isHorizontal }));
     }
   };
 
-  /**
- * Triggers when HTML5 video metadata loads. Determines video orientation
- * so portrait videos do not take up 2 horizontal blocks unnecessarily.
- */
   const handleVideoMetadata = (e: React.SyntheticEvent<HTMLVideoElement>, fileUrl: string) => {
     const video = e.currentTarget;
     const isHorizontal = video.videoWidth > video.videoHeight;
-
     if (mediaDimensions[fileUrl] !== isHorizontal) {
       setMediaDimensions(prev => ({ ...prev, [fileUrl]: isHorizontal }));
     }
@@ -88,7 +85,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     navigate(`/${themeName}/profile/${targetId}`);
   };
 
-  // Uses IntersectionObserver to detect when the header moves out of view, making the sidebar compact header visible
   useEffect(() => {
     if (!shouldShowHeroSection) return;
     const observerOptions = { threshold: 0.05 };
@@ -100,7 +96,45 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     return () => intersectionObserver.disconnect();
   }, [shouldShowHeroSection]);
 
-  // Shared function to render the name titles and breadcrumb paths in both header types
+  useEffect(() => {
+    if (!hasMedia) return;
+
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        const newPaddings: Record<string, number[]> = {};
+
+        gallerySectionKeys.forEach((sectionKey) => {
+          const h0 = colContentRefs.current[`${sectionKey}-0`]?.offsetHeight || 0;
+          const h1 = colContentRefs.current[`${sectionKey}-1`]?.offsetHeight || 0;
+          const h2 = colContentRefs.current[`${sectionKey}-2`]?.offsetHeight || 0;
+
+          const maxHeight = Math.max(h0, h1, h2);
+          if (maxHeight > 0) {
+            newPaddings[sectionKey] = [
+              maxHeight - h0,
+              maxHeight - h1,
+              maxHeight - h2
+            ];
+          }
+        });
+
+        setColumnPaddings(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(newPaddings)) return prev;
+          return newPaddings;
+        });
+      });
+    });
+
+    gallerySectionKeys.forEach((sectionKey) => {
+      [0, 1, 2].forEach((colIndex) => {
+        const el = colContentRefs.current[`${sectionKey}-${colIndex}`];
+        if (el) observer.observe(el);
+      });
+    });
+
+    return () => observer.disconnect();
+  }, [gallerySectionKeys, hasMedia]); // Gefixt: gallerySectionKeys hier veilig toegevoegd
+
   const renderTitleBox = () => (
     <div className={styles.titleBox}>
       <span className={styles.layerLabel}>{theme.labels[activeLayer]}</span>
@@ -118,12 +152,10 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
   return (
     <div className={styles.pageWrapper}>
-      {/* Hidden fallback image to check if the main asset exists before rendering */}
       {heroBannerImageUrl && !hasHeroBanner && (
         <img src={heroBannerImageUrl} style={{ display: 'none' }} onError={() => setHeroImageError(true)} alt="" />
       )}
 
-      {/* --- SECTION: HERO CONTAINER --- */}
       {shouldShowHeroSection ? (
         <section ref={heroSectionRef} className={styles.heroSection}>
           {hasHeroBanner && <div className={styles.heroBg} style={{ backgroundImage: `url(${heroBannerImageUrl})` }} />}
@@ -141,22 +173,17 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
         <div ref={heroSectionRef} style={{ height: 0 }} />
       )}
 
-      {/* If there are no images, show a simple static plain text header instead */}
       {!shouldShowHeroSection && <div className={styles.standaloneTitleWrapper}>{renderTitleBox()}</div>}
 
-      {/* --- SECTION: MAIN GRID LAYOUT --- */}
       <div className={styles.mainLayout}>
         <aside className={styles.sidebar}>
           <div className={`${styles.stickyContainer} ${isHeroScrolledPast ? styles.isSticky : styles.isStatic}`}>
-
-            {/* This small mini-header fades into view inside the sidebar once you scroll past the big header */}
             <div className={`${styles.compactHeader} ${isHeroScrolledPast ? styles.visible : ''}`}>
               {hasProfileCard && <img src={profileCardImageUrl} className={styles.miniAvatar} alt="" />}
               <h2 className={styles.compactName}>{entity.name}</h2>
               <span className={styles.compactLabel}>{sidebarSubLabel}</span>
             </div>
 
-            {/* Main Information / Stats Card */}
             <div className={styles.infoCard}>
               <h3 className={styles.sidebarTitle}>Stats</h3>
               <div className={styles.statsGrid}>
@@ -186,7 +213,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
         </aside>
 
         <main className={styles.contentArea}>
-          {/* MEDIA SHOWCASE ALBUMS */}
           {hasMedia ? (
             gallerySectionKeys.map(sectionKey => {
               const galleryItems = mediaSections[sectionKey];
@@ -194,48 +220,66 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                 <section key={sectionKey} className={styles.mediaSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
                   <div className={styles.mediaGrid}>
-                    {galleryItems.map((item) => {
 
-                      // Render empty placeholders to neatly balance out uneven rows
-                      if (item.isPlaceholder) {
-                        const placeholderSizeClass = item.itemClassKey === 'horizontalImageItem'
-                          ? styles.horizontalImageItem
-                          : styles.imageItem;
+                    {[0, 1, 2].map((colIndex) => {
+                      const itemsInColumn = galleryItems.filter((_, index) => index % 3 === colIndex);
+                      const rawPadding = columnPaddings[sectionKey]?.[colIndex] || 0;
 
-                        return (
-                          <div key={item.file} className={`${styles.decorativePlaceholder} ${placeholderSizeClass}`}>
-                            <div className={styles.placeholderInner}>
-                              <span className={styles.placeholderLabel}>{entity.name}</span>
-                              <span className={styles.placeholderSub}>
-                                {theme.labels[sectionKey] ?? sectionKey}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      }
-
-
-                      // Vervang dat (vlak boven de return van de mediaItem) door:
-                      let itemLayoutClass = styles.imageItem;
-                      if (item.itemClassKey === 'horizontalImageItem') itemLayoutClass = styles.horizontalImageItem;
-                      if (item.itemClassKey === 'videoItem') itemLayoutClass = styles.videoItem;
-                      if (item.itemClassKey === 'verticalVideoItem') itemLayoutClass = styles.verticalVideoItem;
-                      const mediaSourcePath = item.file.startsWith('http') ? item.file : `/${item.file}`;
+                      const finalPlaceholderHeight = rawPadding - 24;
 
                       return (
-                        <div key={item.file} className={`${styles.mediaItem} ${itemLayoutClass}`}>
-                          {item.type === 'image' ? (
-                            <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
-                          ) : item.type === 'video-file' ? (
-                            <video
-                              src={mediaSourcePath}
-                              controls
-                              preload="metadata"
-                              onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
-                            />
-                          ) : (
-                            <iframe src={mediaSourcePath} title={`${sectionKey}-${item.file}`} allowFullScreen />
+                        <div key={colIndex} className={styles.mediaColumn}>
+                          <div
+                            ref={(el) => { colContentRefs.current[`${sectionKey}-${colIndex}`] = el; }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}
+                          >
+                            {itemsInColumn.map((item) => {
+                              let itemLayoutClass = styles.imageItem;
+                              if (item.itemClassKey === 'horizontalImageItem') itemLayoutClass = styles.horizontalImageItem;
+                              if (item.itemClassKey === 'videoItem') itemLayoutClass = styles.videoItem;
+                              if (item.itemClassKey === 'verticalVideoItem') itemLayoutClass = styles.verticalVideoItem;
+                              if (item.itemClassKey === 'tallImageItem') itemLayoutClass = styles.tallImageItem;
+
+                              const mediaSourcePath = item.file.startsWith('http') ? item.file : `/${item.file}`;
+
+                              return (
+                                <div key={item.file} className={`${styles.mediaItem} ${itemLayoutClass}`}>
+                                  {item.type === 'image' ? (
+                                    <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
+                                  ) : item.type === 'video-file' ? (
+                                    <video
+                                      src={mediaSourcePath}
+                                      controls
+                                      preload="metadata"
+                                      onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
+                                    />
+                                  ) : (
+                                    <iframe src={mediaSourcePath} title={`${sectionKey}-${item.file}`} allowFullScreen />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Dynamic Placeholder die de kortere kolommen waterpas trekt */}
+                          {finalPlaceholderHeight > 10 && (
+                            <div
+                              className={`${styles.mediaItem} ${styles.decorativePlaceholder}`}
+                              style={{
+                                height: finalPlaceholderHeight,
+                                padding: finalPlaceholderHeight < 80 ? '0' : undefined,
+                                minHeight: 0
+                              }}
+                            >
+                              {finalPlaceholderHeight >= 80 && (
+                                <div className={styles.placeholderInner}>
+                                  <span className={styles.placeholderLabel}>Showcase</span>
+                                  <span className={styles.placeholderSub}>Coming Soon</span>
+                                </div>
+                              )}
+                            </div>
                           )}
+
                         </div>
                       );
                     })}
@@ -246,13 +290,20 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
           ) : (
             <div className={styles.emptyMediaContainer}>
               <div className={styles.emptyMediaInner}>
+                <div className={styles.emptyMediaIconWrapper}>
+                  {/* Modern minimalistisch foto/video-placeholder icoon */}
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                    <circle cx="9" cy="9" r="2" />
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                  </svg>
+                </div>
                 <h3 className={styles.emptyMediaTitle}>No Media Available</h3>
-                <span className={styles.emptyMediaSubtitle}>This profile currently has no showcase material</span>
+                <p className={styles.emptyMediaSubtitle}>This profile currently has no showcase material</p>
               </div>
             </div>
           )}
 
-          {/* RELATED MEMBERS / TEAMMATES */}
           {groupKeys.length > 0 && (
             <section className={styles.teammatesSection}>
               {groupKeys.map(groupId => {
