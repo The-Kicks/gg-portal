@@ -1,6 +1,6 @@
 import type { HydratedEntity, BaseEntity } from '../../types';
 
-const API_BASE_URL = 'http://localhost:5000/api'; // Pas aan naar jouw poort indien nodig
+const API_BASE_URL = 'http://localhost:5000/api'; 
 
 export const entityService = {
 

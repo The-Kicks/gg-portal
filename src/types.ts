@@ -74,6 +74,7 @@ export interface MetaDataStandard {
   badgeKey: string;      // Metadata key to show as a badge (e.g., "Position")
   subtitleKey: string;   // Metadata key to show as a subtitle (e.g., "Nationality")
   gridKeys: string[];    // List of metadata keys to display in the data grid 
+  mediaKeys: string[];   // List of media keys that an entity could have defined per theme
 
   statusTriggers?: {
     former?: { key: string; value: string };

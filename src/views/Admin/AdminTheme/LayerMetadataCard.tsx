@@ -58,6 +58,19 @@ export function LayerMetadataCard({
                 />
             </div>
 
+            <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>
+                    Media Asset Sleutels (mediaKeys - met komma's):
+                </label>
+                <input
+                    type="text"
+                    value={inputs.mediaKeys || ''} 
+                    onChange={e => onLayerArrayChange(layer, 'mediaKeys', e.target.value)}
+                    placeholder="Bijv. logo, fanart, customBanner"
+                    style={{ width: '100%', padding: '8px', background: '#2d2d2d', border: '1px solid #555', color: '#fff', borderRadius: '4px', fontSize: '13px' }}
+                />
+            </div>
+
             <div style={{ borderTop: '1px solid #333', paddingTop: '10px' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: '#deff9a', fontWeight: 'bold', marginBottom: '8px' }}>
                     Status Badge Triggers (Match Waarde)

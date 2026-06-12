@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Theme } from '../../types';
-import styles from './AdminGlobal.module.css'; // Importeer de centrale css module
+import styles from './AdminGlobal.module.css'; 
 
 interface Props { 
   theme: Theme | undefined | null; 

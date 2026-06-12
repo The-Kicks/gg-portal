@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AdminEntityEdit } from './AdminEntityEdit';
 import { entityService } from './EntityService';
 import type { Theme } from '../../types';
-import styles from './AdminGlobal.module.css'; // Importeer het centrale css-bestand
+import styles from './AdminGlobal.module.css';
 
 interface Props { 
   theme: Theme; 
