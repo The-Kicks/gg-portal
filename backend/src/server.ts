@@ -205,7 +205,6 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 navbarItems: (theme.navbarItems || []) as unknown as string[],
                 labels: (theme.labels || {}) as Record<string, string | undefined>,
                 layerMetadata: (theme.layerMetadata || {}) as Record<string, MetaDataStandard | undefined>,
-                // 🌟 Voeg de settings toe (als de database rij bestaat, pakken we de 'settings' JSON kolom)
                 gameSettings: dbGameSetting ? (dbGameSetting.gameSettings as unknown as GameSettings) : {},
                 entities: hydratedEntities
             });
@@ -240,7 +239,6 @@ app.post('/api/themes', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // 🌟 Sla op in beide tabellen via een database transactie
         const [newTheme] = await prisma.$transaction([
             prisma.theme.create({
                 data: {
@@ -291,7 +289,6 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // 🌟 Update het thema én voer een upsert uit op de GameSetting tabel
         const [updatedTheme] = await prisma.$transaction([
             prisma.theme.update({
                 where: { id },
@@ -339,8 +336,7 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
 app.delete('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        // Omdat GameSetting geen 'onDelete: Cascade' in de schema definitie heeft staan t.o.v Theme, 
-        // verwijderen we deze hier handmatig mee in een transactie om ghost-data te voorkomen.
+
         await prisma.$transaction([
             prisma.gameSetting.deleteMany({ where: { themeId: id } }),
             prisma.theme.delete({ where: { id } })

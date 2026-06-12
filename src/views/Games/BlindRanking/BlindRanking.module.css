@@ -1,0 +1,80 @@
+.gameContainer {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.headerSection {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.gameGrid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr; /* Midden is iets breder voor de foto's */
+  gap: 20px;
+  align-items: start;
+}
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.slotButton {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  border-radius: 8px;
+  border: 2px dashed #ccc;
+  background: #fdfdfd;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+.slotButton:hover:not(:disabled) {
+  border-color: #0070f3;
+  background: #f0f7ff;
+}
+.slotFilled {
+  border-style: solid;
+  border-color: #4caf50;
+  background: #e8f5e9;
+  font-weight: bold;
+}
+.slotNumber {
+  font-size: 1.2rem;
+  margin-right: 15px;
+  background: #333;
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.albumWrapper {
+  position: relative;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 350px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.albumImage {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+}
+.albumNavigation {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  color: #fff;
+}

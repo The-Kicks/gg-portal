@@ -6,6 +6,7 @@ import { Navbar } from "./core/components/Navbar/Navbar";
 import { ScrollToTop } from './core/helpers/scrollToTop';
 import Home from "./views/Home/Home";
 import { GuessWhoViewPage } from './views/Games/GuessWho/GuessWhoViewPage';
+import { BlindRankingViewPage } from './views/Games/BlindRanking/BlindRankingViewPage';
 
 // Layer views representing different hierarchy levels (L1 down to L4)
 import { L1View, L2View, L3View, L4View } from "./views/Layers/index";
@@ -127,6 +128,7 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
 
         {/* In App.tsx inside <Routes> */}
         <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} />} />
+        <Route path="blindranking" element={<BlindRankingViewPage theme={activeTheme}/>} />
 
         {/* Dynamic Layer Route Guards: Checks if a layer exists. If not, safely redirects somewhere else */}
         <Route path="l1" element={hasLayer('l1') ? <L1View theme={activeTheme} /> : <Navigate to="../home" replace />} />

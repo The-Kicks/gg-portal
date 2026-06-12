@@ -653,12 +653,12 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
           {Object.keys(imageInputs).map(key => {
             const isSchemaMediaKey = layerConfig?.mediaKeys?.includes(key);
             const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
-            
+
             return (
               <div key={key}>
                 <div className={styles.labelActionRow}>
                   <span>
-                    {key} 
+                    {key}
                     {Array.isArray(originalEntity.image?.[key]) && <small className={styles.textDimmed}>(Array List)</small>}
                     {isCoreMediaKey && <small className={styles.textWarning} style={{ color: '#d32f2f' }}> (Core Systeem Asset 🔒)</small>}
                     {!isCoreMediaKey && isSchemaMediaKey && <small className={styles.textWarning}> (Schema Asset 🔒)</small>}
@@ -671,16 +671,37 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                     Remove
                   </button>
                 </div>
-                <input
-                  type="text"
+
+                {/* Veranderd van <input> naar deze zelf-schalende <textarea> */}
+                <textarea
                   value={imageInputs[key]}
-                  onChange={e => handleImageInputChange(key, e.target.value)}
-                  className={styles.inputField}
+                  onChange={e => {
+                    handleImageInputChange(key, e.target.value);
+                    // Bereken de hoogte direct opnieuw tijdens het typen
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
+                  ref={el => {
+                    // Zorgt ervoor dat reeds ingeladen lange teksten direct de juiste hoogte hebben
+                    if (el) {
+                      el.style.height = 'auto';
+                      el.style.height = `${el.scrollHeight}px`;
+                    }
+                  }}
+                  className={styles.textareaField}
+                  rows={1}
+                  style={{
+                    minHeight: '38px',      // Begint net zo hoog als een reguliere input
+                    resize: 'none',         // Verbergt de handmatige resize-handler rechtsonder
+                    overflowY: 'hidden',    // Voorkomt een lelijke scrollbar tijdens het groeien
+                    lineHeight: '1.5'
+                  }}
                 />
               </div>
             );
           })}
         </div>
+
         <div className={styles.innerActionRow}>
           <input
             type="text"

@@ -43,7 +43,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   // --- LAZY STATE INITIALIZATION: MEDIA ASSETS ---
   const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
     const nextImages: Record<string, string> = {};
-    
+
     CORE_IMAGE_FIELDS.forEach(field => {
       nextImages[field] = '';
     });
@@ -68,7 +68,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   // --- LAZY STATE INITIALIZATION: METADATA ---
   const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
     const nextInputs: Record<string, string> = {};
-    
+
     REQUIRED_L4_FIELDS.forEach(field => {
       nextInputs[field] = '';
     });
@@ -184,7 +184,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     setStatus('active');
 
     const currentLayer = newType.toLowerCase();
-    
+
     const nextImages: Record<string, string> = {};
     CORE_IMAGE_FIELDS.forEach(field => { nextImages[field] = ''; });
 
@@ -530,41 +530,85 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       <h3 className={styles.sectionTitle}>📸 Media Assets (Optional per Theme {type.toUpperCase()} Schema)</h3>
       <div className={styles.innerSection}>
         <div className={styles.twoColumnGrid}>
+
+          {/* 1. CORE ASSETS */}
           {partitionedImageKeys.coreKeys.map(key => (
             <div key={key}>
               <div className={styles.labelActionRow}>
                 <span>{key} <small className={styles.textMuted}>(Core Asset)</small></span>
               </div>
-              <input
-                type="text"
+              <textarea
                 placeholder="https://image-url.com/asset.png"
                 value={imageInputs[key] || ''}
-                onChange={e => handleImageInputChange(key, e.target.value)}
-                className={styles.inputField}
+                onChange={e => {
+                  handleImageInputChange(key, e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                ref={el => {
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
+                className={styles.textareaField}
+                rows={1}
+                style={{
+                  minHeight: '38px',
+                  resize: 'none',
+                  overflowY: 'hidden',
+                  lineHeight: '1.5'
+                }}
               />
             </div>
           ))}
 
+          {/* 2. DYNAMIC ASSETS */}
           {partitionedImageKeys.dynamicKeys.map(key => (
             <div key={key}>
               <div className={styles.labelActionRow}>
-            <span>{key} <small className={styles.textWarning}>(Optional Theme-decided Key)</small></span>
+                <span>{key} <small className={styles.textWarning}>(Optional Theme-decided Key)</small></span>
                 <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove</button>
               </div>
-              <input
-                type="text"
+              <textarea
                 placeholder="https://image-url.com/dynamic-asset.png"
                 value={imageInputs[key] || ''}
-                onChange={e => handleImageInputChange(key, e.target.value)}
-                className={styles.inputField}
+                onChange={e => {
+                  handleImageInputChange(key, e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                ref={el => {
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
+                className={styles.textareaField}
+                rows={1}
+                style={{
+                  minHeight: '38px',
+                  resize: 'none',
+                  overflowY: 'hidden',
+                  lineHeight: '1.5'
+                }}
               />
             </div>
           ))}
         </div>
-        
+
+        {/* ONDERSTE INLINE ACTIE-BALK (blijft een input, want hier typ je alleen een korte naam) */}
         <div className={styles.innerActionRow}>
-          <input type="text" placeholder="e.g., logo or fanart" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} className={styles.inlineInput} />
-          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>Add Asset Field</button>
+          <input
+            type="text"
+            placeholder="e.g., logo or fanart"
+            value={newImageKey}
+            onChange={e => setNewImageKey(e.target.value)}
+            className={styles.inlineInput}
+          />
+          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>
+            Add Asset Field
+          </button>
         </div>
       </div>
 
