@@ -1,4 +1,3 @@
-// src/core/api.ts
 import type { Theme, HydratedEntity } from '../types';
 
 const API_URL = 'http://localhost:5000/api';

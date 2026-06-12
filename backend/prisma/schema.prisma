@@ -62,8 +62,10 @@ model EntityConnection {
 }
 
 model GameSetting {
-  id        String   @id @default(cuid())
-  themeId   String   @unique
-  gameName  String   @default("guesswho")
-  gameSettings  Json     
+  id           String @id @default(cuid())
+  themeId      String 
+  gameName     String @default("guesswho")
+  gameSettings Json     
+
+  @@unique([themeId, gameName]) 
 }

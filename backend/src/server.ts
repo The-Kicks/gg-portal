@@ -61,8 +61,14 @@ interface GuessWhoSettings {
     disabledColumns: string[];
 }
 
+interface BlindRankingSettings {
+    availableCategories: string[];
+    disabledCategories: string[];
+}
+
 interface GameSettings {
     guesswho?: GuessWhoSettings;
+    blindranking?: BlindRankingSettings;
     [key: string]: unknown;
 }
 
@@ -86,7 +92,7 @@ interface FullThemeResponse {
     navbarItems: string[];
     labels: Record<string, string | undefined>;
     layerMetadata: Record<string, MetaDataStandard | undefined>;
-    gameSettings: GameSettings; // Gecombineerd in de response voor het front-end
+    gameSettings: GameSettings; // Samengestelde response voor de front-end
     entities: HydratedEntity[];
 }
 
@@ -104,7 +110,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
         const fullThemesResult: FullThemeResponse[] = [];
 
         for (const theme of themes) {
-            // 1. Haal data op uit de gekoppelde tabellen (inclusief de losse GameSetting tabel)
+            // 1. Haal data op uit de gekoppelde tabellen
             const dbEntities = await prisma.entity.findMany({
                 where: { themeId: theme.id }
             });
@@ -113,9 +119,15 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 where: { themeId: theme.id }
             });
 
-            // 🌟 NIEUW: Haal de settings op uit de GameSetting tabel via het unieke themeId
-            const dbGameSetting = await prisma.gameSetting.findUnique({
+            // 🌟 GEWIJZIGD: Haal ALLE rijen op voor dit thema (bijv. 'guesswho' EN 'blindranking')
+            const dbGameSettings = await prisma.gameSetting.findMany({
                 where: { themeId: theme.id }
+            });
+
+            // Reconstruct de losse rijen naar één gecombineerd front-end object
+            const combinedGameSettings: GameSettings = {};
+            dbGameSettings.forEach((setting) => {
+                combinedGameSettings[setting.gameName] = setting.gameSettings as unknown as Record<string, unknown>;
             });
 
             // 2. Map DB-data naar initiële HydratedEntity objecten
@@ -205,7 +217,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 navbarItems: (theme.navbarItems || []) as unknown as string[],
                 labels: (theme.labels || {}) as Record<string, string | undefined>,
                 layerMetadata: (theme.layerMetadata || {}) as Record<string, MetaDataStandard | undefined>,
-                gameSettings: dbGameSetting ? (dbGameSetting.gameSettings as unknown as GameSettings) : {},
+                gameSettings: combinedGameSettings, 
                 entities: hydratedEntities
             });
         }
@@ -239,37 +251,31 @@ app.post('/api/themes', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
+        // 🌟 GEWIJZIGD: Loop door de keys van gameSettings (guesswho, blindranking, etc.) en maak losse rijen aan
+        const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) => 
+            prisma.gameSetting.create({
+                data: {
+                    themeId: id,
+                    gameName: gameName, // Slaat nu dynamisch op onder "guesswho" of "blindranking"
+                    gameSettings: (settings || {}) as Prisma.InputJsonValue
+                }
+            })
+        );
+
         const [newTheme] = await prisma.$transaction([
             prisma.theme.create({
                 data: {
-                    id,
-                    title,
-                    description,
-                    orgLayer,
+                    id, title, description, orgLayer,
                     miniViewLayers: miniViewLayers as Prisma.InputJsonValue,
-                    primaryColor,
-                    secondaryColor,
-                    backgroundColor,
-                    navbarColor,
-                    textColor,
-                    darkPrimaryColor,
-                    darkSecondaryColor,
-                    darkBackgroundColor,
-                    darkTextColor,
-                    darkNavbarColor,
+                    primaryColor, secondaryColor, backgroundColor, navbarColor, textColor,
+                    darkPrimaryColor, darkSecondaryColor, darkBackgroundColor, darkTextColor, darkNavbarColor,
                     games: games as Prisma.InputJsonValue,
                     navbarItems: navbarItems as Prisma.InputJsonValue,
                     labels: labels as Prisma.InputJsonValue,
                     layerMetadata: layerMetadata as Prisma.InputJsonValue
                 }
             }),
-            prisma.gameSetting.create({
-                data: {
-                    themeId: id,
-                    gameName: "guesswho",
-                    gameSettings: (gameSettings || {}) as Prisma.InputJsonValue
-                }
-            })
+            ...gameSettingCreates
         ]);
 
         res.status(201).json(newTheme);
@@ -289,41 +295,38 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
+        // 🌟 GEWIJZIGD: Om conflicten of wezen-instellingen te voorkomen, schonen we eerst de oude settings
+        // voor dit specifieke thema op, en knallen daarna de actieve games er splinternieuw in via de transactie.
+        const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) => 
+            prisma.gameSetting.create({
+                data: {
+                    themeId: id,
+                    gameName: gameName, // Netjes gesorteerd onder eigen naam
+                    gameSettings: (settings || {}) as Prisma.InputJsonValue
+                }
+            })
+        );
+
         const [updatedTheme] = await prisma.$transaction([
             prisma.theme.update({
                 where: { id },
                 data: {
-                    title,
-                    description,
-                    orgLayer,
+                    title, description, orgLayer,
                     miniViewLayers: miniViewLayers as Prisma.InputJsonValue,
-                    primaryColor,
-                    secondaryColor,
-                    backgroundColor,
-                    navbarColor,
-                    textColor,
-                    darkPrimaryColor,
-                    darkSecondaryColor,
-                    darkBackgroundColor,
-                    darkTextColor,
-                    darkNavbarColor,
+                    primaryColor, secondaryColor, backgroundColor, navbarColor, textColor,
+                    darkPrimaryColor, darkSecondaryColor, darkBackgroundColor, darkTextColor, darkNavbarColor,
                     games: games as Prisma.InputJsonValue,
                     navbarItems: navbarItems as Prisma.InputJsonValue,
                     labels: labels as Prisma.InputJsonValue,
                     layerMetadata: layerMetadata as Prisma.InputJsonValue
                 }
             }),
-            prisma.gameSetting.upsert({
-                where: { themeId: id },
-                update: {
-                    gameSettings: (gameSettings || {}) as Prisma.InputJsonValue
-                },
-                create: {
-                    themeId: id,
-                    gameName: "guesswho",
-                    gameSettings: (gameSettings || {}) as Prisma.InputJsonValue
-                }
-            })
+            // Verwijder alle oude spelinstellingen voor dit specifieke thema
+            prisma.gameSetting.deleteMany({
+                where: { themeId: id }
+            }),
+            // Voeg de geüpdatete instellingen per spel toe
+            ...gameSettingCreates
         ]);
 
         res.json(updatedTheme);
@@ -336,7 +339,6 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
 app.delete('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-
         await prisma.$transaction([
             prisma.gameSetting.deleteMany({ where: { themeId: id } }),
             prisma.theme.delete({ where: { id } })
@@ -362,10 +364,7 @@ app.post(
         try {
             const newEntity = await prisma.entity.create({
                 data: {
-                    id,
-                    themeId,
-                    name,
-                    type,
+                    id, themeId, name, type,
                     status: status || 'active',
                     isStandalone,
                     image: image as unknown as Prisma.InputJsonValue,
@@ -403,22 +402,16 @@ app.put(
                 prisma.entity.update({
                     where: { id: entityId },
                     data: {
-                        name,
-                        type,
+                        name, type,
                         status: status || 'active',
                         isStandalone,
                         image: image as unknown as Prisma.InputJsonValue,
                         metadata: metadata as Prisma.InputJsonValue,
                     }
                 }),
-
                 prisma.entityConnection.deleteMany({
-                    where: {
-                        themeId,
-                        sourceEntityId: entityId
-                    }
+                    where: { themeId, sourceEntityId: entityId }
                 }),
-
                 prisma.entityConnection.createMany({
                     data: connections.map((conn) => ({
                         themeId,

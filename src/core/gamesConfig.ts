@@ -1,4 +1,3 @@
-// src/core/gamesConfig.ts
 import type { GameID } from '../types';
 
 // ==========================================
@@ -40,12 +39,11 @@ export interface GuessWhoSettings {
 }
 
 export interface BlindRankingSettings {
+  availableCategories: string[];
   disabledCategories: string[];
-  customCategories: string[];
 }
 
 export interface SorterSettings { [key: string]: unknown; }
-export interface BlindRankingSettings { [key: string]: unknown; }
 
 export type ThemeGameSettings = {
   guesswho?: GuessWhoSettings;
