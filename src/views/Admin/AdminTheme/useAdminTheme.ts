@@ -1,6 +1,6 @@
 /**
  * HOOK: useAdminTheme.ts
- * * Doel: Beheert de state en logica voor het bewerken en opslaan van thema-instellingen.
+ * Doel: Beheert de state en logica voor het bewerken en opslaan van thema-instellingen.
  * Functies: Afhandeling van form-input, API-calls voor CRUD-acties op thema's,
  * en het vertalen van ruwe metadata naar de vereiste systeem-structuur.
  */
@@ -10,12 +10,12 @@ import { createTheme, updateTheme, deleteTheme } from '../../../core/api';
 import type { GuessWhoColumnID } from '../../../core/gamesConfig';
 import type { Theme, MetaDataStandard } from '../../../types';
 
-// Oplossing foutmelding 2 & 3
 const FIXED_STATUS_KEY = 'status'; 
 const AVAILABLE_LAYERS = ['l1', 'l2', 'l3', 'l4'];
 
 export interface MetaInputState {
     gridKeys: string;
+    mediaKeys: string; 
     statusFormerVal: string;
     statusAlertVal: string;
     statusWarningVal: string;
@@ -30,7 +30,6 @@ const emptyTheme: Partial<Theme> = {
     gameSettings: { guesswho: { disabledColumns: [] } }
 };
 
-// 'loadedThemes' verwijderd uit argumenten om de linter-fout op te lossen
 export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string) {
     const navigate = useNavigate();
     const [editingTheme, setEditingTheme] = useState<Partial<Theme> | null>(null);
@@ -39,7 +38,6 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
     const [metaInputs, setMetaInputs] = useState<Record<string, MetaInputState>>({});
     const [guesswhoDisabledColumns, setGuesswhoDisabledColumns] = useState<GuessWhoColumnID[]>([]);
 
-    // Gebruik van themeName opgelost
     const handleReturnToControlPanel = () => {
         navigate(`/${themeName || 'default'}/admin`);
     };
@@ -49,6 +47,7 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         AVAILABLE_LAYERS.forEach(layer => {
             initialMetaInputs[layer] = {
                 gridKeys: layer === 'l4' ? 'Birthday, Nationality' : '',
+                mediaKeys: '', 
                 statusFormerVal: '', statusAlertVal: '', statusWarningVal: '', statusInfoVal: ''
             };
         });
@@ -56,7 +55,14 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         setGuesswhoDisabledColumns([]);
         setEditingTheme({
             ...emptyTheme,
-            layerMetadata: { l4: { badgeKey: 'Role', subtitleKey: 'Group', gridKeys: ['Birthday', 'Nationality'] } }
+            layerMetadata: { 
+                l4: { 
+                    badgeKey: 'Role', 
+                    subtitleKey: 'Group', 
+                    gridKeys: ['Birthday', 'Nationality'],
+                    mediaKeys: [] 
+                } 
+            }
         });
         setIsNew(true);
         setError(null);
@@ -75,6 +81,7 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             const layerData = layerMetadataRecord[layer];
             initialMetaInputs[layer] = {
                 gridKeys: layerData?.gridKeys ? layerData.gridKeys.join(', ') : '',
+                mediaKeys: layerData?.mediaKeys ? layerData.mediaKeys.join(', ') : '',
                 statusFormerVal: layerData?.statusTriggers?.former?.value || '',
                 statusAlertVal: layerData?.statusTriggers?.alert?.value || '',
                 statusWarningVal: layerData?.statusTriggers?.warning?.value || '',
@@ -110,7 +117,10 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             const inputs = metaInputs[layer];
             if (!inputs) return;
 
+            // Split string op komma's, trim witruimtes en filter lege waarden eruit
             const gridKeysArr = inputs.gridKeys.split(',').map(s => s.trim()).filter(Boolean);
+            const mediaKeysArr = inputs.mediaKeys.split(',').map(s => s.trim()).filter(Boolean);
+            
             const statusTriggers: NonNullable<MetaDataStandard['statusTriggers']> = {};
 
             if (inputs.statusFormerVal) statusTriggers.former = { key: FIXED_STATUS_KEY, value: inputs.statusFormerVal };
@@ -121,9 +131,13 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             const badgeKey = layerData?.badgeKey || '';
             const subtitleKey = layerData?.subtitleKey || '';
 
-            if (badgeKey || subtitleKey || gridKeysArr.length || Object.keys(statusTriggers).length > 0) {
+            // Neem de laag mee als er minimaal één relevante eigenschap is ingevuld (inclusief mediaKeys)
+            if (badgeKey || subtitleKey || gridKeysArr.length || mediaKeysArr.length || Object.keys(statusTriggers).length > 0) {
                 finalLayerMetadata[layer] = {
-                    badgeKey, subtitleKey, gridKeys: gridKeysArr,
+                    badgeKey, 
+                    subtitleKey, 
+                    gridKeys: gridKeysArr,
+                    mediaKeys: mediaKeysArr, 
                     ...(Object.keys(statusTriggers).length > 0 ? { statusTriggers } : {})
                 };
             }

@@ -75,8 +75,8 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
 
             {!editingTheme ? (
                 <div>
-                    <button 
-                        onClick={handleStartCreate} 
+                    <button
+                        onClick={handleStartCreate}
                         className={`${styles.btn} ${styles.btnPrimary}`}
                         style={{ marginBottom: '20px' }}
                     >
@@ -107,22 +107,22 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                         </div>
                         <div>
                             <label className={styles.fieldLabel}>Theme Title Reference:</label>
-                            <input 
-                                type="text" 
-                                value={editingTheme.title || ''} 
-                                onChange={e => setEditingTheme({ ...editingTheme, title: e.target.value })} 
-                                className={styles.inputField} 
-                                required 
+                            <input
+                                type="text"
+                                value={editingTheme.title || ''}
+                                onChange={e => setEditingTheme({ ...editingTheme, title: e.target.value })}
+                                className={styles.inputField}
+                                required
                             />
                         </div>
                     </div>
 
                     <div style={{ marginBottom: '20px' }}>
                         <label className={styles.fieldLabel}>Description Meta Content:</label>
-                        <textarea 
-                            value={editingTheme.description || ''} 
-                            onChange={e => setEditingTheme({ ...editingTheme, description: e.target.value })} 
-                            className={styles.textareaField} 
+                        <textarea
+                            value={editingTheme.description || ''}
+                            onChange={e => setEditingTheme({ ...editingTheme, description: e.target.value })}
+                            className={styles.textareaField}
                         />
                     </div>
 
@@ -132,9 +132,9 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                         <div>
                             <div style={{ marginBottom: '15px' }}>
                                 <label className={`${styles.fieldLabel} ${styles.textBold}`}>Core Anchor Stratum:</label>
-                                <select 
-                                    value={editingTheme.orgLayer || 'l3'} 
-                                    onChange={e => setEditingTheme({ ...editingTheme, orgLayer: e.target.value })} 
+                                <select
+                                    value={editingTheme.orgLayer || 'l3'}
+                                    onChange={e => setEditingTheme({ ...editingTheme, orgLayer: e.target.value })}
                                     className={styles.inputField}
                                 >
                                     <option value="l1">Layer 1 (Framework)</option>
@@ -147,10 +147,10 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                 <label className={`${styles.fieldLabel} ${styles.textBold}`}>Miniature Views:</label>
                                 {AVAILABLE_LAYERS.map(l => (
                                     <label key={l} className={styles.checkboxLabelInline}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={((editingTheme.miniViewLayers || []) as string[]).includes(l)} 
-                                            onChange={() => handleArrayToggle('miniViewLayers', l)} 
+                                        <input
+                                            type="checkbox"
+                                            checked={((editingTheme.miniViewLayers || []) as string[]).includes(l)}
+                                            onChange={() => handleArrayToggle('miniViewLayers', l)}
                                         />
                                         {l.toUpperCase()}
                                     </label>
@@ -162,10 +162,10 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                 <label className={`${styles.fieldLabel} ${styles.textBold}`}>Active Modules:</label>
                                 {GLOBAL_AVAILABLE_GAMES.map(g => (
                                     <label key={g.id} className={styles.checkboxLabelInline}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={((editingTheme.games || []) as string[]).includes(g.id)} 
-                                            onChange={() => handleArrayToggle('games', g.id)} 
+                                        <input
+                                            type="checkbox"
+                                            checked={((editingTheme.games || []) as string[]).includes(g.id)}
+                                            onChange={() => handleArrayToggle('games', g.id)}
                                         />
                                         {g.name}
                                     </label>
@@ -175,10 +175,10 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                 <label className={`${styles.fieldLabel} ${styles.textBold}`}>Navbar Interface Items:</label>
                                 {AVAILABLE_LAYERS.map(l => (
                                     <label key={l} className={styles.checkboxLabelInline}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={((editingTheme.navbarItems || []) as string[]).includes(l)} 
-                                            onChange={() => handleArrayToggle('navbarItems', l)} 
+                                        <input
+                                            type="checkbox"
+                                            checked={((editingTheme.navbarItems || []) as string[]).includes(l)}
+                                            onChange={() => handleArrayToggle('navbarItems', l)}
                                         />
                                         {l.toUpperCase()}
                                     </label>
@@ -196,13 +196,13 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                 <div key={c.key}>
                                     <label className={styles.fieldLabel} style={{ fontSize: '0.8rem' }}>{c.label}:</label>
                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                        <input 
-                                            type="color" 
-                                            value={editingTheme[c.key as keyof Theme] as string || '#ffffff'} 
+                                        <input
+                                            type="color"
+                                            value={editingTheme[c.key as keyof Theme] as string || '#ffffff'}
                                             onChange={e => setEditingTheme({ ...editingTheme, [c.key]: e.target.value })}
                                             style={{ width: '40px', height: '38px', padding: 0, cursor: 'pointer', border: '1px solid #444' }}
                                         />
-                                        <input 
+                                        <input
                                             type="text"
                                             value={editingTheme[c.key as keyof Theme] as string || ''}
                                             onChange={e => setEditingTheme({ ...editingTheme, [c.key]: e.target.value })}
@@ -221,13 +221,13 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                 <div key={c.key}>
                                     <label className={styles.fieldLabel} style={{ fontSize: '0.8rem' }}>{c.label}:</label>
                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                        <input 
-                                            type="color" 
-                                            value={editingTheme[c.key as keyof Theme] as string || '#000000'} 
+                                        <input
+                                            type="color"
+                                            value={editingTheme[c.key as keyof Theme] as string || '#000000'}
                                             onChange={e => setEditingTheme({ ...editingTheme, [c.key]: e.target.value })}
                                             style={{ width: '40px', height: '38px', padding: 0, cursor: 'pointer', border: '1px solid #444' }}
                                         />
-                                        <input 
+                                        <input
                                             type="text"
                                             value={editingTheme[c.key as keyof Theme] as string || ''}
                                             onChange={e => setEditingTheme({ ...editingTheme, [c.key]: e.target.value })}
@@ -249,11 +249,11 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                             {AVAILABLE_LAYERS.map(l => (
                                 <div key={l}>
                                     <label className={styles.fieldLabel}>{l.toUpperCase()} Engine Alias:</label>
-                                    <input 
-                                        type="text" 
-                                        value={editingTheme.labels?.[l] || ''} 
-                                        onChange={e => updateLabel(l, e.target.value)} 
-                                        className={styles.inputField} 
+                                    <input
+                                        type="text"
+                                        value={editingTheme.labels?.[l] || ''}
+                                        onChange={e => updateLabel(l, e.target.value)}
+                                        className={styles.inputField}
                                     />
                                 </div>
                             ))}
@@ -264,11 +264,11 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                             {CORE_ENTITY_ATTRIBUTES.map(attr => (
                                 <div key={attr.key}>
                                     <label className={styles.fieldLabel}>{attr.label}:</label>
-                                    <input 
-                                        type="text" 
-                                        value={editingTheme.labels?.[attr.key] || ''} 
-                                        onChange={e => updateLabel(attr.key, e.target.value)} 
-                                        className={styles.inputField} 
+                                    <input
+                                        type="text"
+                                        value={editingTheme.labels?.[attr.key] || ''}
+                                        onChange={e => updateLabel(attr.key, e.target.value)}
+                                        className={styles.inputField}
                                         placeholder={`Bijv. ${attr.key}`}
                                     />
                                 </div>
@@ -282,12 +282,12 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                         {CUSTOM_PORTAL_LABELS.map(c => (
                             <div key={c.key}>
                                 <label className={styles.fieldLabel}>{c.label}:</label>
-                                <input 
-                                    type="text" 
-                                    placeholder={c.placeholder} 
-                                    value={editingTheme.labels?.[c.key] || ''} 
-                                    onChange={e => updateLabel(c.key, e.target.value)} 
-                                    className={styles.inputField} 
+                                <input
+                                    type="text"
+                                    placeholder={c.placeholder}
+                                    value={editingTheme.labels?.[c.key] || ''}
+                                    onChange={e => updateLabel(c.key, e.target.value)}
+                                    className={styles.inputField}
                                 />
                             </div>
                         ))}
@@ -335,8 +335,8 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
                                 key={layer}
                                 layer={layer}
                                 layerAlias={editingTheme.labels?.[layer] || `Layer ${layer.toUpperCase()}`}
-                                layerMeta={layerMetadataRecord[layer] || { badgeKey: '', subtitleKey: '', gridKeys: [] }}
-                                inputs={metaInputs[layer] || { gridKeys: '', statusFormerVal: '', statusAlertVal: '', statusWarningVal: '', statusInfoVal: '' }}
+                                layerMeta={layerMetadataRecord[layer] || { badgeKey: '', subtitleKey: '', gridKeys: [], mediaKeys: [] }}
+                                inputs={metaInputs[layer] || { gridKeys: '', mediaKeys: '', statusFormerVal: '', statusAlertVal: '', statusWarningVal: '', statusInfoVal: '' }}
                                 onLayerStringChange={updateLayerString}
                                 onLayerArrayChange={updateLayerArrayInput}
                             />
@@ -345,15 +345,15 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
 
                     {/* --- FORM ACTIONS --- */}
                     <div className={styles.footerActions} style={{ borderTop: '1px solid #333', paddingTop: '20px' }}>
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             className={`${styles.btn} ${styles.btnPrimary}`}
                         >
                             {isNew ? 'Save New Theme Instance' : 'Apply Settings Changes'}
                         </button>
-                        <button 
-                            type="button" 
-                            onClick={() => setEditingTheme(null)} 
+                        <button
+                            type="button"
+                            onClick={() => setEditingTheme(null)}
                             className={`${styles.btn} ${styles.btnBack}`}
                             style={{ marginBottom: 0 }}
                         >

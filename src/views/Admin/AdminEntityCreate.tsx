@@ -19,6 +19,7 @@ interface LayerConfig {
   subtitleKey?: string;
   gridKeys?: string[];
   statusTriggers?: Record<string, TriggerConfig>;
+  mediaKeys?: string[];
 }
 
 interface LayerMetadataMap {
@@ -28,6 +29,7 @@ interface LayerMetadataMap {
 type MetadataValue = string | number | boolean | string[] | undefined;
 
 const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
+const CORE_IMAGE_FIELDS = ['profileCard', 'heroBanner'];
 
 export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
   // --- Form Local States ---
@@ -38,28 +40,45 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   const [isStandalone, setIsStandalone] = useState(true);
   const [idStatus, setIdStatus] = useState<'idle' | 'available' | 'taken'>('idle');
 
-  const [imageInputs, setImageInputs] = useState<Record<string, string>>({
-    profileCard: '',
-    heroBanner: ''
-  });
-
-  // --- LAZY STATE INITIALIZATION ---
-  // Dit lost de linter-fout op: we berekenen de dynamic attributes direct synchroon bij het opstarten!
-  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
-    const nextInputs: Record<string, string> = {};
+  // --- LAZY STATE INITIALIZATION: MEDIA ASSETS ---
+  const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
+    const nextImages: Record<string, string> = {};
     
-    // 1. Altijd de L4 core velden laden (omdat de initiële 'type' state 'l4' is)
-    REQUIRED_L4_FIELDS.forEach(field => {
-      nextInputs[field] = '';
+    CORE_IMAGE_FIELDS.forEach(field => {
+      nextImages[field] = '';
     });
 
-    // 2. Direct de dynamic attributes uit de theme injecteren indien aanwezig
     if (theme.layerMetadata) {
       try {
         const parsed = typeof theme.layerMetadata === 'string'
           ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
           : (theme.layerMetadata as unknown as LayerMetadataMap);
-        const initialConfig = parsed['l4']; // We weten dat we starten op l4
+        const initialConfig = parsed['l4'];
+
+        if (initialConfig?.mediaKeys && Array.isArray(initialConfig.mediaKeys)) {
+          initialConfig.mediaKeys.forEach(k => { if (k) nextImages[k] = ''; });
+        }
+      } catch (e: unknown) {
+        console.error("Error loading initial media assets in lazy state:", e);
+      }
+    }
+    return nextImages;
+  });
+
+  // --- LAZY STATE INITIALIZATION: METADATA ---
+  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
+    const nextInputs: Record<string, string> = {};
+    
+    REQUIRED_L4_FIELDS.forEach(field => {
+      nextInputs[field] = '';
+    });
+
+    if (theme.layerMetadata) {
+      try {
+        const parsed = typeof theme.layerMetadata === 'string'
+          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
+          : (theme.layerMetadata as unknown as LayerMetadataMap);
+        const initialConfig = parsed['l4'];
 
         if (initialConfig) {
           if (initialConfig.badgeKey) nextInputs[initialConfig.badgeKey] = '';
@@ -111,7 +130,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     return map;
   }, [dynamicTriggers]);
 
-  // --- Exact dezelfde partitionering als in de Edit-pagina ---
   const partitionedMetadataKeys = useMemo(() => {
     const allKeys = Object.keys(metadataInputs);
     const isL4 = type.toLowerCase() === 'l4';
@@ -127,6 +145,14 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       })
     };
   }, [metadataInputs, type]);
+
+  const partitionedImageKeys = useMemo(() => {
+    const allImageKeys = Object.keys(imageInputs);
+    return {
+      coreKeys: allImageKeys.filter(k => CORE_IMAGE_FIELDS.includes(k)),
+      dynamicKeys: allImageKeys.filter(k => !CORE_IMAGE_FIELDS.includes(k))
+    };
+  }, [imageInputs]);
 
   // --- Debounced Async ID/Slug check ---
   useEffect(() => {
@@ -157,13 +183,14 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     setIsStandalone(newType.toLowerCase() === 'l4');
     setStatus('active');
 
-    const nextInputs: Record<string, string> = {};
     const currentLayer = newType.toLowerCase();
+    
+    const nextImages: Record<string, string> = {};
+    CORE_IMAGE_FIELDS.forEach(field => { nextImages[field] = ''; });
 
+    const nextInputs: Record<string, string> = {};
     if (currentLayer === 'l4') {
-      REQUIRED_L4_FIELDS.forEach(field => {
-        nextInputs[field] = '';
-      });
+      REQUIRED_L4_FIELDS.forEach(field => { nextInputs[field] = ''; });
     }
 
     if (theme.layerMetadata) {
@@ -174,6 +201,9 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         const nextConfig = parsed[currentLayer];
 
         if (nextConfig) {
+          if (nextConfig.mediaKeys && Array.isArray(nextConfig.mediaKeys)) {
+            nextConfig.mediaKeys.forEach(k => { if (k) nextImages[k] = ''; });
+          }
           if (nextConfig.badgeKey) nextInputs[nextConfig.badgeKey] = '';
           if (nextConfig.subtitleKey) nextInputs[nextConfig.subtitleKey] = '';
           if (Array.isArray(nextConfig.gridKeys)) {
@@ -188,6 +218,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       }
     }
 
+    setImageInputs(nextImages);
     setMetadataInputs(nextInputs);
   };
 
@@ -217,7 +248,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
     const isCoreField = REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase());
     if (isCoreField) {
-      alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld (Core Game Metric). Je kunt deze niet toevoegen als dynamisch attribuut.`);
+      alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld.`);
       return;
     }
 
@@ -226,6 +257,10 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   };
 
   const handleRemoveImageField = (key: string) => {
+    if (CORE_IMAGE_FIELDS.includes(key)) {
+      alert(`Field "${key}" is core and cannot be removed.`);
+      return;
+    }
     setImageInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
@@ -241,7 +276,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     currentInputs: Record<string, string>
   ): Record<string, MetadataValue> => {
     const result: Record<string, MetadataValue> = {};
-    const isL4 = type.toLowerCase() === 'l4';
 
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
@@ -254,7 +288,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
       if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
         result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
-      } else if (isL4 && (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear')) {
+      } else if (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear') {
         result[key] = Number(rawValue.trim()) || 0;
       } else {
         result[key] = rawValue.trim();
@@ -270,7 +304,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     }
 
     if (idStatus === 'taken') {
-      alert("Cannot save: This unique ID combination is already taken. Please adjust the suffix.");
+      alert("Cannot save: This unique ID combination is already taken.");
       return;
     }
 
@@ -283,32 +317,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           alert(`Game Error: The field "${field}" is strictly required for Layer 4 entities.`);
           return;
         }
-      }
-
-      const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
-      const birthdayKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'birthday') || 'Birthday';
-      if (!dateRegex.test(metadataInputs[birthdayKey]?.trim() || '')) {
-        alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
-        return;
-      }
-
-      const passingDateKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'passingdate') || 'PassingDate';
-      const passingDate = metadataInputs[passingDateKey]?.trim();
-      if (passingDate && !dateRegex.test(passingDate)) {
-        alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
-        return;
-      }
-
-      const heightKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'height') || 'Height';
-      if (isNaN(Number(metadataInputs[heightKey]?.trim()))) {
-        alert("Format Error: Height must be a number.");
-        return;
-      }
-
-      const debutYearKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'debutyear') || 'DebutYear';
-      if (isNaN(Number(metadataInputs[debutYearKey]?.trim()))) {
-        alert("Format Error: Debut Year must be a number.");
-        return;
       }
     }
 
@@ -323,6 +331,13 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       updatedMetadata[trigger.key] = trigger.value;
     }
 
+    const cleanedImages: Record<string, string> = {};
+    Object.keys(imageInputs).forEach(k => {
+      if (imageInputs[k] && imageInputs[k].trim()) {
+        cleanedImages[k] = imageInputs[k].trim();
+      }
+    });
+
     const newSkeleton: BaseEntity = {
       id: generatedId,
       themeId: theme.id,
@@ -330,7 +345,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       type: type,
       status: status,
       isStandalone: isStandalone,
-      image: imageInputs as unknown as BaseEntity['image'],
+      image: cleanedImages as unknown as BaseEntity['image'],
       metadata: updatedMetadata
     };
 
@@ -340,7 +355,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       if (onSave) onSave(savedEntity);
     } catch (err: unknown) {
       console.error(err);
-      alert(`Could not persist the new record. Verify that the ID "${generatedId}" does not already exist.`);
+      alert(`Could not persist the new record.`);
     }
   };
 
@@ -443,16 +458,13 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       {type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
         <div className={styles.requiredSection}>
           <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
-          <p className={`${styles.labelSubText} ${styles.textMuted}`}>These attributes are strictly required by the GuessWho game configuration engine.</p>
           <div className={styles.twoColumnGrid}>
             {partitionedMetadataKeys.requiredKeys.map(key => (
               <div key={key}>
-                <div className={styles.requiredLabel}>
-                  {key} {key.toLowerCase() === 'nationality' && <small className={styles.textMuted}>(Comma separated list)</small>}
-                </div>
+                <div className={styles.requiredLabel}>{key}</div>
                 <input
                   type="text"
-                  placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
+                  placeholder={`Enter required ${key}`}
                   value={metadataInputs[key] || ''}
                   onChange={e => handleMetadataInputChange(key, e.target.value)}
                   className={`${styles.inputField} ${styles.requiredInput}`}
@@ -467,33 +479,24 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Populated via {type.toUpperCase()} Theme Schema)</h3>
       <div className={styles.innerSection}>
         {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
-          <p className={`${styles.textMuted} ${styles.labelSubText}`}>No specific layout metadata schema properties injected for this layer. Append custom fields below:</p>
+          <p className={styles.textMuted}>No specific layout metadata schema properties injected for this layer.</p>
         ) : (
           <div className={styles.twoColumnGrid}>
             {partitionedMetadataKeys.dynamicKeys.map(key => {
               const triggerValues = triggerFieldsMap[key];
-              const isList = key.toLowerCase() === 'nationality' || (metadataInputs[key] && metadataInputs[key].includes(','));
-
               return (
                 <div key={key}>
                   <div className={styles.labelActionRow}>
                     <span>
                       {key}
-                      {isList && <small className={styles.textDimmed}> (Array List)</small>}
-                      {triggerValues && <small className={styles.textWarning}> (Schema Controlled 🔒)</small>}
+                      {triggerValues && <small className={styles.textWarning}> (Required by theme 🔒)</small>}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMetadataField(key)}
-                      className={styles.btnRemove}
-                    >
-                      Remove
-                    </button>
+                    <button type="button" onClick={() => handleRemoveMetadataField(key)} className={styles.btnRemove}>Remove</button>
                   </div>
 
                   {triggerValues ? (
                     <select
-                      value={metadataInputs[key]}
+                      value={metadataInputs[key] || ''}
                       onChange={e => handleMetadataInputChange(key, e.target.value)}
                       className={styles.inputField}
                     >
@@ -518,83 +521,57 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         )}
         <div className={styles.innerActionRow}>
-          <input
-            type="text"
-            placeholder="e.g., Twitter, Instagram or SquadNumber"
-            value={newMetadataKey}
-            onChange={e => setNewMetadataKey(e.target.value)}
-            className={styles.inlineInput}
-          />
-          <button
-            type="button"
-            onClick={handleAddMetadataField}
-            className={`${styles.btn} ${styles.btnPrimary}`}
-          >
-            Add Attribute Property
-          </button>
+          <input type="text" placeholder="e.g., Twitter" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} className={styles.inlineInput} />
+          <button type="button" onClick={handleAddMetadataField} className={`${styles.btn} ${styles.btnPrimary}`}>Add Attribute Property</button>
         </div>
       </div>
 
-      {/* Media Assets */}
-      <h3 className={styles.sectionTitle}>Media Assets</h3>
+      {/* SECTIE C: MEDIA ASSETS */}
+      <h3 className={styles.sectionTitle}>📸 Media Assets (Optional per Theme {type.toUpperCase()} Schema)</h3>
       <div className={styles.innerSection}>
         <div className={styles.twoColumnGrid}>
-          {Object.keys(imageInputs).map(key => (
+          {partitionedImageKeys.coreKeys.map(key => (
             <div key={key}>
               <div className={styles.labelActionRow}>
-                <span>{key}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveImageField(key)}
-                  className={styles.btnRemove}
-                >
-                  Remove
-                </button>
+                <span>{key} <small className={styles.textMuted}>(Core Asset)</small></span>
               </div>
               <input
                 type="text"
-                value={imageInputs[key]}
+                placeholder="https://image-url.com/asset.png"
+                value={imageInputs[key] || ''}
+                onChange={e => handleImageInputChange(key, e.target.value)}
+                className={styles.inputField}
+              />
+            </div>
+          ))}
+
+          {partitionedImageKeys.dynamicKeys.map(key => (
+            <div key={key}>
+              <div className={styles.labelActionRow}>
+            <span>{key} <small className={styles.textWarning}>(Optional Theme-decided Key)</small></span>
+                <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove</button>
+              </div>
+              <input
+                type="text"
+                placeholder="https://image-url.com/dynamic-asset.png"
+                value={imageInputs[key] || ''}
                 onChange={e => handleImageInputChange(key, e.target.value)}
                 className={styles.inputField}
               />
             </div>
           ))}
         </div>
+        
         <div className={styles.innerActionRow}>
-          <input
-            type="text"
-            placeholder="e.g., streamingTeaser or liveries"
-            value={newImageKey}
-            onChange={e => setNewImageKey(e.target.value)}
-            className={styles.inlineInput}
-          />
-          <button
-            type="button"
-            onClick={handleAddImageField}
-            className={`${styles.btn} ${styles.btnOutline}`}
-          >
-            Add Asset Field
-          </button>
+          <input type="text" placeholder="e.g., logo or fanart" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} className={styles.inlineInput} />
+          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>Add Asset Field</button>
         </div>
       </div>
 
       {/* Action Footers */}
       <div className={styles.footerActions}>
-        <button
-          type="button"
-          onClick={onCancel}
-          className={`${styles.btn} ${styles.btnBack}`}
-          style={{ marginBottom: 0 }}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className={`${styles.btn} ${styles.btnPrimary}`}
-        >
-          Create & Save
-        </button>
+        <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
+        <button type="button" onClick={handleSubmit} className={`${styles.btn} ${styles.btnPrimary}`}>Create & Save</button>
       </div>
     </div>
   );

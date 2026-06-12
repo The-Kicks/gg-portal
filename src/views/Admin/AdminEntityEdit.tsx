@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import type { Theme, HydratedEntity, HydratedEntityConnection, BaseEntity } from '../../types';
+import type { Theme, HydratedEntity, HydratedEntityConnection } from '../../types';
 import { entityService } from './EntityService';
 import styles from './AdminGlobal.module.css';
 
@@ -19,6 +19,7 @@ interface LayerConfig {
   badgeKey?: string;
   subtitleKey?: string;
   gridKeys?: string[];
+  mediaKeys?: string[];
   statusTriggers?: Record<string, TriggerConfig>;
 }
 
@@ -38,6 +39,7 @@ type MetadataValue = string | number | boolean | string[] | undefined;
 
 const LAYER_ORDER: Record<string, number> = { l1: 1, l2: 2, l3: 3, l4: 4 };
 const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
+const CORE_IMAGE_FIELDS = ['profileCard', 'heroBanner'];
 
 export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCancel }) => {
   const originalEntity = useMemo(() => {
@@ -45,7 +47,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   }, [theme, entityId]);
 
   // --- LAZY STATE INITIALIZATION ---
-  // Alle hooks staan nu ALTIJD bovenaan, ongeacht of originalEntity bestaat.
   const [name, setName] = useState<string>(() => originalEntity?.name || '');
   const [status, setStatus] = useState<string>(() => originalEntity?.status || 'active');
   const [isStandalone, setIsStandalone] = useState<boolean>(() => originalEntity?.isStandalone || false);
@@ -57,6 +58,24 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
         imgInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
       });
     }
+
+    if (theme.layerMetadata) {
+      try {
+        const parsed = typeof theme.layerMetadata === 'string'
+          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
+          : (theme.layerMetadata as unknown as LayerMetadataMap);
+        const currentType = originalEntity?.type?.toLowerCase() || '';
+        const currentLayerConfig = parsed[currentType];
+
+        if (currentLayerConfig && Array.isArray(currentLayerConfig.mediaKeys)) {
+          currentLayerConfig.mediaKeys.forEach(k => {
+            if (k && imgInputs[k] === undefined) imgInputs[k] = '';
+          });
+        }
+      } catch (e: unknown) {
+        console.error("Error patching theme schema media fields into initial edit state:", e);
+      }
+    }
     return imgInputs;
   });
 
@@ -66,14 +85,12 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
 
     const currentType = originalEntity.type?.toLowerCase() || '';
 
-    // 1. Initialiseer verplichte L4 velden als lege string basis blueprint
     if (currentType === 'l4') {
       REQUIRED_L4_FIELDS.forEach(field => {
         metaInputs[field] = '';
       });
     }
 
-    // 2. Vul de inputs met bestaande opgeslagen data uit de database
     if (originalEntity.metadata) {
       Object.entries(originalEntity.metadata).forEach(([dbKey, val]) => {
         const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
@@ -82,7 +99,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       });
     }
 
-    // 3. MERGE MET THEME SCHEMA: Voeg direct ontbrekende dynamic attributes toe
     if (theme.layerMetadata) {
       try {
         const parsed = typeof theme.layerMetadata === 'string'
@@ -119,19 +135,13 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   const [localConnections, setLocalConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.connections || []);
   const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.targetConnections || []);
 
-  // --- Fast-track Provisioning Pool ---
-  const [quickCreatedEntities, setQuickCreatedEntities] = useState<HydratedEntity[]>([]);
-
-  // Gecombineerde pool via Derived State
   const entitiesPool = useMemo(() => {
-    return [...(theme.entities || []), ...quickCreatedEntities];
-  }, [theme.entities, quickCreatedEntities]);
+    return theme.entities || [];
+  }, [theme.entities]);
 
   // --- UI Control States ---
   const [newImageKey, setNewImageKey] = useState<string>('');
   const [newMetadataKey, setNewMetadataKey] = useState<string>('');
-  const [quickCreateName, setQuickCreateName] = useState<string>('');
-  const [quickCreateLayer, setQuickCreateLayer] = useState<string>('l4');
   const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
 
   const [connectionSearchTerm, setConnectionSearchTerm] = useState<string>('');
@@ -168,7 +178,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     return map;
   }, [dynamicTriggers]);
 
-  // Scheiding van velden voor de interface om Required en Dynamic los te koppelen
   const partitionedMetadataKeys = useMemo(() => {
     const allKeys = Object.keys(metadataInputs);
     const isL4 = originalEntity?.type?.toLowerCase() === 'l4';
@@ -185,7 +194,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     };
   }, [metadataInputs, originalEntity?.type]);
 
-  // --- Target Filter Logic ---
   const sortedAvailableTargets = useMemo(() => {
     return entitiesPool
       .filter(e => e.id !== entityId)
@@ -272,6 +280,15 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
   };
 
   const handleRemoveImageField = (key: string) => {
+    if (CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
+      alert(`Het veld "${key}" is een verplicht systeem-veld (Core Media Asset) en kan niet worden verwijderd.`);
+      return;
+    }
+
+    if (layerConfig?.mediaKeys?.includes(key)) {
+      if (!window.confirm(`Veld "${key}" is onderdeel van het themaschema. Weet je zeker dat je dit invoerveld wilt verwijderen?`)) return;
+    }
+
     setImageInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
@@ -344,50 +361,22 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
   };
 
-  const handleInlineQuickCreate = async (): Promise<void> => {
-    if (!quickCreateName.trim() || !originalEntity) return;
-    const baseSlug = quickCreateName.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
-    const randomSuffix = Math.random().toString(36).substring(2, 6);
-    const generatedId = `${baseSlug}-${randomSuffix}`;
+  const reconstructImageObject = (
+    currentInputs: Record<string, string>,
+    originalImage: Record<string, unknown>
+  ): Record<string, string | string[]> => {
+    const result: Record<string, string | string[]> = {};
+    Object.keys(currentInputs).forEach(key => {
+      const rawValue = currentInputs[key];
+      if (!rawValue || !rawValue.trim()) return;
 
-    const newSkeletonEntity: BaseEntity = {
-      id: generatedId,
-      themeId: theme.id,
-      name: quickCreateName,
-      type: quickCreateLayer,
-      status: 'active',
-      isStandalone: quickCreateLayer === 'l4',
-      image: { profileCard: '', heroBanner: '' },
-      metadata: {}
-    };
-
-    try {
-      const savedEntityFromDb: HydratedEntity = await entityService.create(theme.id, newSkeletonEntity);
-      setQuickCreatedEntities(prev => [...prev, savedEntityFromDb]);
-
-      const allExistingIds = [
-        ...localConnections.map(c => c.id),
-        ...localTargetConnections.map(c => c.id)
-      ];
-      const maxId = allExistingIds.length > 0 ? Math.max(...allExistingIds) : 0;
-
-      const newConn: HydratedEntityConnection = {
-        id: maxId + 1,
-        themeId: theme.id,
-        sourceEntityId: originalEntity.id,
-        targetEntityId: savedEntityFromDb.id,
-        metadata: { status: 'active' },
-        targetEntity: savedEntityFromDb
-      };
-
-      setLocalConnections(prev => [...prev, newConn]);
-      setQuickCreateName('');
-      window.dispatchEvent(new Event('refresh-database'));
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      console.error(errorMessage);
-      alert("Failed to quickly provision the requested entity record.");
-    }
+      if (Array.isArray(originalImage[key]) || rawValue.includes(',')) {
+        result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
+      } else {
+        result[key] = rawValue.trim();
+      }
+    });
+    return result;
   };
 
   const reconstructObject = (
@@ -470,6 +459,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
 
     const updatedMetadata = reconstructObject(metadataInputs, originalEntity.metadata || {});
+    const updatedImage = reconstructImageObject(imageInputs, originalEntity.image || {});
 
     if (dynamicTriggers[status]) {
       const trigger = dynamicTriggers[status];
@@ -481,7 +471,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       name: name.trim(),
       status,
       isStandalone,
-      image: imageInputs as HydratedEntity['image'],
+      image: updatedImage as HydratedEntity['image'],
       metadata: updatedMetadata as HydratedEntity['metadata'],
       connections: localConnections,
       targetConnections: localTargetConnections
@@ -497,10 +487,10 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
     }
   };
 
-  // --- VEILIGE CONTROLE-CHECK (AAN HET EINDE VAN DE HOOKS) ---
   if (!originalEntity) {
     return <div style={{ color: 'red', padding: '20px' }}>Target entity record not found.</div>;
   }
+
   return (
     <div className={styles.formCard}>
       <h2 className={styles.formCardTitle}>
@@ -560,7 +550,7 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
         </div>
       </div>
 
-      {/* SECTIE A: CORE REQUIRED GAME FIELDS (Zichtbaar bij Layer 4) */}
+      {/* SECTIE A: CORE REQUIRED GAME FIELDS */}
       {originalEntity.type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
         <div className={styles.requiredSection}>
           <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
@@ -660,28 +650,36 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
       <h3 className={styles.sectionTitle}>Media Assets</h3>
       <div className={styles.innerSection}>
         <div className={styles.twoColumnGrid}>
-          {Object.keys(imageInputs).map(key => (
-            <div key={key}>
-              <div className={styles.labelActionRow}>
-                <span>
-                  {key} {Array.isArray(originalEntity.image?.[key]) && <small className={styles.textDimmed}>(Array List)</small>}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveImageField(key)}
-                  className={styles.btnRemove}
-                >
-                  Remove
-                </button>
+          {Object.keys(imageInputs).map(key => {
+            const isSchemaMediaKey = layerConfig?.mediaKeys?.includes(key);
+            const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
+            
+            return (
+              <div key={key}>
+                <div className={styles.labelActionRow}>
+                  <span>
+                    {key} 
+                    {Array.isArray(originalEntity.image?.[key]) && <small className={styles.textDimmed}>(Array List)</small>}
+                    {isCoreMediaKey && <small className={styles.textWarning} style={{ color: '#d32f2f' }}> (Core Systeem Asset 🔒)</small>}
+                    {!isCoreMediaKey && isSchemaMediaKey && <small className={styles.textWarning}> (Schema Asset 🔒)</small>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImageField(key)}
+                    className={styles.btnRemove}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={imageInputs[key]}
+                  onChange={e => handleImageInputChange(key, e.target.value)}
+                  className={styles.inputField}
+                />
               </div>
-              <input
-                type="text"
-                value={imageInputs[key]}
-                onChange={e => handleImageInputChange(key, e.target.value)}
-                className={styles.inputField}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className={styles.innerActionRow}>
           <input
@@ -762,7 +760,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
                     onSave={async (updatedChild) => {
                       try {
                         await entityService.update(theme.id, updatedChild.id, updatedChild);
-                        setQuickCreatedEntities(prev => prev.map(e => e.id === updatedChild.id ? updatedChild : e));
                         setLocalConnections(prev => prev.map(c => c.targetEntityId === updatedChild.id ? { ...c, targetEntity: updatedChild } : c));
                         setLocalTargetConnections(prev => prev.map(c => c.sourceEntityId === updatedChild.id ? { ...c, sourceEntity: updatedChild } : c));
                         window.dispatchEvent(new Event('refresh-database'));
@@ -821,39 +818,6 @@ export const AdminEntityEdit: React.FC<Props> = ({ theme, entityId, onSave, onCa
               )}
             </div>
           )}
-        </div>
-
-        {/* Fast-track Provisioning Section */}
-        <div className={styles.provisionBox}>
-          <div className={styles.provisionTitle}>Fast-track Provisioning: Create New Entity & Link Instantly</div>
-          <div className={styles.buttonGroup} style={{ gap: '10px' }}>
-            <input
-              type="text"
-              placeholder="Entry Name"
-              value={quickCreateName}
-              onChange={e => setQuickCreateName(e.target.value)}
-              className={styles.inputField}
-              style={{ flex: 2 }}
-            />
-            <select
-              value={quickCreateLayer}
-              onChange={e => setQuickCreateLayer(e.target.value)}
-              className={styles.inputField}
-              style={{ flex: 1 }}
-            >
-              <option value="l2">Layer 2 (Governing Body / Association)</option>
-              <option value="l3">Layer 3 (Team / Club / Constructor)</option>
-              <option value="l4">Layer 4 (Driver / Player / Individual)</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => { void handleInlineQuickCreate(); }}
-              className={`${styles.btn} ${styles.btnOutline}`}
-              style={{ background: '#b3e5fc', color: '#000', border: 'none' }}
-            >
-              Provision Record
-            </button>
-          </div>
         </div>
       </div>
 
