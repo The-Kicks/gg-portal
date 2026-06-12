@@ -42,15 +42,14 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 }) => {
 
     const progressPercent = maxSlots > 0 ? (currentIndex / maxSlots) * 100 : 0;
+    const isGameOver = !currentEntity || currentIndex >= maxSlots;
 
-    // Handler to pick a random category
     const handleSelectRandomCategory = () => {
         if (availableCategories.length === 0) return;
         const randomIndex = Math.floor(Math.random() * availableCategories.length);
         handleStartGame(availableCategories[randomIndex]);
     };
 
-    // Helper to retrieve the thumbnail of a placed entity
     const getPlacedEntityImage = (placed: HydratedEntity | null): string => {
         if (!placed?.image) return '';
         const imgs = placed.image as Record<string, string | undefined>;
@@ -78,44 +77,72 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                     </div>
                 </div>
 
-                {/* ULTRA WIDE GAME GRID */}
-                <div className={styles.gameGrid}>
+                {/* HORIZONTAL GAME GRID */}
+                <div className={`${styles.gameGrid} ${isGameOver ? styles.gameOver : ''}`}>
 
-                    {/* LEFT SLOT COLUMN */}
-                    <div className={styles.sideColumn}>
-                        {leftSlots.map(index => {
-                            const placed = rankings[index];
-                            const imgUrl = getPlacedEntityImage(placed);
-                            return (
-                                <button
-                                    key={index}
-                                    disabled={placed !== null || !currentEntity}
-                                    onClick={() => handlePlaceEntity(index)}
-                                    className={`${styles.slotButton} ${placed ? styles.slotFilled : styles.slotEmpty}`}
-                                    style={placed && imgUrl ? { '--slot-bg': `url(${imgUrl})` } as React.CSSProperties : {}}
-                                >
-                                    <div className={styles.slotBlurOverlay} />
-                                    <div className={styles.slotContent}>
+                    {/* 2/3 COLUMN: HORIZONTAL RANKING ROWS */}
+                    <div className={styles.rankingSection}>
+                        
+                        {/* TOP ROW (Ranks 1 - 5) */}
+                        <div className={styles.horizontalRow}>
+                            {leftSlots.map(index => {
+                                const placed = rankings[index];
+                                const imgUrl = getPlacedEntityImage(placed);
+                                return (
+                                    <button
+                                        key={index}
+                                        disabled={placed !== null || !currentEntity}
+                                        onClick={() => handlePlaceEntity(index)}
+                                        className={`${styles.slotButton} ${placed ? styles.slotFilled : styles.slotEmpty}`}
+                                        style={placed && imgUrl ? { '--slot-bg': `url(${imgUrl})` } as React.CSSProperties : {}}
+                                    >
                                         <span className={styles.slotNumber}>{index + 1}</span>
-                                        <span className={styles.slotName}>
-                                            {placed ? placed.name : 'Place here'}
-                                        </span>
-                                    </div>
-                                </button>
-                            );
-                        })}
+                                        <div className={styles.slotBlurOverlay} />
+                                        <div className={styles.slotContent}>
+                                            <span className={styles.slotName}>
+                                                {placed ? placed.name : '＋ Place'}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* BOTTOM ROW (Ranks 6 - 10) */}
+                        <div className={styles.horizontalRow}>
+                            {rightSlots.map(index => {
+                                const placed = rankings[index];
+                                const imgUrl = getPlacedEntityImage(placed);
+                                return (
+                                    <button
+                                        key={index}
+                                        disabled={placed !== null || !currentEntity}
+                                        onClick={() => handlePlaceEntity(index)}
+                                        className={`${styles.slotButton} ${placed ? styles.slotFilled : styles.slotEmpty}`}
+                                        style={placed && imgUrl ? { '--slot-bg': `url(${imgUrl})` } as React.CSSProperties : {}}
+                                    >
+                                        <span className={styles.slotNumber}>{index + 1}</span>
+                                        <div className={styles.slotBlurOverlay} />
+                                        <div className={styles.slotContent}>
+                                            <span className={styles.slotName}>
+                                                {placed ? placed.name : '＋ Place'}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
-                    {/* MIDDLE COLUMN: THE HUGE FOCUS CARD */}
-                    <div className={styles.centerColumn}>
-                        {currentEntity && currentIndex < maxSlots ? (
+                    {/* 1/3 COLUMN: FOCUS CARD (MEDIA) */}
+                    {!isGameOver ? (
+                        <div className={styles.centerColumn}>
                             <div className={styles.entityCard}>
                                 <div className={styles.cardHeader}>
                                     <span className={styles.cardSub}>Currently reviewing:</span>
-                                    <h2 className={styles.entityName}>{currentEntity.name}</h2>
+                                    <h2 className={styles.entityName}>{currentEntity?.name}</h2>
                                 </div>
 
-                                {/* FLEXIBLE ASPECT RATIO MEDIA CONTAINER */}
                                 <div className={styles.albumWrapper}>
                                     {currentMediaUrls.length > 0 ? (
                                         <div className={styles.mediaFlexBox}>
@@ -131,17 +158,16 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                             ) : (
                                                 <img
                                                     src={currentMediaUrls[currentMediaIndex]}
-                                                    alt={currentEntity.name}
+                                                    alt={currentEntity?.name}
                                                     className={styles.flexibleMedia}
                                                 />
                                             )}
 
-                                            {/* Navigation controls */}
                                             {currentMediaUrls.length > 1 && (
                                                 <div className={styles.albumNavigation}>
-                                                    <button type="button" onClick={handlePrevMedia} className={styles.albumNavBtn}>◀ Previous</button>
+                                                    <button type="button" onClick={handlePrevMedia} className={styles.albumNavBtn}>◀</button>
                                                     <span className={styles.albumCounter}>{currentMediaIndex + 1} / {currentMediaUrls.length}</span>
-                                                    <button type="button" onClick={handleNextMedia} className={styles.albumNavBtn}>Next ▶</button>
+                                                    <button type="button" onClick={handleNextMedia} className={styles.albumNavBtn}>▶</button>
                                                 </div>
                                             )}
                                         </div>
@@ -150,14 +176,13 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                     )}
                                 </div>
 
-                                {/* FLAGS AND METADATA */}
                                 <div className={styles.quickMeta}>
                                     <div className={styles.metaBadge}>
                                         <span>Position / Role</span>
-                                        <strong>{Array.isArray(currentEntity.metadata?.Role) ? currentEntity.metadata.Role.join(', ') : String(currentEntity.metadata?.Role || 'N/A')}</strong>
+                                        <strong>{Array.isArray(currentEntity?.metadata?.Role) ? currentEntity.metadata.Role.join(', ') : String(currentEntity?.metadata?.Role || 'N/A')}</strong>
                                     </div>
 
-                                    {currentEntity.metadata?.Nationality && Array.isArray(currentEntity.metadata.Nationality) && (
+                                    {currentEntity?.metadata?.Nationality && Array.isArray(currentEntity.metadata.Nationality) && (
                                         <div className={styles.metaBadge}>
                                             <span>Origin</span>
                                             <div className={styles.flagsRow}>
@@ -180,42 +205,10 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                     )}
                                 </div>
                             </div>
-                        ) : (
-                            <div className={styles.gameOverSplash}>
-                                <div className={styles.splashIcon}>🎉</div>
-                                <h2>Congratulations!</h2>
-                                <p>You have compiled your personal top {maxSlots}.</p>
-                                <button onClick={() => setIsPlaying(false)} className={styles.btnPrimary}>
-                                    Back to Lobby
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* RIGHT SLOT COLUMN */}
-                    <div className={styles.sideColumn}>
-                        {rightSlots.map(index => {
-                            const placed = rankings[index];
-                            const imgUrl = getPlacedEntityImage(placed);
-                            return (
-                                <button
-                                    key={index}
-                                    disabled={placed !== null || !currentEntity}
-                                    onClick={() => handlePlaceEntity(index)}
-                                    className={`${styles.slotButton} ${placed ? styles.slotFilled : styles.slotEmpty}`}
-                                    style={placed && imgUrl ? { '--slot-bg': `url(${imgUrl})` } as React.CSSProperties : {}}
-                                >
-                                    <div className={styles.slotBlurOverlay} />
-                                    <div className={styles.slotContent}>
-                                        <span className={styles.slotNumber}>{index + 1}</span>
-                                        <span className={styles.slotName}>
-                                            {placed ? placed.name : 'Place here'}
-                                        </span>
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
+                        </div>
+                    ) : (
+                        <div className={styles.emptyCenterSpace} />
+                    )}
                 </div>
             </div>
         );
@@ -233,12 +226,7 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
             <div className={styles.menuLayout}>
                 <div className={styles.setupCard}>
-
-                    {/* RANDOM CATEGORY BUTTON */}
-                    <button
-                        onClick={handleSelectRandomCategory}
-                        className={styles.btnRandomLaunch}
-                    >
+                    <button onClick={handleSelectRandomCategory} className={styles.btnRandomLaunch}>
                         <span className={styles.randomIcon}>🎲</span>
                         <div className={styles.randomText}>
                             <strong>Random Criterion</strong>
