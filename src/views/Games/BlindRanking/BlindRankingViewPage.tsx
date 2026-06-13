@@ -78,7 +78,7 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     };
   }, [isPlaying]);
 
-  // Helper om strings/arrays om te zetten naar schone URL arrays (buiten useMemo herbruikbaar)
+  // Helper om strings/arrays om te zetten naar schone URL arrays
   const parseRawMedia = useCallback((raw: string | string[] | undefined): string[] => {
     if (!raw) return [];
     if (typeof raw === 'string') {
@@ -123,7 +123,7 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     return Array.from(new Set(finalUrls));
   }, [parseRawMedia]);
 
-  // De actieve medialijst voor de huidige kaart op basis van de useMemo
+  // De actieve medialijst voor de huidige kaart
   const currentMediaUrls = useMemo<string[]>(() => {
     return getMediaUrlsForEntity(currentEntity, activeCategory);
   }, [currentEntity, activeCategory, getMediaUrlsForEntity]);
@@ -132,24 +132,30 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
   const getInitialMediaIndex = useCallback((entity: HydratedEntity | undefined, category: string): number => {
     if (!entity?.image) return 0;
     
-    const urls = getMediaUrlsForEntity(entity, category);
-    if (urls.length === 0) return 0;
-
     const imageContainer = entity.image as Record<string, string | string[] | undefined>;
-    
-    // Bereken hoeveel base-afbeeldingen er vooraan staan
-    const profileCount = parseRawMedia(imageContainer.profileCard).length;
-    const heroCount = parseRawMedia(imageContainer.heroBanner).length;
-    const baseImagesCount = profileCount + heroCount;
+    const imageKeys = Object.keys(imageContainer);
 
-    // Als er media is ná de profile/hero, start dan direct dáár (op index van de eerste categorie-afbeelding)
-    if (urls.length > baseImagesCount) {
-      return baseImagesCount;
+    // 1. Zoek of de categorie-key bestaat in het object van de persoon
+    const matchedCategoryKey = imageKeys.find(key => 
+      category.toLowerCase().includes(key.toLowerCase()) && 
+      key !== 'profileCard' && 
+      key !== 'heroBanner'
+    );
+
+    // 2. Check of die specifieke categorie daadwerkelijk gevulde media bevat
+    const categoryMediaUrls = matchedCategoryKey ? parseRawMedia(imageContainer[matchedCategoryKey]) : [];
+
+    // WATERDICHTE CHECK: Als de specifieke categorie GEEN media bevat voor deze persoon, start direct op 0 (Profile)
+    if (categoryMediaUrls.length === 0) {
+      return 0;
     }
 
-    // Fallback naar 0 als er niks anders is dan profile/hero
-    return 0;
-  }, [getMediaUrlsForEntity, parseRawMedia]);
+    // 3. Als er wél categorie-media is, bereken hoeveel base-afbeeldingen er vooraan staan
+    const profileCount = parseRawMedia(imageContainer.profileCard).length;
+    const heroCount = parseRawMedia(imageContainer.heroBanner).length;
+    
+    return profileCount + heroCount;
+  }, [parseRawMedia]);
 
   // --- 6. Check of de HUIDIG getoonde afbeelding bij de categorie hoort ---
   const isMatchingCategoryMedia = useMemo<boolean>(() => {
@@ -203,7 +209,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
       .slice(0, 10);
 
     const firstEntity = randomized[0];
-    // Bereken direct de juiste start-afbeelding voor de allereerste kaart
     const startingMediaIndex = getInitialMediaIndex(firstEntity, categoryName);
 
     setShuffledEntities(randomized);
@@ -226,8 +231,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
 
     const nextIndex = currentIndex + 1;
     const nextEntity = shuffledEntities[nextIndex];
-    
-    // Bereken alvast de juiste media-index voor de VOLGENDE kaart die in beeld komt
     const nextMediaStartingIndex = getInitialMediaIndex(nextEntity, activeCategory);
 
     setCurrentMediaIndex(nextMediaStartingIndex);
