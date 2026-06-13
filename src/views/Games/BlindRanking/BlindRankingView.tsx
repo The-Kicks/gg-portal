@@ -10,6 +10,7 @@ interface ViewProps {
     currentEntity: HydratedEntity | undefined;
     currentMediaUrls: string[];
     currentMediaIndex: number;
+    isMatchingCategoryMedia: boolean;
     rankings: (HydratedEntity | null)[];
     currentIndex: number;
     maxSlots: number;
@@ -29,6 +30,7 @@ export const BlindRankingView: React.FC<ViewProps> = ({
     currentEntity,
     currentMediaUrls,
     currentMediaIndex,
+    isMatchingCategoryMedia,
     rankings,
     currentIndex,
     maxSlots,
@@ -143,9 +145,30 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                     <h2 className={styles.entityName}>{currentEntity?.name}</h2>
                                 </div>
 
-                                <div className={styles.albumWrapper}>
+                                {/* Albumwrapper met dynamische border-klasse en info-tooltip */}
+                                <div className={`${styles.albumWrapper} ${isMatchingCategoryMedia ? styles.matchingCategory : ''}`}>
+                                    
+                                    {/* INFO UTLEG RECHTSBOVEN IN WRAPPER */}
+                                    <div className={styles.infoTooltipContainer}>
+                                        <span className={styles.infoIcon}>?</span>
+                                        <div className={styles.tooltipText}>
+                                            The border lights up when the media matches the current category.
+                                        </div>
+                                    </div>
+
                                     {currentMediaUrls.length > 0 ? (
                                         <div className={styles.mediaFlexBox}>
+                                            {/* EXTERNAL LINK BUTTON */}
+                                            <a 
+                                                href={currentMediaUrls[currentMediaIndex]} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className={styles.btnFullscreenMedia}
+                                                title="Open in new tab"
+                                            >
+                                                ↗
+                                            </a>
+
                                             {currentMediaUrls[currentMediaIndex].toLowerCase().endsWith('.mp4') ? (
                                                 <video
                                                     src={currentMediaUrls[currentMediaIndex]}
