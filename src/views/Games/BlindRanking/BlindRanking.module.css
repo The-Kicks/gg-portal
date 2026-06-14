@@ -1,14 +1,17 @@
+/* ==========================================================================
+   1. CORE LAYOUTS (LOBBY & GAME CONTAINER)
+   ========================================================================== */
+
 .gameContainer {
-    width: 100%;
-    height: calc(100vh - 60px);
-    max-width: 100% !important;
-    margin: 0;
-    padding: 20px;
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
+    width: 100%;
+    height: calc(100vh - 60px);
+    margin: 0;
+    padding: 20px;
     background-color: var(--bg);
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 .setupContainer {
@@ -16,16 +19,224 @@
     max-width: 600px;
     margin: 60px auto;
     padding: 24px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     box-sizing: border-box;
 }
+
+.setupHeader {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.lobbyTitle {
+    font-size: 46px;
+    font-weight: 900;
+}
+
+.lobbySubtitle {
+    font-size: 16px;
+    color: color-mix(in srgb, var(--text) 60%, transparent);
+}
+
+.setupCard {
+    background: color-mix(in srgb, var(--bg) 95%, white);
+    border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+    padding: 32px;
+    border-radius: 24px;
+    max-width: 550px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   2. CUSTOM CRITERION INPUT (NIEUW)
+   ========================================================================== */
+
+.customInputForm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.inputLabel {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: color-mix(in srgb, var(--text) 60%, transparent);
+}
+
+.inputWrapper {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.customCategoryInput {
+    flex: 1;
+    padding: 14px 18px;
+    background: color-mix(in srgb, var(--bg) 90%, black 10%);
+    border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.customCategoryInput:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.btnSubmitCustom {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    background: var(--primary);
+    border: none;
+    border-radius: 12px;
+    color: var(--bg);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btnSubmitCustom:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: scale(1.03);
+}
+
+.btnSubmitCustom:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: color-mix(in srgb, var(--text) 20%, transparent);
+    color: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+/* ==========================================================================
+   3. LOBBY BUTTONS & DIVIDERS
+   ========================================================================== */
+
+.btnRandomLaunch {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border: none;
+    border-radius: 16px;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 30%, transparent);
+    transition: all 0.2s ease;
+    margin-bottom: 8px;
+}
+
+.btnRandomLaunch:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.randomIcon {
+    font-size: 32px;
+}
+
+.randomText {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+
+    & strong { font-size: 18px; }
+    & span { font-size: 13px; opacity: 0.8; }
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: color-mix(in srgb, var(--text) 40%, transparent);
+    font-size: 13px;
+    margin: 20px 0;
+
+    &::before, &::after {
+        content: '';
+        flex: 1;
+        border-bottom: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+    }
+    &::before { margin-right: .5em; }
+    &::after { margin-left: .5em; }
+}
+
+.actionLaunchList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.btnLaunchGame {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    background: color-mix(in srgb, var(--bg) 92%, black 8%);
+    border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    border-radius: 12px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+
+    &:hover {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--bg);
+        transform: translateX(4px);
+    }
+}
+
+/* ==========================================================================
+   4. GAMEPLAY HEADER & PROGRESS
+   ========================================================================== */
 
 .headerSection {
     text-align: center;
     margin-bottom: 20px;
     position: relative;
     flex-shrink: 0;
+}
+
+.btnBack {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+
+    &:hover {
+        background: var(--text);
+        color: var(--bg);
+    }
+}
+
+.categoryBadge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: color-mix(in srgb, var(--text) 50%, transparent);
 }
 
 .categoryTitle {
@@ -35,6 +246,36 @@
     color: var(--primary);
 }
 
+.progressWrapper {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.progressBarContainer {
+    width: 100%;
+    height: 6px;
+    background-color: color-mix(in srgb, var(--text) 15%, transparent);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progressBar {
+    height: 100%;
+    background-color: var(--primary);
+    border-radius: 10px;
+    transition: width 0.4s ease;
+}
+
+.progressCounter {
+    font-size: 13px;
+    color: color-mix(in srgb, var(--text) 60%, transparent);
+}
+
+/* ==========================================================================
+   5. GAME GRID & SLOTS
+   ========================================================================== */
+
 .gameGrid {
     display: grid;
     grid-template-columns: 2fr 1fr;
@@ -43,12 +284,13 @@
     align-items: stretch;
     min-height: 0;
     transition: grid-template-columns 0.6s cubic-bezier(0.25, 1, 0.5, 1);
-}
 
-/* Bij Game over klapt de media-kolom weg */
-.gameGrid.gameOver {
-    grid-template-columns: 1fr 0fr;
-    gap: 0;
+    &.gameOver {
+        grid-template-columns: 1fr 0fr;
+        gap: 0;
+
+        & .horizontalRow { transform: scale(0.98); }
+    }
 }
 
 .rankingSection {
@@ -68,11 +310,6 @@
     transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* GAME OVER */
-.gameGrid.gameOver .horizontalRow {
-    transform: scale(0.98);
-}
-
 .emptyCenterSpace {
     display: none;
 }
@@ -89,34 +326,34 @@
     border-radius: 20px;
     cursor: pointer;
     box-sizing: border-box;
-    overflow: visible !important;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.2s ease,
-        border-color 0.2s ease,
-        background 0.2s ease;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
-/* Lege slots */
 .slotEmpty {
     border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-    background: linear-gradient(135deg,
-            color-mix(in srgb, var(--bg) 98%, white) 0%,
-            color-mix(in srgb, var(--bg) 94%, black) 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--bg) 98%, white) 0%, color-mix(in srgb, var(--bg) 94%, black) 100%);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
     color: color-mix(in srgb, var(--text) 40%, transparent);
     align-items: center;
     justify-content: center;
+
+    & .slotName {
+        font-size: 11px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        opacity: 0.6;
+        text-shadow: none;
+    }
+
+    &:hover:not(:disabled) {
+        border-color: var(--primary);
+        background: color-mix(in srgb, var(--primary) 4%, transparent);
+        color: var(--primary);
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 12%, transparent);
+    }
 }
 
-.slotEmpty:hover:not(:disabled) {
-    border-color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 4%, transparent);
-    color: var(--primary);
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 12%, transparent);
-}
-
-/* Gevulde slots */
 .slotFilled {
     border: 1px solid color-mix(in srgb, var(--secondary) 50%, white 30%);
     background-image: var(--slot-bg);
@@ -125,11 +362,13 @@
     color: #ffffff;
     font-weight: 700;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
 
-.slotFilled:hover {
-    transform: translateY(-4px) scale(1.04);
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35), 0 0 0 2px var(--primary);
+    & .slotBlurOverlay { display: block; }
+
+    &:hover {
+        transform: translateY(-4px) scale(1.04);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35), 0 0 0 2px var(--primary);
+    }
 }
 
 .slotBlurOverlay {
@@ -139,10 +378,6 @@
     display: none;
     z-index: 1;
     border-radius: 19px;
-}
-
-.slotFilled .slotBlurOverlay {
-    display: block;
 }
 
 .slotContent {
@@ -157,7 +392,6 @@
     text-align: center;
 }
 
-/* BADGE BOVEN OP DE HOEK */
 .slotNumber {
     position: absolute;
     top: -8px;
@@ -195,15 +429,10 @@
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
 }
 
-.slotEmpty .slotName {
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    opacity: 0.6;
-    text-shadow: none;
-}
+/* ==========================================================================
+   6. FOCUS MEDIA CARD & ALBUM
+   ========================================================================== */
 
-/* RIGHT 1/3 SIDE: MEDIA CARD */
 .centerColumn {
     display: flex;
     flex-direction: column;
@@ -224,185 +453,6 @@
     min-height: 0;
 }
 
-.albumWrapper {
-    position: relative;
-    background: color-mix(in srgb, var(--bg) 94%, white);
-    border-radius: 18px;
-    overflow: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-grow: 1;
-    min-height: 0;
-    border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-.albumWrapper.matchingCategory {
-    border-color: var(--primary);
-    box-shadow: 0 0 15px color-mix(in srgb, var(--primary) 20%, transparent);
-}
-
-.mediaFlexBox {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-/* VERANDERD: Behoudt nu de eigen aspect ratio en snijdt niets af */
-.flexibleMedia {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
-.btnFullscreenMedia {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 32px;
-    height: 32px;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #ffffff;
-    border-radius: 50%;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding-bottom: 2px;
-    padding-left: 1px;
-
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: bold;
-    z-index: 15;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.btnFullscreenMedia:hover {
-    background: var(--primary);
-    border-color: var(--primary);
-    transform: scale(1.1);
-}
-
-.albumNavigation {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 40%, rgba(0, 0, 0, 0));
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 24px 16px 12px 16px;
-    color: #fff;
-    z-index: 10;
-}
-
-/* LOBBY & SETUP */
-.btnRandomLaunch {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    width: 100%;
-    padding: 20px;
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    border: none;
-    border-radius: 16px;
-    color: white;
-    cursor: pointer;
-    box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 30%, transparent);
-    transition: all 0.2s ease;
-    margin-bottom: 8px;
-}
-
-.btnRandomLaunch:hover {
-    transform: translateY(-2px);
-    filter: brightness(1.1);
-}
-
-.randomIcon {
-    font-size: 32px;
-}
-
-.randomText {
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-}
-
-.randomText strong {
-    font-size: 18px;
-}
-
-.randomText span {
-    font-size: 13px;
-    opacity: 0.8;
-}
-
-.divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    color: color-mix(in srgb, var(--text) 40%, transparent);
-    font-size: 13px;
-    margin: 20px 0;
-}
-
-.divider::before,
-.divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
-}
-
-.divider:not(:empty)::before {
-    margin-right: .5em;
-}
-
-.divider:not(:empty)::after {
-    margin-left: .5em;
-}
-
-.flagsRow {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    margin-top: 4px;
-}
-
-.progressWrapper {
-    max-width: 400px;
-    margin: 0 auto;
-}
-
-.progressBarContainer {
-    width: 100%;
-    height: 6px;
-    background-color: color-mix(in srgb, var(--text) 15%, transparent);
-    border-radius: 10px;
-    overflow: hidden;
-    margin-bottom: 8px;
-}
-
-.progressBar {
-    height: 100%;
-    background-color: var(--primary);
-    border-radius: 10px;
-    transition: width 0.4s ease;
-}
-
-.progressCounter {
-    font-size: 13px;
-    color: color-mix(in srgb, var(--text) 60%, transparent);
-}
-
 .cardHeader {
     text-align: center;
 }
@@ -420,98 +470,88 @@
     font-weight: 900;
 }
 
-.quickMeta {
+.albumWrapper {
+    position: relative;
+    background: color-mix(in srgb, var(--bg) 94%, white);
+    border-radius: 18px;
+    overflow: hidden;
     display: flex;
-    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    flex-grow: 1;
+    min-height: 0;
+    border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+
+    &.matchingCategory {
+        border-color: var(--primary);
+        box-shadow: 0 0 15px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
 }
 
-.metaBadge {
-    flex: 1;
-    background: color-mix(in srgb, var(--text) 6%, transparent);
-    padding: 10px;
-    border-radius: 12px;
-    text-align: center;
-    font-size: 12px;
+.mediaFlexBox {
+    position: relative;
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    justify-content: center;
 }
 
-.metaBadge span {
-    font-size: 10px;
-    opacity: 0.6;
-    text-transform: uppercase;
+.flexibleMedia {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
-.btnBack {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
-    color: var(--text);
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
+.noMediaPlaceholder {
+    font-size: 14px;
+    color: color-mix(in srgb, var(--text) 40%, transparent);
     font-weight: 600;
 }
 
-.btnBack:hover {
-    background: var(--text);
-    color: var(--bg);
-}
-
-.setupHeader {
-    text-align: center;
-    margin-bottom: 40px;
-}
-
-.lobbyTitle {
-    font-size: 46px;
-    font-weight: 900;
-}
-
-.lobbySubtitle {
-    font-size: 16px;
-    color: color-mix(in srgb, var(--text) 60%, transparent);
-}
-
-.setupCard {
-    background: color-mix(in srgb, var(--bg) 95%, white);
-    border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-    padding: 32px;
-    border-radius: 24px;
-    max-width: 550px;
-    margin: 0 auto;
-}
-
-.actionLaunchList {
+.btnFullscreenMedia {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border-radius: 50%;
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 2px;
+    padding-left: 1px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 15;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+    &:hover {
+        background: var(--primary);
+        border-color: var(--primary);
+        transform: scale(1.1);
+    }
 }
 
-.btnLaunchGame {
+.albumNavigation {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 40%, rgba(0, 0, 0, 0));
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 20px;
-    background: color-mix(in srgb, var(--bg) 92%, black 8%);
-    border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-    border-radius: 12px;
-    cursor: pointer;
-    color: var(--text);
-    font-size: 15px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-}
-
-.btnLaunchGame:hover {
-    border-color: var(--primary);
-    background: var(--primary);
-    color: var(--bg);
-    transform: translateX(4px);
+    padding: 24px 16px 12px 16px;
+    color: #fff;
+    z-index: 10;
 }
 
 .albumNavBtn {
@@ -524,16 +564,30 @@
     font-weight: bold;
 }
 
-/* Tooltip Container */
+/* ==========================================================================
+   7. INTERACTIVE TOOLTIP
+   ========================================================================== */
+
 .infoTooltipContainer {
     position: absolute;
     top: 12px;
-    left: 12px; /* Linkerbovenhoek, zodat hij de fullscreen-knop rechts niet in de weg zit */
+    left: 12px;
     z-index: 20;
     cursor: help;
+
+    &:hover {
+        & .infoIcon {
+            background: rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+            transform: scale(1.05);
+        }
+        & .tooltipText {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 }
 
-/* Het vraagteken rondje zelf */
 .infoIcon {
     display: flex;
     align-items: center;
@@ -550,19 +604,12 @@
     transition: all 0.2s ease;
 }
 
-.infoTooltipContainer:hover .infoIcon {
-    background: rgba(255, 255, 255, 0.3);
-    color: #ffffff;
-    transform: scale(1.05);
-}
-
-/* De zwevende tekstbalk */
 .tooltipText {
     position: absolute;
     top: 28px;
     left: 0;
     width: 180px;
-    background: #1e1e24; /* Donkere, strakke achtergrond */
+    background: #1e1e24;
     color: #ffffff;
     font-size: 11px;
     line-height: 1.4;
@@ -570,40 +617,43 @@
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    
-    /* Onzichtbaar maken bij start */
     opacity: 0;
     pointer-events: none;
     transform: translateY(-5px);
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Tonen bij hover */
-.infoTooltipContainer:hover .tooltipText {
-    opacity: 1;
-    transform: translateY(0);
+/* ==========================================================================
+   8. METADATA & BADGES
+   ========================================================================== */
+
+.quickMeta {
+    display: flex;
+    gap: 10px;
 }
 
-@media (max-width: 1024px) {
-    .gameGrid {
-        grid-template-columns: 1fr;
-    }
+.metaBadge {
+    flex: 1;
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    padding: 10px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 
-    .horizontalRow {
-        flex-direction: column;
-        height: auto;
-    }
-
-    .slotButton {
-        min-height: 70px;
-    }
-
-    .gameContainer {
-        height: auto;
-        overflow: auto;
-    }
-
-    .gameGrid.gameOver {
-        grid-template-columns: 1fr;
+    & span {
+        font-size: 10px;
+        opacity: 0.6;
+        text-transform: uppercase;
     }
 }
+
+.flagsRow {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 4px;
+}
+

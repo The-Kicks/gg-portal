@@ -2,19 +2,13 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import { BlindRankingView } from './BlindRankingView';
 
-// --- Strikte Type Definities op basis van jouw API Response ---
 interface BlindRankingSettings {
   availableCategories?: string[];
   disabledCategories?: string[];
 }
 
-interface GuessWhoSettings {
-  disabledColumns?: string[];
-}
-
 interface GameSettingsConfig {
   blindranking?: BlindRankingSettings;
-  guesswho?: GuessWhoSettings;
 }
 
 export interface BlindRankingTheme extends Omit<Theme, 'gameSettings'> {
@@ -41,7 +35,6 @@ interface EngineProps {
 
 const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntities }) => {
   
-  // --- 1. Haal de categorieën type-safe op ---
   const availableCategories = useMemo<string[]>(() => {
     const adminCategories = theme.gameSettings?.blindranking?.availableCategories;
     if (Array.isArray(adminCategories) && adminCategories.length > 0) {
@@ -50,7 +43,7 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     return ['Algemene Ranking'];
   }, [theme.gameSettings]);
 
-  // --- 2. Gameplay States ---
+  // --- States ---
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [shuffledEntities, setShuffledEntities] = useState<HydratedEntity[]>([]);
@@ -61,7 +54,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
   const maxSlots = shuffledEntities.length;
   const currentEntity = shuffledEntities[currentIndex] as HydratedEntity | undefined;
 
-  // --- 3. TIJDELIJKE SCROLL-LOCK OP DE APP CONTAINER ---
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
     if (isPlaying && appContainerEl) {
@@ -78,7 +70,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     };
   }, [isPlaying]);
 
-  // Helper om strings/arrays om te zetten naar schone URL arrays
   const parseRawMedia = useCallback((raw: string | string[] | undefined): string[] => {
     if (!raw) return [];
     if (typeof raw === 'string') {
@@ -90,7 +81,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     return [];
   }, []);
 
-  // --- 4. Generieke functie om de complete medialijst voor een specifieke entiteit te bouwen ---
   const getMediaUrlsForEntity = useCallback((entity: HydratedEntity | undefined, category: string): string[] => {
     if (!entity?.image) return [];
 
@@ -98,11 +88,9 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     const imageKeys = Object.keys(imageContainer);
     const finalUrls: string[] = [];
 
-    // STAP 1: Altijd profileCard en heroBanner eerst
     finalUrls.push(...parseRawMedia(imageContainer.profileCard));
     finalUrls.push(...parseRawMedia(imageContainer.heroBanner));
 
-    // STAP 2: Zoek en voeg de media van de ACTIEVE categorie toe
     const matchedCategoryKey = imageKeys.find(key => 
       category.toLowerCase().includes(key.toLowerCase()) && 
       key !== 'profileCard' && 
@@ -113,7 +101,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
       finalUrls.push(...parseRawMedia(imageContainer[matchedCategoryKey]));
     }
 
-    // STAP 3: ALTIJD DE REST achteraan sluiten
     imageKeys.forEach(key => {
       if (key !== 'profileCard' && key !== 'heroBanner' && key !== matchedCategoryKey) {
         finalUrls.push(...parseRawMedia(imageContainer[key]));
@@ -123,41 +110,35 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     return Array.from(new Set(finalUrls));
   }, [parseRawMedia]);
 
-  // De actieve medialijst voor de huidige kaart
   const currentMediaUrls = useMemo<string[]>(() => {
     return getMediaUrlsForEntity(currentEntity, activeCategory);
   }, [currentEntity, activeCategory, getMediaUrlsForEntity]);
 
-  // --- 5. Bepaal de start-index van de categorie-specifieke media ---
   const getInitialMediaIndex = useCallback((entity: HydratedEntity | undefined, category: string): number => {
     if (!entity?.image) return 0;
     
     const imageContainer = entity.image as Record<string, string | string[] | undefined>;
     const imageKeys = Object.keys(imageContainer);
 
-    // 1. Zoek of de categorie-key bestaat in het object van de persoon
     const matchedCategoryKey = imageKeys.find(key => 
       category.toLowerCase().includes(key.toLowerCase()) && 
       key !== 'profileCard' && 
       key !== 'heroBanner'
     );
 
-    // 2. Check of die specifieke categorie daadwerkelijk gevulde media bevat
     const categoryMediaUrls = matchedCategoryKey ? parseRawMedia(imageContainer[matchedCategoryKey]) : [];
 
-    // WATERDICHTE CHECK: Als de specifieke categorie GEEN media bevat voor deze persoon, start direct op 0 (Profile)
+    // Als de eigen ingevulde categorie geen match heeft, valt hij hier direct terug op 0 (Profile)
     if (categoryMediaUrls.length === 0) {
       return 0;
     }
 
-    // 3. Als er wél categorie-media is, bereken hoeveel base-afbeeldingen er vooraan staan
     const profileCount = parseRawMedia(imageContainer.profileCard).length;
     const heroCount = parseRawMedia(imageContainer.heroBanner).length;
     
     return profileCount + heroCount;
   }, [parseRawMedia]);
 
-  // --- 6. Check of de HUIDIG getoonde afbeelding bij de categorie hoort ---
   const isMatchingCategoryMedia = useMemo<boolean>(() => {
     if (!currentEntity?.image || currentMediaUrls.length === 0) return false;
 
@@ -167,7 +148,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     const currentActiveUrl = currentMediaUrls[currentMediaIndex];
     if (!currentActiveUrl) return false;
 
-    // Profile/Hero uitsluiten van oplichten
     const profileUrls = parseRawMedia(imageContainer.profileCard);
     const heroUrls = parseRawMedia(imageContainer.heroBanner);
     const isProfileOrHero = profileUrls.includes(currentActiveUrl) || heroUrls.includes(currentActiveUrl);
@@ -197,7 +177,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, availableEntitie
     };
   }, [maxSlots]);
 
-  // --- 7. Handlers ---
   const handleStartGame = useCallback((categoryName: string) => {
     if (availableEntities.length === 0) {
       alert("Dit thema bevat geen Layer 4 entiteiten om te ranken!");

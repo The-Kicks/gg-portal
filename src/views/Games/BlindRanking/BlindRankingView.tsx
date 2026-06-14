@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactCountryFlag from 'react-country-flag';
 import type { HydratedEntity } from '../../../types';
 import styles from './BlindRanking.module.css';
@@ -42,6 +42,8 @@ export const BlindRankingView: React.FC<ViewProps> = ({
     handleNextMedia,
     handlePrevMedia
 }) => {
+    // State voor de handmatige input in de lobby
+    const [customCategory, setCustomCategory] = useState<string>('');
 
     const progressPercent = maxSlots > 0 ? (currentIndex / maxSlots) * 100 : 0;
     const isGameOver = !currentEntity || currentIndex >= maxSlots;
@@ -50,6 +52,13 @@ export const BlindRankingView: React.FC<ViewProps> = ({
         if (availableCategories.length === 0) return;
         const randomIndex = Math.floor(Math.random() * availableCategories.length);
         handleStartGame(availableCategories[randomIndex]);
+    };
+
+    const handleLaunchCustomCategory = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!customCategory.trim()) return;
+        handleStartGame(customCategory.trim());
+        setCustomCategory(''); // Reset het veld na de start
     };
 
     const getPlacedEntityImage = (placed: HydratedEntity | null): string => {
@@ -84,8 +93,6 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
                     {/* 2/3 COLUMN: HORIZONTAL RANKING ROWS */}
                     <div className={styles.rankingSection}>
-                        
-                        {/* TOP ROW (Ranks 1 - 5) */}
                         <div className={styles.horizontalRow}>
                             {leftSlots.map(index => {
                                 const placed = rankings[index];
@@ -110,7 +117,6 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                             })}
                         </div>
 
-                        {/* BOTTOM ROW (Ranks 6 - 10) */}
                         <div className={styles.horizontalRow}>
                             {rightSlots.map(index => {
                                 const placed = rankings[index];
@@ -145,10 +151,7 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                     <h2 className={styles.entityName}>{currentEntity?.name}</h2>
                                 </div>
 
-                                {/* Albumwrapper met dynamische border-klasse en info-tooltip */}
                                 <div className={`${styles.albumWrapper} ${isMatchingCategoryMedia ? styles.matchingCategory : ''}`}>
-                                    
-                                    {/* INFO UTLEG RECHTSBOVEN IN WRAPPER */}
                                     <div className={styles.infoTooltipContainer}>
                                         <span className={styles.infoIcon}>?</span>
                                         <div className={styles.tooltipText}>
@@ -158,7 +161,6 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
                                     {currentMediaUrls.length > 0 ? (
                                         <div className={styles.mediaFlexBox}>
-                                            {/* EXTERNAL LINK BUTTON */}
                                             <a 
                                                 href={currentMediaUrls[currentMediaIndex]} 
                                                 target="_blank" 
@@ -249,6 +251,33 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
             <div className={styles.menuLayout}>
                 <div className={styles.setupCard}>
+                    
+                    {/* DYNAMISCH EN EIGEN INPUT FIELD */}
+                    <form onSubmit={handleLaunchCustomCategory} className={styles.customInputForm}>
+                        <label className={styles.inputLabel}>Create Custom Criterion</label>
+                        <div className={styles.inputWrapper}>
+                            <input
+                                type="text"
+                                value={customCategory}
+                                onChange={(e) => setCustomCategory(e.target.value)}
+                                placeholder="e.g., Best Hairstyle, Most Underrated..."
+                                className={styles.customCategoryInput}
+                                maxLength={50}
+                            />
+                            <button 
+                                type="submit" 
+                                disabled={!customCategory.trim()} 
+                                className={styles.btnSubmitCustom}
+                            >
+                                ➔
+                            </button>
+                        </div>
+                    </form>
+
+                    <div className={styles.divider}>
+                        <span>Or select theme criterion</span>
+                    </div>
+
                     <button onClick={handleSelectRandomCategory} className={styles.btnRandomLaunch}>
                         <span className={styles.randomIcon}>🎲</span>
                         <div className={styles.randomText}>
@@ -256,10 +285,6 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                             <span>Let fate decide</span>
                         </div>
                     </button>
-
-                    <div className={styles.divider}>
-                        <span>Or choose manually</span>
-                    </div>
 
                     <div className={styles.actionLaunchList}>
                         {availableCategories.map((categoryName, idx) => (
