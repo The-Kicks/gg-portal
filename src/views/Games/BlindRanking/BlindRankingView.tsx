@@ -6,6 +6,7 @@ import styles from './BlindRanking.module.css';
 interface ViewProps {
     isPlaying: boolean;
     availableCategories: string[];
+    l1Entities: HydratedEntity[];
     activeCategory: string;
     currentEntity: HydratedEntity | undefined;
     currentMediaUrls: string[];
@@ -21,11 +22,13 @@ interface ViewProps {
     handlePlaceEntity: (slotIndex: number) => void;
     handleNextMedia: () => void;
     handlePrevMedia: () => void;
+    l1Label: string;
 }
 
 export const BlindRankingView: React.FC<ViewProps> = ({
     isPlaying,
     availableCategories,
+    l1Entities,
     activeCategory,
     currentEntity,
     currentMediaUrls,
@@ -40,9 +43,9 @@ export const BlindRankingView: React.FC<ViewProps> = ({
     handleStartGame,
     handlePlaceEntity,
     handleNextMedia,
-    handlePrevMedia
+    handlePrevMedia,
+    l1Label
 }) => {
-    // State voor de handmatige input in de lobby
     const [customCategory, setCustomCategory] = useState<string>('');
 
     const progressPercent = maxSlots > 0 ? (currentIndex / maxSlots) * 100 : 0;
@@ -58,7 +61,14 @@ export const BlindRankingView: React.FC<ViewProps> = ({
         e.preventDefault();
         if (!customCategory.trim()) return;
         handleStartGame(customCategory.trim());
-        setCustomCategory(''); // Reset het veld na de start
+        setCustomCategory('');
+    };
+
+    const handleSelectL1Dropdown = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        if (!val) return;
+        handleStartGame(val);
+        e.target.value = '';
     };
 
     const getPlacedEntityImage = (placed: HydratedEntity | null): string => {
@@ -252,15 +262,34 @@ export const BlindRankingView: React.FC<ViewProps> = ({
             <div className={styles.menuLayout}>
                 <div className={styles.setupCard}>
                     
-                    {/* DYNAMISCH EN EIGEN INPUT FIELD */}
+                    {/* DROPDOWN FOR L1 ENTITIES - Only displays if there are more than 1 L1 options available */}
+                    {l1Entities.length > 1 && (
+                        <div className={styles.dropdownFormGroup} style={{ marginBottom: '1.5rem' }}>
+                            <label className={styles.inputLabel}>Filter by {l1Label}</label>
+                            <select 
+                                onChange={handleSelectL1Dropdown} 
+                                className={styles.customCategoryInput}
+                                defaultValue=""
+                                style={{ width: '100%', cursor: 'pointer' }}
+                            >
+                                <option value="" disabled>Choose a specific {l1Label.toLowerCase()}...</option>
+                                {l1Entities.map(l1 => (
+                                    <option key={l1.id} value={l1.name}>
+                                        {l1.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <form onSubmit={handleLaunchCustomCategory} className={styles.customInputForm}>
-                        <label className={styles.inputLabel}>Create Custom Criterion</label>
+                        <label className={styles.inputLabel}>Or enter custom prompt</label>
                         <div className={styles.inputWrapper}>
                             <input
                                 type="text"
                                 value={customCategory}
                                 onChange={(e) => setCustomCategory(e.target.value)}
-                                placeholder="e.g., Best Hairstyle, Most Underrated..."
+                                placeholder="e.g., Face, Dance, Voice or custom scenario..."
                                 className={styles.customCategoryInput}
                                 maxLength={50}
                             />
