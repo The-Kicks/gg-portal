@@ -3,12 +3,12 @@
  * Doel: De hoofdinterface voor het beheren van thema-profielen in het admin-paneel.
  */
 import { useParams } from 'react-router-dom';
-import { GLOBAL_AVAILABLE_GAMES, GUESSWHO_AVAILABLE_COLUMNS } from '../../core/gamesConfig';
-import { useAdminTheme } from './AdminTheme/useAdminTheme';
-import { ThemeOverviewTable } from './AdminTheme/ThemeOverviewTable';
-import { LayerMetadataCard } from './AdminTheme/LayerMetadataCard';
-import type { Theme, MetaDataStandard } from '../../types';
-import styles from './AdminGlobal.module.css';
+import { GLOBAL_AVAILABLE_GAMES, GUESSWHO_AVAILABLE_COLUMNS } from '../../../core/gamesConfig';
+import { useAdminTheme } from './useAdminTheme';
+import { ThemeOverviewTable } from './ThemeOverviewTable';
+import { LayerMetadataCard } from './LayerMetadataCard';
+import type { Theme, MetaDataStandard } from '../../../types';
+import styles from '../AdminGlobal.module.css';
 
 interface AdminThemeManagerProps {
     loadedThemes: Theme[];

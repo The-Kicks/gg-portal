@@ -164,23 +164,22 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
               }
             };
             teammatesMap.set(entity.id, { l4: enrichedEntity, l3: [p] });
+          } else {
+            const existing = teammatesMap.get(entity.id);
+            if (existing && !existing.l3.some(group => group.id === p.id)) {
+              existing.l3.push(p);
+            }
           }
         }
       });
     });
 
     const rawTeammates = Array.from(teammatesMap.values());
-    const STANDALONE_KEYWORDS = ['soloist', 'retired', 'free agent', 'independent', 'solo', 'none'];
-    const badgeKey = theme.layerMetadata?.['l4']?.badgeKey;
+    const formerTriggerValue = String(theme.layerMetadata?.['l4']?.statusTriggers?.former?.value || 'former').toLowerCase();
 
     return rawTeammates.map(member => {
       const explicitStatus = String(member.l4?.metadata?.['membershipStatus'] || '').toLowerCase();
-      const badgeValue = badgeKey ? String(member.l4?.metadata?.[badgeKey] || '').toLowerCase() : '';
-
-      const isFormerTeammate =
-        explicitStatus === 'former' ||
-        STANDALONE_KEYWORDS.includes(badgeValue) ||
-        !!member.l4?.isStandalone;
+      const isFormerTeammate = explicitStatus === 'former' || explicitStatus === formerTriggerValue;
 
       return {
         ...member,
@@ -197,21 +196,22 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
   const groupedTeammates = useMemo(() => {
     const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
+    
     relatedTeammates.forEach(member => {
-      const group = member.l3?.[0];
-      if (!group) return;
-      if (!groups[group.id]) {
-        groups[group.id] = { groupName: group.name, members: [] };
-      }
-      groups[group.id].members.push(member);
+      member.l3.forEach(group => {
+        if (!groups[group.id]) {
+          groups[group.id] = { groupName: group.name, members: [] };
+        }
+        groups[group.id].members.push(member);
+      });
     });
     return groups;
   }, [relatedTeammates]);
 
   const groupKeys = useMemo(() => {
     return Object.keys(groupedTeammates).sort((a, b) => {
-      const groupA = groupedTeammates[a].members[0].l3?.[0];
-      const groupB = groupedTeammates[b].members[0].l3?.[0];
+      const groupA = groupedTeammates[a].members[0]?.l3?.find(g => g.id === a);
+      const groupB = groupedTeammates[b].members[0]?.l3?.find(g => g.id === b);
       const statusA = (groupA?.status === 'active' || groupA?.metadata?.membershipStatus === 'active') ? 0 : 1;
       const statusB = (groupB?.status === 'active' || groupB?.metadata?.membershipStatus === 'active') ? 0 : 1;
       if (statusA !== statusB) return statusA - statusB;
@@ -267,7 +267,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       }));
   }, [profileDetails, theme.labels, theme.layerMetadata]);
 
-  // Vrijgemaakt van handmatige array-vulling: puur doorsturen naar de DOM handler
   const preparedMediaSections = useMemo(() => {
     const entityImages = profileDetails?.targetEntity.image as EntityImages | undefined;
     if (!profileDetails?.targetEntity || !entityImages) return {};

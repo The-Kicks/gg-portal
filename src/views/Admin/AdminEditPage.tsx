@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AdminEntityEdit } from './AdminEntityEdit';
+import { AdminEntityEdit } from './AdminEdit/AdminEntityEdit';
 import { entityService } from './EntityService';
 import type { Theme } from '../../types';
 import styles from './AdminGlobal.module.css';
@@ -55,4 +55,4 @@ export const AdminEditPage: React.FC<Props> = ({ theme }) => {
       />
     </div>
   );
-};
+};  
