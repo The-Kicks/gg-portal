@@ -42,6 +42,15 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
   const [albumInput, setAlbumInput] = useState('');
   const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
 
+  // --- Helper: Normalize Imgur Links (.gifv format workaround) ---
+  const cleanImgUrl = (url: string): string => {
+    const trimmed = url.trim();
+    if (trimmed.toLowerCase().endsWith('.gifv')) {
+      return trimmed.slice(0, -5) + '.mp4';
+    }
+    return trimmed;
+  };
+
   // --- LAZY STATE INITIALIZATION: MEDIA ASSETS ---
   const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
     const nextImages: Record<string, string> = {};
@@ -173,28 +182,52 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
 
   // --- Synchronous Drop Action Handlers ---
   const handleAssignImage = (url: string, key: string) => {
-    setUnassignedImages(prev => prev.filter(u => u !== url));
+    const cleanedUrl = cleanImgUrl(url);
+    console.log(`[Hook Log] handleAssignImage executed -> target field: "${key}", url: "${cleanedUrl}"`);
+    
     setImageInputs(prev => {
-      const currentVal = prev[key] || '';
-      const urls = currentVal.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
-      if (!urls.includes(url)) {
-        urls.push(url);
+      const currentVal = prev[key] ? prev[key].trim() : '';
+      
+      if (!currentVal) {
+        console.log(`[Hook Log] Field "${key}" was empty. Appending asset directly.`);
+        return { ...prev, [key]: cleanedUrl };
       }
-      return { ...prev, [key]: urls.join('\n') };
+      
+      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+      if (urls.includes(cleanedUrl)) {
+        console.warn(`[Hook Log] Prevented assignment: "${cleanedUrl}" already registered inside field "${key}".`);
+        return prev;
+      }
+      
+      console.log(`[Hook Log] Field "${key}" has existing data. Merging array list.`);
+      return { ...prev, [key]: [...urls, cleanedUrl].join(', ') };
+    });
+
+    setUnassignedImages(prev => {
+      const filtered = prev.filter(u => cleanImgUrl(u) !== cleanedUrl);
+      console.log(`[Hook Log] Staging pool update. Previous count: ${prev.length}, Next count: ${filtered.length}`);
+      return filtered;
     });
   };
 
   const handleUnassignImage = (url: string, sourceKey: string) => {
+    const cleanedUrl = cleanImgUrl(url);
+    console.log(`[Hook Log] handleUnassignImage executed -> returning asset from field "${sourceKey}" back to pool.`);
+
     setImageInputs(prev => {
       const currentVal = prev[sourceKey] || '';
-      const urls = currentVal.split(/[\s,]+/).map(s => s.trim()).filter(s => s && s !== url);
-      return { ...prev, [sourceKey]: urls.join('\n') };
+      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+      const updatedUrls = urls.filter(u => cleanImgUrl(u) !== cleanedUrl);
+      return { ...prev, [sourceKey]: updatedUrls.join(', ') };
     });
+
     setUnassignedImages(prev => {
-      if (!prev.includes(url)) {
-        return [...prev, url];
+      const normalizedPrev = prev.map(cleanImgUrl);
+      if (normalizedPrev.includes(cleanedUrl)) {
+        console.log("[Hook Log] Asset already safely present in staging pool. Skipping duplicate push.");
+        return prev;
       }
-      return prev;
+      return [...prev, cleanedUrl];
     });
   };
 
@@ -277,7 +310,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
   };
 
   const handleRemoveImageField = (key: string) => {
-    if (CORE_IMAGE_FIELDS.includes(key)) {
+    if (CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
       alert(`Field "${key}" is core and cannot be removed.`);
       return;
     }
@@ -317,6 +350,23 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     return result;
   };
 
+  const reconstructImageObject = (
+    currentInputs: Record<string, string>
+  ): Record<string, string | string[]> => {
+    const result: Record<string, string | string[]> = {};
+    Object.keys(currentInputs).forEach(key => {
+      const rawValue = currentInputs[key];
+      if (!rawValue || !rawValue.trim()) return;
+
+      if (rawValue.includes(',')) {
+        result[key] = rawValue.split(',').map(s => cleanImgUrl(s)).filter(Boolean);
+      } else {
+        result[key] = cleanImgUrl(rawValue);
+      }
+    });
+    return result;
+  };
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       alert("Please enter a valid name.");
@@ -351,17 +401,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       updatedMetadata[trigger.key] = trigger.value;
     }
 
-    // Explicit formatting outputting cleaned space-separated string arrays matching the schema
-    const cleanedImages: Record<string, string> = {};
-    Object.keys(imageInputs).forEach(k => {
-      if (imageInputs[k] && imageInputs[k].trim()) {
-        cleanedImages[k] = imageInputs[k]
-          .split(/[\s,]+/)
-          .map(s => s.trim())
-          .filter(Boolean)
-          .join(' ');
-      }
-    });
+    const updatedImage = reconstructImageObject(imageInputs);
 
     const newSkeleton: BaseEntity = {
       id: generatedId,
@@ -370,7 +410,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       type: type,
       status: status,
       isStandalone: isStandalone,
-      image: cleanedImages as unknown as BaseEntity['image'],
+      image: updatedImage as unknown as BaseEntity['image'],
       metadata: updatedMetadata
     };
 

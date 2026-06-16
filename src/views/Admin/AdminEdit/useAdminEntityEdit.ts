@@ -43,7 +43,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     return (theme.entities || []).find(e => e.id === entityId);
   }, [theme, entityId]);
 
-  // --- LAZY STATE INITIALIZATION ---
+  // --- STATE TRACKING FOR CLEAN SWITCHING WITHOUT LINTER ERRORS ---
+  const [prevEntityId, setPrevEntityId] = useState<string>(entityId);
+
+  // --- CORE FIELDS STATES ---
   const [name, setName] = useState<string>(() => originalEntity?.name || '');
   const [status, setStatus] = useState<string>(() => originalEntity?.status || 'active');
   const [isStandalone, setIsStandalone] = useState<boolean>(() => originalEntity?.isStandalone || false);
@@ -52,20 +55,20 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   const [albumInput, setAlbumInput] = useState<string>('');
   const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
 
-  const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
+  // Helper to build image inputs map
+  const buildImageInputs = (entity: HydratedEntity | undefined) => {
     const imgInputs: Record<string, string> = {};
-    if (originalEntity?.image) {
-      Object.entries(originalEntity.image).forEach(([key, val]) => {
+    if (entity?.image) {
+      Object.entries(entity.image).forEach(([key, val]) => {
         imgInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
       });
     }
-
     if (theme.layerMetadata) {
       try {
         const parsed = typeof theme.layerMetadata === 'string'
           ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
           : (theme.layerMetadata as unknown as LayerMetadataMap);
-        const currentType = originalEntity?.type?.toLowerCase() || '';
+        const currentType = entity?.type?.toLowerCase() || '';
         const currentLayerConfig = parsed[currentType];
 
         if (currentLayerConfig && Array.isArray(currentLayerConfig.mediaKeys)) {
@@ -73,18 +76,19 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
             if (k && imgInputs[k] === undefined) imgInputs[k] = '';
           });
         }
-      } catch (e: unknown) {
-        console.error("Error patching theme schema media fields into initial edit state:", e);
+      } catch {
+        // Fallback gracefully
       }
     }
     return imgInputs;
-  });
+  };
 
-  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
+  // Helper to build metadata inputs map
+  const buildMetadataInputs = (entity: HydratedEntity | undefined) => {
     const metaInputs: Record<string, string> = {};
-    if (!originalEntity) return metaInputs;
+    if (!entity) return metaInputs;
 
-    const currentType = originalEntity.type?.toLowerCase() || '';
+    const currentType = entity.type?.toLowerCase() || '';
 
     if (currentType === 'l4') {
       REQUIRED_L4_FIELDS.forEach(field => {
@@ -92,8 +96,8 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       });
     }
 
-    if (originalEntity.metadata) {
-      Object.entries(originalEntity.metadata).forEach(([dbKey, val]) => {
+    if (entity.metadata) {
+      Object.entries(entity.metadata).forEach(([dbKey, val]) => {
         const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
         const targetKey = match || dbKey;
         metaInputs[targetKey] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
@@ -125,16 +129,32 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
             });
           }
         }
-      } catch (e: unknown) {
-        console.error("Error patching theme schema fields into initial edit state:", e);
+      } catch {
+        // Fallback gracefully
       }
     }
-
     return metaInputs;
-  });
+  };
 
+  const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => buildImageInputs(originalEntity));
+  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => buildMetadataInputs(originalEntity));
   const [localConnections, setLocalConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.connections || []);
   const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.targetConnections || []);
+
+  // --- SYNCHRONOUS STATE RESET ON RE-RENDER WHEN ENTITY CHANGES ---
+  // This complies with React's best practices for resetting state from props without useEffect hooks
+  if (entityId !== prevEntityId) {
+    setPrevEntityId(entityId);
+    setName(originalEntity?.name || '');
+    setStatus(originalEntity?.status || 'active');
+    setIsStandalone(originalEntity?.isStandalone || false);
+    setAlbumInput('');
+    setUnassignedImages([]);
+    setImageInputs(buildImageInputs(originalEntity));
+    setMetadataInputs(buildMetadataInputs(originalEntity));
+    setLocalConnections(originalEntity?.connections || []);
+    setLocalTargetConnections(originalEntity?.targetConnections || []);
+  }
 
   const entitiesPool = useMemo(() => {
     return theme.entities || [];
@@ -158,8 +178,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
         ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
         : (theme.layerMetadata as unknown as LayerMetadataMap);
       return parsedConfig[currentLayer];
-    } catch (err: unknown) {
-      console.error("Error parsing schema configuration layer metadata:", err);
+    } catch {
       return undefined;
     }
   }, [theme.layerMetadata, originalEntity?.type]);
@@ -301,18 +320,24 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     setMetadataInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
-  const handleConnectionStatusChange = (connId: number, newStatus: string) => {
-    setLocalConnections(prev =>
-      prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, status: newStatus } } : c))
-    );
-    setLocalTargetConnections(prev =>
-      prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, status: newStatus } } : c))
-    );
+  const handleConnectionStatusChange = (connId: number, direction: 'outgoing' | 'incoming', newStatus: string) => {
+    if (direction === 'outgoing') {
+      setLocalConnections(prev =>
+        prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, status: newStatus } } : c))
+      );
+    } else {
+      setLocalTargetConnections(prev =>
+        prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, status: newStatus } } : c))
+      );
+    }
   };
 
-  const handleRemoveConnection = (connId: number) => {
-    setLocalConnections(prev => prev.filter(c => c.id !== connId));
-    setLocalTargetConnections(prev => prev.filter(c => c.id !== connId));
+  const handleRemoveConnection = (connId: number, direction: 'outgoing' | 'incoming') => {
+    if (direction === 'outgoing') {
+      setLocalConnections(prev => prev.filter(c => c.id !== connId));
+    } else {
+      setLocalTargetConnections(prev => prev.filter(c => c.id !== connId));
+    }
   };
 
   const handleAddConnection = (selectedEntityId: string) => {
@@ -330,13 +355,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     const currentLayerLevel = LAYER_ORDER[originalEntity.type.toLowerCase()] || 99;
     const selectedLayerLevel = LAYER_ORDER[selectedNode.type.toLowerCase()] || 99;
 
-    const allExistingIds = [
-      ...localConnections.map(c => c.id),
-      ...localTargetConnections.map(c => c.id)
-    ];
-    const maxId = allExistingIds.length > 0 ? Math.max(...allExistingIds) : 0;
-    const connectionId = maxId + 1;
-
+    const connectionId = -1 - Math.floor(Math.random() * 1000000);
     const baseMeta = { status: 'active' };
 
     if (currentLayerLevel <= selectedLayerLevel) {
@@ -363,10 +382,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   };
 
   // --- FIXED MEDIA PORTAL HANDLING ---
-  
-  /**
-   * Splits input values by line breaks, spaces or commas to parse multi-url asset lists
-   */
   const handleParseAlbum = () => {
     if (!albumInput.trim()) return;
 
@@ -389,30 +404,19 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     }
   };
 
-  /**
-   * FIXED: Appends image URLs to the existing asset field data using comma separation.
-   * This ensures multiple previews render simultaneously instead of over-writing single string inputs.
-   */
   const handleAssignImage = (url: string, key: string) => {
     setImageInputs(prev => {
       const currentVal = prev[key] ? prev[key].trim() : '';
-      
-      if (!currentVal) {
-        return { ...prev, [key]: url };
-      }
+      if (!currentVal) return { ...prev, [key]: url };
       
       const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
       if (urls.includes(url)) return prev;
       
       return { ...prev, [key]: [...urls, url].join(', ') };
     });
-
     setUnassignedImages(prev => prev.filter(u => u !== url));
   };
 
-  /**
-   * Isolates and slices a single detached asset image node from a comma-separated text string pool
-   */
   const handleUnassignImage = (url: string, key: string) => {
     setImageInputs(prev => {
       const currentVal = prev[key] || '';
@@ -420,7 +424,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       const updatedUrls = urls.filter(u => u !== url);
       return { ...prev, [key]: updatedUrls.join(', ') };
     });
-
     setUnassignedImages(prev => {
       if (prev.includes(url)) return prev;
       return [...prev, url];
@@ -455,7 +458,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
 
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
-
       if (!rawValue || !rawValue.trim()) return;
 
       if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
@@ -485,7 +487,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     }
 
     if (!originalEntity) return;
-
     if (!name.trim()) {
       alert("Please enter a valid name.");
       return;
@@ -508,7 +509,9 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
         return;
       }
 
-      const passingDate = metadataInputs['PassingDate']?.trim();
+      const passingDateKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === 'passingdate');
+      const passingDate = passingDateKey ? metadataInputs[passingDateKey]?.trim() : undefined;
+      
       if (passingDate && !dateRegex.test(passingDate)) {
         alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
         return;
@@ -547,8 +550,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       if (onSave) {
         await onSave(updatedEntity);
       }
-    } catch (err: unknown) {
-      console.error(err);
+    } catch {
       alert("Could not update the entity modifications.");
     }
   };

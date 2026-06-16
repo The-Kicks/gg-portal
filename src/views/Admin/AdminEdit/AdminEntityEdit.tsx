@@ -19,32 +19,42 @@ interface AdminEntityEditProps {
   onCancel: () => void | Promise<void>;
 }
 
+/**
+ * Helper function to format all media assets strictly as space-separated strings.
+ * Built to be fully type-safe without using the 'any' type.
+ */
+const formatEntityImages = (imageObj: Record<string, unknown>): Record<string, string> => {
+  const formatted: Record<string, string> = {};
+
+  Object.keys(imageObj).forEach(key => {
+    const value = imageObj[key];
+    if (Array.isArray(value)) {
+      formatted[key] = value
+        .flatMap(v => typeof v === 'string' ? v.split(/[\s,]+/) : [])
+        .map(s => s.trim())
+        .filter(Boolean)
+        .join(' ');
+    } else if (typeof value === 'string') {
+      formatted[key] = value
+        .split(/[\s,]+/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .join(' ');
+    } else {
+      formatted[key] = '';
+    }
+  });
+
+  return formatted;
+};
+
 export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityId, onSave, onCancel }) => {
 
   // Intercept the save process to format all media assets strictly as space-separated strings
   const handleLocalSave = async (updatedEntity: HydratedEntity) => {
     if (updatedEntity.image) {
-      const formattedImage = {} as Record<string, string>;
-
-      Object.keys(updatedEntity.image).forEach(key => {
-        const value = (updatedEntity.image as Record<string, unknown>)[key];
-        if (Array.isArray(value)) {
-          formattedImage[key] = value
-            .flatMap(v => typeof v === 'string' ? v.split(/[\s,]+/) : [])
-            .map(s => s.trim())
-            .filter(Boolean)
-            .join(' ');
-        } else if (typeof value === 'string') {
-          formattedImage[key] = value
-            .split(/[\s,]+/)
-            .map(s => s.trim())
-            .filter(Boolean)
-            .join(' ');
-        } else {
-          formattedImage[key] = '';
-        }
-      });
-
+      const formattedImage = formatEntityImages(updatedEntity.image as Record<string, unknown>);
+      
       // Type-assert explicitly to EntityImages to satisfy strict type requirements without using any
       updatedEntity.image = formattedImage as NonNullable<HydratedEntity['image']>;
     }
@@ -422,7 +432,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                 <div className={styles.labelActionRow}>
                   <span>
                     {key}
-                    {isCoreMediaKey && <small className={styles.textWarning} style={{ color: '#d32f2f' }}> (Core Asset 🔒)</small>}
+                    {isCoreMediaKey && <span className={styles.textWarning} style={{ color: '#d32f2f' }}> (Core Asset 🔒)</span>}
                   </span>
                   <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove Field</button>
                 </div>
@@ -522,13 +532,13 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   {isL4ToL4 && <span className={styles.textWarning}>Cross-individual connection</span>}
                 </span>
                 <div className={styles.buttonGroup} style={{ gap: '10px' }}>
-                  <select value={conn.status} onChange={e => handleConnectionStatusChange(conn.id, e.target.value)} className={styles.inputField} style={{ padding: '6px 10px', width: 'auto' }}>
+                  <select value={conn.status} onChange={e =>handleConnectionStatusChange(conn.id, conn.direction, e.target.value)} className={styles.inputField} style={{ padding: '6px 10px', width: 'auto' }}>
                     <option value="active">Active</option>
                     <option value="former">Former</option>
                     <option value="inactive">Inactive</option>
                     <option value="retired">Retired</option>
                   </select>
-                  <button type="button" onClick={() => handleRemoveConnection(conn.id)} className={styles.btnUnlink}>Unlink</button>
+                  <button type="button" onClick={() =>handleRemoveConnection(conn.id, conn.direction)} className={styles.btnUnlink}>Unlink</button>
                 </div>
               </div>
 
@@ -541,17 +551,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     onSave={async (updatedChild) => {
                       try {
                         if (updatedChild.image) {
-                          const childFormattedImage = {} as Record<string, string>;
-                          Object.keys(updatedChild.image).forEach(ckey => {
-                            const cval = (updatedChild.image as Record<string, unknown>)[ckey];
-                            if (Array.isArray(cval)) {
-                              childFormattedImage[ckey] = cval.flatMap(v => typeof v === 'string' ? v.split(/[\s,]+/) : []).map(s => s.trim()).filter(Boolean).join(' ');
-                            } else if (typeof cval === 'string') {
-                              childFormattedImage[ckey] = cval.split(/[\s,]+/).map(s => s.trim()).filter(Boolean).join(' ');
-                            } else {
-                              childFormattedImage[ckey] = '';
-                            }
-                          });
+                          const childFormattedImage = formatEntityImages(updatedChild.image as Record<string, unknown>);
                           updatedChild.image = childFormattedImage as NonNullable<HydratedEntity['image']>;
                         }
 

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
-import { useAdminEntityCreate } from './useAdminEntityCreate';
+import { useAdminEntityCreate, CORE_IMAGE_FIELDS } from './useAdminEntityCreate';
 import styles from '../AdminGlobal.module.css';
 
 interface Props {
@@ -46,63 +46,44 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     handleSubmit
   } = useAdminEntityCreate({ theme, onSave });
 
+  // Tracks the current active drag source to manage UI state
+  const [activeDragSource, setActiveDragSource] = useState<string | null>(null);
+
   const getInputValidationClass = (): string => {
     if (idStatus === 'available') return styles.inputAvailable;
     if (idStatus === 'taken') return styles.inputTaken;
     return '';
   };
 
-  // Helper function to verify if a URL represents a video asset
   const isVideoUrl = (url: string): boolean => {
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
-    const videoPlatforms = ['youtube.com', 'youtu.be', 'vimeo.com', 'twitch.tv', 'streamable.com'];
     const lowerUrl = url.toLowerCase();
-    return (
-      videoExtensions.some(ext => lowerUrl.includes(ext)) ||
-      videoPlatforms.some(platform => lowerUrl.includes(platform))
-    );
+    return lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.webm');
   };
 
-  // Helper function to extract valid embed targets for video previews
-  const getVideoEmbedUrl = (url: string): string | null => {
-    const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes('youtube.com/watch')) {
-      const videoId = url.split('v=')[1]?.split('&')[0];
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-    }
-    if (lowerUrl.includes('youtu.be/')) {
-      const videoId = url.split('youtu.be/')[1]?.split('?')[0];
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-    }
-    if (lowerUrl.includes('vimeo.com/')) {
-      const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
-      return videoId ? `https://player.vimeo.com/video/${videoId}` : null;
-    }
-    return null;
-  };
-
-  // Bulk link digestion handler blocking duplicate assets synchronously
   const handleCustomParseAlbum = () => {
     if (!albumInput.trim()) return;
 
     const freshUrls = albumInput
       .split(/[\s,]+/)
       .map(s => s.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(url => {
+        if (url.toLowerCase().endsWith('.gifv')) {
+          return url.slice(0, -5) + '.mp4';
+        }
+        return url;
+      });
 
     const dynamicAssignedUrls: string[] = [];
-    Object.keys(imageInputs).forEach(key => {
-      const val = imageInputs[key];
+    Object.values(imageInputs).forEach(val => {
       if (val) {
-        const parsed = val.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+        const parsed = val.split(',').map(s => s.trim()).filter(Boolean);
         dynamicAssignedUrls.push(...parsed);
       }
     });
 
     const uniqueFreshUrls = freshUrls.filter(url => {
-      const isAlreadyInPool = unassignedImages.includes(url);
-      const isAlreadyInAssets = dynamicAssignedUrls.includes(url);
-      return !isAlreadyInPool && !isAlreadyInAssets;
+      return !unassignedImages.includes(url) && !dynamicAssignedUrls.includes(url);
     });
 
     if (uniqueFreshUrls.length > 0) {
@@ -123,6 +104,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
             Name {idStatus === 'taken' && <span className={styles.textError}>(ID taken!)</span>}
           </div>
           <input
+            id="base-name-input"
+            name="name"
             type="text"
             placeholder="e.g., Johan Cruijff"
             value={name}
@@ -133,6 +116,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         <div>
           <div className={styles.fieldLabel}>Unique Suffix (Optional)</div>
           <input
+            id="base-suffix-input"
+            name="customSuffix"
             type="text"
             placeholder="e.g., Ajax"
             value={customSuffix}
@@ -143,6 +128,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         <div>
           <div className={styles.fieldLabel}>Tier / Layer Type</div>
           <select
+            id="base-type-select"
+            name="type"
             value={type}
             onChange={e => handleTypeChange(e.target.value)}
             className={styles.inputField}
@@ -165,6 +152,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         <div>
           <div className={styles.fieldLabel}>Status</div>
           <select
+            id="base-status-select"
+            name="status"
             value={status}
             onChange={e => setStatus(e.target.value)}
             className={styles.inputField}
@@ -183,6 +172,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         <div>
           <div className={styles.fieldLabel}>Standalone Node</div>
           <input
+            id="base-standalone-checkbox"
+            name="isStandalone"
             type="checkbox"
             checked={isStandalone}
             onChange={e => setIsStandalone(e.target.checked)}
@@ -192,6 +183,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         <div>
           <div className={styles.fieldLabel}>Passing Date</div>
           <input
+            id="meta-field-PassingDate"
+            name="PassingDate"
             type="text"
             placeholder="DD-MM-YYYY"
             value={metadataInputs['PassingDate'] || ''}
@@ -201,7 +194,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         </div>
       </div>
 
-      {/* SECTION A: CORE REQUIRED GAME FIELDS */}
+      {/* Required Game Fields */}
       {type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
         <div className={styles.requiredSection}>
           <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
@@ -210,6 +203,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
               <div key={key}>
                 <div className={styles.requiredLabel}>{key}</div>
                 <input
+                  id={`required-field-${key}`}
+                  name={key}
                   type="text"
                   placeholder={`Enter required ${key}`}
                   value={metadataInputs[key] || ''}
@@ -222,7 +217,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
         </div>
       )}
 
-      {/* SECTION B: DYNAMIC THEME ATTRIBUTES */}
+      {/* Dynamic Attributes */}
       <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Populated via {type.toUpperCase()} Theme Schema)</h3>
       <div className={styles.innerSection}>
         {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
@@ -243,6 +238,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
                   {triggerValues ? (
                     <select
+                      id={`dynamic-select-${key}`}
+                      name={key}
                       value={metadataInputs[key] || ''}
                       onChange={e => handleMetadataInputChange(key, e.target.value)}
                       className={styles.inputField}
@@ -256,6 +253,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                     </select>
                   ) : (
                     <input
+                      id={`dynamic-input-${key}`}
+                      name={key}
                       type="text"
                       value={metadataInputs[key] || ''}
                       onChange={e => handleMetadataInputChange(key, e.target.value)}
@@ -268,21 +267,21 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         )}
         <div className={styles.innerActionRow}>
-          <input type="text" placeholder="e.g., Twitter" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} className={styles.inlineInput} />
+          <input id="new-metadata-key-input" name="newMetadataKey" type="text" placeholder="e.g., Twitter" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} className={styles.inlineInput} />
           <button type="button" onClick={handleAddMetadataField} className={`${styles.btn} ${styles.btnPrimary}`}>Add Attribute Property</button>
         </div>
       </div>
 
-      {/* SECTION C: MEDIA ASSETS */}
-      <h3 className={styles.sectionTitle}>📸 Media Assets (Optional per Theme {type.toUpperCase()} Schema)</h3>
+      {/* Media Assets */}
+      <h3 className={styles.sectionTitle}>📸 Media Assets (Imgur CDN Links Only)</h3>
       <div className={styles.innerSection}>
-
-        {/* Bulk Link Ingestion Field */}
         <div style={{ marginBottom: '15px' }}>
-          <div className={styles.fieldLabel} style={{ fontSize: '12px' }}>📋 Bulk Link Ingestion List</div>
+          <div className={styles.fieldLabel} style={{ fontSize: '12px' }}>📋 Bulk Imgur Link Ingestion List</div>
           <div className={styles.innerActionRow} style={{ marginTop: '5px' }}>
             <textarea
-              placeholder="Paste multiple URLs separated by spaces, commas or newlines..."
+              id="bulk-album-textarea"
+              name="albumInput"
+              placeholder="Paste Imgur links separated by spaces, commas or newlines..."
               value={albumInput}
               onChange={e => setAlbumInput(e.target.value)}
               className={styles.textareaField}
@@ -299,7 +298,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         </div>
 
-        {/* Unassigned Drag Pool Container */}
+        {/* Unassigned Drag Pool */}
         {unassignedImages.length > 0 && (
           <div
             className={styles.innerActionRow}
@@ -311,52 +310,60 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
             onDrop={e => {
               e.preventDefault();
               const dragData = e.dataTransfer.getData('text/plain');
+              
               try {
-                const { url, sourceKey } = JSON.parse(dragData);
-                if (sourceKey) {
-                  // Safely disconnect asset directly out of field back into staging pool
-                  handleUnassignImage(url, sourceKey);
+                if (dragData && dragData.startsWith('{')) {
+                  const { url, sourceKey } = JSON.parse(dragData);
+                  if (sourceKey) {
+                    handleUnassignImage(url, sourceKey);
+                    return;
+                  }
                 }
-              } catch {
-                const url = e.dataTransfer.getData('url') || dragData;
-                if (url && !unassignedImages.includes(url)) {
-                  setUnassignedImages(prev => [...prev, url]);
+              } catch (err) {
+                console.warn("[UI Log] JSON processing error on pool drop.", err);
+              }
+
+              let fallbackUrl = e.dataTransfer.getData('url') || dragData;
+              if (fallbackUrl) {
+                fallbackUrl = fallbackUrl.trim();
+                if (fallbackUrl.toLowerCase().endsWith('.gifv')) {
+                  fallbackUrl = fallbackUrl.slice(0, -5) + '.mp4';
+                }
+                if (!unassignedImages.includes(fallbackUrl)) {
+                  setUnassignedImages(prev => [...prev, fallbackUrl]);
                 }
               }
             }}
           >
-            {unassignedImages.map((url, idx) => {
-              const embedUrl = getVideoEmbedUrl(url);
-              return (
-                <div
-                  key={`${url}-${idx}`}
-                  draggable
-                  onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: null })); }}
-                  style={{ position: 'relative', cursor: 'grab', flexShrink: 0 }}
-                >
-                  {isVideoUrl(url) ? (
-                    <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333' }}>
-                      {embedUrl ? (
-                        <iframe src={embedUrl} title="Video preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }} />
-                      ) : (
-                        <video src={url} muted loop autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      )}
-                    </div>
-                  ) : (
-                    <img src={url} alt="Staging thumb" style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
-                  )}
-                </div>
-              );
-            })}
+            {unassignedImages.map((url, idx) => (
+              <div
+                key={`${url}-${idx}`}
+                draggable
+                onDragStart={e => {
+                  setTimeout(() => setActiveDragSource('pool'), 0);
+                  e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: null }));
+                }}
+                onDragEnd={() => setActiveDragSource(null)}
+                style={{ position: 'relative', cursor: 'grab', flexShrink: 0 }}
+              >
+                {isVideoUrl(url) ? (
+                  <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333' }}>
+                    <video src={url} muted loop autoPlay draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                  </div>
+                ) : (
+                  <img src={url} alt="Staging thumb" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', pointerEvents: 'none' }} />
+                )}
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Unified Media Asset Inputs Grid */}
+        {/* Media Asset Inputs Grid */}
         <div className={styles.twoColumnGrid}>
           {Object.keys(imageInputs).map(key => {
-            const isCoreMediaKey = ['profilecard', 'herobanner'].includes(key.toLowerCase());
+            const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
             const rawValue = imageInputs[key] || '';
-            const assignedUrls = rawValue.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+            const assignedUrls = rawValue.split(',').map(s => s.trim()).filter(Boolean);
 
             return (
               <div
@@ -365,150 +372,114 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                 onDrop={e => {
                   e.preventDefault();
                   const dragData = e.dataTransfer.getData('text/plain');
+                  let urlToAssign = '';
+                  let detectedSourceKey: string | null = null;
+
                   try {
-                    const { url, sourceKey } = JSON.parse(dragData);
-                    if (sourceKey === key) return;
-
-                    if (sourceKey) {
-                      // Synchronous cross-field batch pass assignment bypassing intermediate staging renders
-                      const sourceList = (imageInputs[sourceKey] || '')
-                        .split(/[\s,]+/)
-                        .map(s => s.trim())
-                        .filter(s => s && s !== url);
-
-                      const targetList = rawValue
-                        .split(/[\s,]+/)
-                        .map(s => s.trim())
-                        .filter(Boolean);
-
-                      if (!targetList.includes(url)) {
-                        targetList.push(url);
-                      }
-
-                      handleImageInputChange(sourceKey, sourceList.join('\n'));
-                      handleImageInputChange(key, targetList.join('\n'));
-                    } else {
-                      // Asset injected straight from unassigned staging pool
-                      handleAssignImage(url, key);
+                    if (dragData && dragData.startsWith('{')) {
+                      const { url, sourceKey } = JSON.parse(dragData);
+                      urlToAssign = url;
+                      detectedSourceKey = sourceKey;
                     }
-                  } catch {
-                    const url = e.dataTransfer.getData('url') || dragData;
-                    if (url) {
-                      handleAssignImage(url, key);
-                    }
+                  } catch (err) {
+                    console.warn("[UI Log] Error parsing drop payload.", err);
+                  }
+
+                  if (!urlToAssign) urlToAssign = e.dataTransfer.getData('url') || dragData;
+                  if (!urlToAssign) return;
+                  
+                  urlToAssign = urlToAssign.trim();
+                  if (urlToAssign.toLowerCase().endsWith('.gifv')) {
+                    urlToAssign = urlToAssign.slice(0, -5) + '.mp4';
+                  }
+
+                  if (detectedSourceKey === key) return;
+
+                  if (detectedSourceKey) {
+                    const sourceList = (imageInputs[detectedSourceKey] || '')
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(s => s && s !== urlToAssign);
+
+                    const targetList = rawValue
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(Boolean);
+
+                    if (!targetList.includes(urlToAssign)) targetList.push(urlToAssign);
+
+                    handleImageInputChange(detectedSourceKey, sourceList.join(', '));
+                    handleImageInputChange(key, targetList.join(', '));
+                  } else {
+                    handleAssignImage(urlToAssign, key);
                   }
                 }}
               >
                 <div className={styles.labelActionRow}>
                   <span>
                     {key}
-                    {isCoreMediaKey ? (
-                      <small className={styles.textMuted}> (Core Asset)</small>
-                    ) : (
-                      <small className={styles.textWarning}> (Optional Theme-decided Key)</small>
-                    )}
+                    {isCoreMediaKey ? <small className={styles.textMuted}> (Core Asset)</small> : <small className={styles.textWarning}> (Optional Theme Key)</small>}
                   </span>
-                  {!isCoreMediaKey && (
-                    <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove</button>
-                  )}
+                  {!isCoreMediaKey && <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove</button>}
                 </div>
 
                 {assignedUrls.length > 0 && (
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                    {assignedUrls.map((url, uIdx) => {
-                      const embedUrl = getVideoEmbedUrl(url);
-                      return (
-                        <div
-                          key={`${url}-${uIdx}`}
-                          draggable
-                          onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: key })); }}
-                          style={{ position: 'relative', cursor: 'grab', transition: 'transform 0.2s ease' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.zIndex = '10'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.zIndex = '1'; }}
-                        >
-                          {isVideoUrl(url) ? (
-                            <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid currentColor' }}>
-                              {embedUrl ? (
-                                <iframe src={embedUrl} title="Video preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }} />
-                              ) : (
-                                <video src={url} muted loop autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              )}
-                            </div>
-                          ) : (
-                            <img src={url} alt="Asset preview" style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid currentColor', boxShadow: '0 4px 6px rgba(0,0,0,0.15)' }} />
-                          )}
-
-                          <button
-                            type="button"
-                            title="Duplicate to Staging Pool"
-                            onClick={() => {
-                              if (!unassignedImages.includes(url)) {
-                                setUnassignedImages(prev => [...prev, url]);
-                              }
-                            }}
-                            style={{
-                              position: 'absolute', top: '-5px', right: '-5px',
-                              background: '#22c55e', color: '#fff', border: 'none',
-                              borderRadius: '50%', width: '20px', height: '20px', fontSize: '14px',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.3)', zIndex: 20, fontWeight: 'bold'
-                            }}
-                          >
-                            +
-                          </button>
-                        </div>
-                      );
-                    })}
+                    {assignedUrls.map((url, subIdx) => (
+                      <div
+                        key={`${url}-${subIdx}`}
+                        draggable
+                        onDragStart={e => {
+                          setTimeout(() => setActiveDragSource(key), 0);
+                          e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: key }));
+                        }}
+                        onDragEnd={() => setActiveDragSource(null)}
+                        style={{ position: 'relative', cursor: 'grab', transition: 'transform 0.2s ease', pointerEvents: activeDragSource ? 'none' : 'auto' }}
+                      >
+                        {isVideoUrl(url) ? (
+                          <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid currentColor' }}>
+                            <video src={url} muted loop autoPlay draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                          </div>
+                        ) : (
+                          <img src={url} alt="Asset preview" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid currentColor', boxShadow: '0 4px 6px rgba(0,0,0,0.15)', pointerEvents: 'none' }} />
+                        )}
+                        <button
+                          type="button"
+                          title="Duplicate to Staging Pool"
+                          onClick={() => { if (!unassignedImages.includes(url)) setUnassignedImages(prev => [...prev, url]); }}
+                          style={{
+                            position: 'absolute', top: '-5px', right: '-5px', background: '#22c55e', color: '#fff', border: 'none',
+                            borderRadius: '50%', width: '20px', height: '20px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 20
+                          }}
+                        >+</button>
+                      </div>
+                    ))}
                   </div>
                 )}
-
                 <textarea
-                  placeholder="https://image-url.com/asset.png"
+                  id={`media-textarea-${key}`}
+                  name={key}
+                  placeholder="https://i.imgur.com/example.png"
                   value={rawValue}
-                  onChange={e => {
-                    handleImageInputChange(key, e.target.value);
-                    e.currentTarget.style.height = 'auto';
-                    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                  }}
-                  ref={el => {
-                    if (el) {
-                      el.style.height = 'auto';
-                      el.style.height = `${el.scrollHeight}px`;
-                    }
-                  }}
+                  onChange={e => handleImageInputChange(key, e.target.value)}
                   className={styles.textareaField}
-                  rows={1}
-                  style={{
-                    minHeight: '38px',
-                    resize: 'none',
-                    overflowY: 'hidden',
-                    lineHeight: '1.5'
-                  }}
+                  style={{ minHeight: '38px', resize: 'none', overflowY: 'hidden', pointerEvents: activeDragSource ? 'none' : 'auto' }}
                 />
               </div>
             );
           })}
         </div>
 
-        {/* Lower Action Row */}
         <div className={styles.innerActionRow}>
-          <input
-            type="text"
-            placeholder="e.g., logo or fanart"
-            value={newImageKey}
-            onChange={e => setNewImageKey(e.target.value)}
-            className={styles.inlineInput}
-          />
-          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>
-            Add Asset Field
-          </button>
+          <input id="new-image-key-input" name="newImageKey" type="text" placeholder="e.g., logo or fanart" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} className={styles.inlineInput} />
+          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>Add Asset Field</button>
         </div>
       </div>
 
-      {/* Action Footers */}
+      {/* Footer */}
       <div className={styles.footerActions}>
         <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
-        <button type="button" onClick={() => { void handleSubmit(); }} className={`${styles.btn} ${styles.btnPrimary}`}>Create & Save</button>
+        <button type="button" onClick={() => void handleSubmit()} className={`${styles.btn} ${styles.btnPrimary}`}>Create & Save</button>
       </div>
     </div>
   );
