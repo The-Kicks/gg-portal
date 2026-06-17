@@ -7,7 +7,10 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+
+// Increase the text/json payload limit to allow large theme graphs or embedded assets
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 interface EntityImages {
     profileCard: string;
@@ -92,7 +95,7 @@ interface FullThemeResponse {
     navbarItems: string[];
     labels: Record<string, string | undefined>;
     layerMetadata: Record<string, MetaDataStandard | undefined>;
-    gameSettings: GameSettings; // Samengestelde response voor de front-end
+    gameSettings: GameSettings; // Combined game settings response for the frontend
     entities: HydratedEntity[];
 }
 
@@ -110,7 +113,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
         const fullThemesResult: FullThemeResponse[] = [];
 
         for (const theme of themes) {
-            // 1. Haal data op uit de gekoppelde tabellen
+            // 1. Fetch data from linked tables
             const dbEntities = await prisma.entity.findMany({
                 where: { themeId: theme.id }
             });
@@ -119,18 +122,18 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 where: { themeId: theme.id }
             });
 
-            // 🌟 GEWIJZIGD: Haal ALLE rijen op voor dit thema (bijv. 'guesswho' EN 'blindranking')
+            // Fetch ALL rows for this theme (e.g., 'guesswho' AND 'blindranking')
             const dbGameSettings = await prisma.gameSetting.findMany({
                 where: { themeId: theme.id }
             });
 
-            // Reconstruct de losse rijen naar één gecombineerd front-end object
+            // Reconstruct individual rows into a single combined frontend object
             const combinedGameSettings: GameSettings = {};
             dbGameSettings.forEach((setting) => {
                 combinedGameSettings[setting.gameName] = setting.gameSettings as unknown as Record<string, unknown>;
             });
 
-            // 2. Map DB-data naar initiële HydratedEntity objecten
+            // 2. Map database records to initial HydratedEntity objects
             const hydratedEntities: HydratedEntity[] = dbEntities.map((e) => {
                 const entityMetadata = (e.metadata || {}) as Record<string, unknown>;
                 const extractedStatus = e.status
@@ -155,7 +158,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 hydratedEntities.map((e) => [e.id, e])
             );
 
-            // 3. Hydrateer alle edges (verbindingen) tussen de knopen
+            // 3. Hydrate all edges (connections) between the graph nodes
             for (const conn of dbConnections) {
                 const source = entityMap.get(conn.sourceEntityId);
                 const target = entityMap.get(conn.targetEntityId);
@@ -196,7 +199,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 if (target) target.targetConnections.push(hydratedConn);
             }
 
-            // 4. Bouw de complete response op
+            // 4. Construct the complete theme payload
             fullThemesResult.push({
                 id: theme.id,
                 title: theme.title,
@@ -224,8 +227,8 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
 
         res.json(fullThemesResult);
     } catch (error) {
-        console.error("Fout bij opbouwen van getypeerde graph dataset:", error);
-        res.status(500).json({ error: "Interne serverfout" });
+        console.error("Error building typed graph dataset:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -237,8 +240,8 @@ app.get('/api/themes/:themeId/entities/check/:entityId', async (req: Request, re
         });
         res.json({ exists: !!existingEntity });
     } catch (error) {
-        console.error("Fout bij controleren ID:", error);
-        res.status(500).json({ error: "Kon ID-controle niet uitvoeren" });
+        console.error("Error checking entity ID existence:", error);
+        res.status(500).json({ error: "Could not execute ID check" });
     }
 });
 
@@ -251,12 +254,12 @@ app.post('/api/themes', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // 🌟 GEWIJZIGD: Loop door de keys van gameSettings (guesswho, blindranking, etc.) en maak losse rijen aan
+        // Map gameSettings keys (guesswho, blindranking, etc.) to individual creation promises
         const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) => 
             prisma.gameSetting.create({
                 data: {
                     themeId: id,
-                    gameName: gameName, // Slaat nu dynamisch op onder "guesswho" of "blindranking"
+                    gameName: gameName,
                     gameSettings: (settings || {}) as Prisma.InputJsonValue
                 }
             })
@@ -280,8 +283,8 @@ app.post('/api/themes', async (req: Request, res: Response) => {
 
         res.status(201).json(newTheme);
     } catch (error) {
-        console.error("Fout bij aanmaken thema en/of gamesettings:", error);
-        res.status(500).json({ error: "Kon het thema niet aanmaken. Bestaat deze ID al?" });
+        console.error("Error creating theme and game settings:", error);
+        res.status(500).json({ error: "Could not create theme. Does this ID already exist?" });
     }
 });
 
@@ -295,13 +298,12 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // 🌟 GEWIJZIGD: Om conflicten of wezen-instellingen te voorkomen, schonen we eerst de oude settings
-        // voor dit specifieke thema op, en knallen daarna de actieve games er splinternieuw in via de transactie.
+        // To avoid orphan records, clear old settings first and insert current active games fresh inside the transaction
         const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) => 
             prisma.gameSetting.create({
                 data: {
                     themeId: id,
-                    gameName: gameName, // Netjes gesorteerd onder eigen naam
+                    gameName: gameName,
                     gameSettings: (settings || {}) as Prisma.InputJsonValue
                 }
             })
@@ -321,18 +323,16 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
                     layerMetadata: layerMetadata as Prisma.InputJsonValue
                 }
             }),
-            // Verwijder alle oude spelinstellingen voor dit specifieke thema
             prisma.gameSetting.deleteMany({
                 where: { themeId: id }
             }),
-            // Voeg de geüpdatete instellingen per spel toe
             ...gameSettingCreates
         ]);
 
         res.json(updatedTheme);
     } catch (error) {
-        console.error("Fout bij updaten thema en/of gamesettings:", error);
-        res.status(500).json({ error: "Kon het thema niet bijwerken." });
+        console.error("Error updating theme and game settings:", error);
+        res.status(500).json({ error: "Could not update theme layout." });
     }
 });
 
@@ -344,10 +344,10 @@ app.delete('/api/themes/:id', async (req: Request, res: Response) => {
             prisma.theme.delete({ where: { id } })
         ]);
         
-        res.json({ success: true, message: "Thema en alle gekoppelde entiteiten/connecties/instellingen succesvol verwijderd." });
+        res.json({ success: true, message: "Theme and all cascading entities/connections successfully removed." });
     } catch (error) {
-        console.error("Fout bij verwijderen thema:", error);
-        res.status(500).json({ error: "Kon het thema niet verwijderen." });
+        console.error("Error deleting theme graph:", error);
+        res.status(500).json({ error: "Could not delete the selected theme." });
     }
 });
 
@@ -383,8 +383,8 @@ app.post(
 
             res.status(201).json(responsePayload);
         } catch (error) {
-            console.error("Fout bij aanmaken entiteit:", error);
-            res.status(500).json({ error: "Kon entiteit niet aanmaken" });
+            console.error("Error creating base entity:", error);
+            res.status(500).json({ error: "Could not create entity node" });
         }
     }
 );
@@ -398,6 +398,9 @@ app.put(
         const { name, type, status, isStandalone, image, metadata, connections } = req.body;
 
         try {
+            // Guard against undefined connection payloads to prevent mapping crashes
+            const safeConnections = connections || [];
+
             await prisma.$transaction([
                 prisma.entity.update({
                     where: { id: entityId },
@@ -409,11 +412,12 @@ app.put(
                         metadata: metadata as Prisma.InputJsonValue,
                     }
                 }),
+                // Destructive synchronization: wipe previous connections for this source and rebuild
                 prisma.entityConnection.deleteMany({
                     where: { themeId, sourceEntityId: entityId }
                 }),
                 prisma.entityConnection.createMany({
-                    data: connections.map((conn) => ({
+                    data: safeConnections.map((conn) => ({
                         themeId,
                         sourceEntityId: entityId,
                         targetEntityId: conn.targetEntityId,
@@ -422,14 +426,14 @@ app.put(
                 })
             ]);
 
-            res.json({ success: true, message: "Entiteit succesvol gesynchroniseerd." });
+            res.json({ success: true, message: "Entity graph and timeline synchronized successfully." });
         } catch (error) {
-            console.error("Fout bij bijwerken van getypeerde graph:", error);
-            res.status(500).json({ error: "Interne serverfout bij updaten" });
+            console.error("Error updating graph entity and relationships:", error);
+            res.status(500).json({ error: "Internal server error during update" });
         }
     }
 );
 
 app.listen(PORT, () => {
-    console.log(`🚀 GG-PORTAL backend server draait op http://localhost:${PORT}`);
+    console.log(`🚀 GG-PORTAL backend server running on http://localhost:${PORT}`);
 });

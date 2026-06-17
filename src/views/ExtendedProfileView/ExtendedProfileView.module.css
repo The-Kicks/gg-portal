@@ -266,7 +266,7 @@
 }
 
 /* ==========================================================================
-   4. MEDIA CONTENT & TRUE MASONRY LAYOUT (HERZIEN)
+   4. MEDIA CONTENT & TRUE MASONRY LAYOUT
    ========================================================================== */
 .mediaSection { 
   margin-bottom: 8vh; 
@@ -281,16 +281,14 @@
   padding-left: 1.5rem;
 }
 
-/* Het hoofdgrid dat de 3 kolommen naast elkaar zet */
 .mediaGrid { 
   display: grid; 
   grid-template-columns: repeat(3, 1fr); 
   gap: 1.5rem; 
-  align-items: start; /* Cruciaal: zorgt dat kolommen onafhankelijk naar beneden streamen */
+  align-items: start; 
   width: 100%;
 }
 
-/* De verticale kolommen zelf */
 .mediaColumn {
   display: flex;
   flex-direction: column;
@@ -315,7 +313,6 @@
   display: block;
 }
 
-/* Verhoudingen */
 .horizontalImageItem,
 .videoItem {
   aspect-ratio: 16 / 9;
@@ -333,7 +330,6 @@
   aspect-ratio: 3 / 4; 
 }
 
-/* De Gestreepte Placeholder Box */
 .decorativePlaceholder {
   background: linear-gradient(135deg, color-mix(in srgb, var(--bg), #fff 2%), color-mix(in srgb, var(--bg), #000 2%));
   border: 2px dashed color-mix(in srgb, var(--text), transparent 85%);
@@ -373,8 +369,8 @@
   align-items: center;
   justify-content: center;
   padding: 5rem 2rem;
-  background: rgba(255, 255, 255, 0.02); /* Subtiele glass-look grondlaag */
-  border: 1px dashed rgba(255, 255, 255, 0.08); /* Elegante gestippelde rand */
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px dashed rgba(255, 255, 255, 0.08); 
   border-radius: 1rem;
   text-align: center;
   backdrop-filter: blur(4px);
@@ -396,7 +392,7 @@
   height: 64px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.3); /* Zacht uitgefaded icoon */
+  color: rgba(255, 255, 255, 0.3); 
   margin-bottom: 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
   transition: color 0.3s ease, transform 0.3s ease;
@@ -421,7 +417,6 @@
   line-height: 1.5;
   margin: 0;
 }
-
 
 /* ==========================================================================
    5. RELATED MEMBERS / TEAMMATES GRID
@@ -460,4 +455,151 @@
 .isFormerTeammate:hover {
   opacity: 0.95;
   filter: grayscale(0);
+}
+
+/* ==========================================================================
+   6. TIMELINE SECTION
+   ========================================================================== */
+.timelineSection {
+  margin-bottom: 8vh;
+  width: 100%;
+}
+
+.timelineTrack {
+  position: relative;
+  padding-left: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+/* English comment: Creates the vertical dynamic multi-gradient track line */
+.timelineTrack::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 1rem;
+  bottom: 1rem;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--primary) 0%,
+    color-mix(in srgb, var(--primary) 40%, var(--secondary)) 60%,
+    color-mix(in srgb, var(--text), transparent 92%) 100__
+  );
+  border-radius: 4px;
+}
+
+.timelineItem {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+  width: 100%;
+  transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.timelineItem:hover {
+  transform: translateX(8px);
+}
+
+.timelineNode {
+  position: absolute;
+  left: -3rem;
+  top: 50%;
+  transform: translateY(-50%) translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  z-index: 5;
+}
+
+.timelineDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--bg);
+  border: 3px solid var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary), transparent 85%);
+  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* English comment: Expands the inner dot node and flashes a gorgeous highlight glow on hover */
+.timelineItem:hover .timelineDot {
+  background-color: var(--primary);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary), transparent 80%),
+              0 0 15px var(--primary);
+  transform: scale(1.15);
+}
+
+.timelineCard {
+  flex: 1;
+  background: color-mix(in srgb, var(--text), transparent 97%);
+  border: 1px solid color-mix(in srgb, var(--text), transparent 90%);
+  border-radius: 1.5rem;
+  padding: 1.5rem 2rem;
+  backdrop-filter: blur(10px);
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.timelineItem:hover .timelineCard {
+  background: color-mix(in srgb, var(--text), transparent 95%);
+  border-color: color-mix(in srgb, var(--primary), transparent 60%);
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.12);
+}
+
+.timelineMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.timelineDuration {
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: var(--secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timelineGroupTitle {
+  font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+/* English comment: Custom color context styling parameters for the career badges */
+.timelineBadge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 0.25rem 0.75rem;
+  border-radius: 2rem;
+  letter-spacing: 0.5px;
+  border: 1px solid currentColor;
+}
+
+.timelineBadge.active {
+  color: #10b981;
+  background: color-mix(in srgb, #10b981, transparent 92%);
+  box-shadow: inset 0 0 4px color-mix(in srgb, #10b981, transparent 70%);
+}
+
+.timelineBadge.former {
+  color: var(--secondary);
+  opacity: 0.8;
+  background: color-mix(in srgb, var(--secondary), transparent 92%);
+}
+
+.timelineBadge.disbanded {
+  color: #f43f5e;
+  background: color-mix(in srgb, #f43f5e, transparent 92%);
+  box-shadow: inset 0 0 4px color-mix(in srgb, #f43f5e, transparent 70%);
 }

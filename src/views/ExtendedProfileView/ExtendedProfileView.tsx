@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
 import styles from './ExtendedProfileView.module.css';
 import ReactCountryFlag from 'react-country-flag';
-import type { PreparedMediaItem, FormattedStatItem, TeammateStructure } from './ExtendedProfileViewPage';
+import type { PreparedMediaItem, FormattedStatItem, TeammateStructure, TimelineItem } from './ExtendedProfileViewPage';
 import type { BaseEntity, Theme } from '../../types';
 
 interface ExtendedProfileViewProps {
@@ -25,6 +25,7 @@ interface ExtendedProfileViewProps {
   setMediaDimensions: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   groupedTeammates: Record<string, { groupName: string; members: TeammateStructure[] }>;
   groupKeys: string[];
+  timelineItems: TimelineItem[];
 }
 
 export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
@@ -46,6 +47,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   setMediaDimensions,
   groupedTeammates,
   groupKeys,
+  timelineItems,
 }) => {
   const [isHeroScrolledPast, setIsHeroScrolledPast] = useState(false);
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,14 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   const handleTeammateClick = (targetId: string) => {
     if (!targetId) return;
     navigate(`/${themeName}/profile/${targetId}`);
+  };
+
+  /* English comment: Format date string cleanly for timeline view */
+  const formatTimelineDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return dateStr;
+    return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
   };
 
   useEffect(() => {
@@ -211,6 +221,35 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
         </aside>
 
         <main className={styles.contentArea}>
+          {/* English comment: Structural CSS classes ready for timeline styling */}
+          {timelineItems.length > 0 && (
+            <section className={styles.timelineSection}>
+              <h2 className={styles.sectionHeading}>Timeline</h2>
+              <div className={styles.timelineTrack}>
+                {timelineItems.map((item) => (
+                  <div key={item.id} className={styles.timelineItem}>
+                    <div className={styles.timelineNode}>
+                      <div className={styles.timelineDot} />
+                    </div>
+                    <div className={styles.timelineCard}>
+                      <div className={styles.timelineMeta}>
+                        <span className={styles.timelineDuration}>
+                          {formatTimelineDate(item.startDate)} {item.endDate ? ` - ${formatTimelineDate(item.endDate)}` : ' - Present'}
+                        </span>
+                        {item.status && (
+                          <span className={`${styles.timelineBadge} ${styles[String(item.status).toLowerCase()] || ''}`}>
+                            {item.status}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className={styles.timelineGroupTitle}>{item.groupName}</h3>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {hasMedia ? (
             gallerySectionKeys.map(sectionKey => {
               const galleryItems = mediaSections[sectionKey];
@@ -310,7 +349,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                     <div className={styles.teammatesGrid}>
                       {members.map((member) => {
                         const currentStatus = String(member.l4.metadata?.groupStatus || '').toLowerCase();
-                        const isFormer = ['former', 'retired', 'ex'].includes(currentStatus);
+                        const isFormer = ['former', 'retired', 'ex', 'disbanded'].includes(currentStatus);
 
                         return (
                           <div

@@ -24,8 +24,11 @@ export interface UnifiedConnection {
   relatedEntity: HydratedEntity | undefined;
   relatedEntityId: string;
   status: string;
+  startDate?: string;
+  endDate?: string;
 }
 
+// Defined explicit type for metadata values to avoid 'any'
 export type MetadataValue = string | number | boolean | string[] | undefined;
 
 export const LAYER_ORDER: Record<string, number> = { l1: 1, l2: 2, l3: 3, l4: 4 };
@@ -43,7 +46,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     return (theme.entities || []).find(e => e.id === entityId);
   }, [theme, entityId]);
 
-  // --- STATE TRACKING FOR CLEAN SWITCHING WITHOUT LINTER ERRORS ---
+  // --- STATE TRACKING FOR CLEAN SWITCHING ---
   const [prevEntityId, setPrevEntityId] = useState<string>(entityId);
 
   // --- CORE FIELDS STATES ---
@@ -56,11 +59,11 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
 
   // Helper to build image inputs map
-  const buildImageInputs = (entity: HydratedEntity | undefined) => {
+  const buildImageInputs = (entity: HydratedEntity | undefined): Record<string, string> => {
     const imgInputs: Record<string, string> = {};
     if (entity?.image) {
       Object.entries(entity.image).forEach(([key, val]) => {
-        imgInputs[key] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+        imgInputs[key] = Array.isArray(val) ? val.join('\n') : String(val ?? '');
       });
     }
     if (theme.layerMetadata) {
@@ -84,7 +87,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   };
 
   // Helper to build metadata inputs map
-  const buildMetadataInputs = (entity: HydratedEntity | undefined) => {
+  const buildMetadataInputs = (entity: HydratedEntity | undefined): Record<string, string> => {
     const metaInputs: Record<string, string> = {};
     if (!entity) return metaInputs;
 
@@ -97,7 +100,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     }
 
     if (entity.metadata) {
-      Object.entries(entity.metadata).forEach(([dbKey, val]) => {
+      Object.entries(entity.metadata as Record<string, MetadataValue>).forEach(([dbKey, val]) => {
         const match = REQUIRED_L4_FIELDS.find(f => f.toLowerCase() === dbKey.toLowerCase());
         const targetKey = match || dbKey;
         metaInputs[targetKey] = Array.isArray(val) ? val.join(', ') : String(val ?? '');
@@ -142,7 +145,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   const [localTargetConnections, setLocalTargetConnections] = useState<HydratedEntityConnection[]>(() => originalEntity?.targetConnections || []);
 
   // --- SYNCHRONOUS STATE RESET ON RE-RENDER WHEN ENTITY CHANGES ---
-  // This complies with React's best practices for resetting state from props without useEffect hooks
   if (entityId !== prevEntityId) {
     setPrevEntityId(entityId);
     setName(originalEntity?.name || '');
@@ -169,7 +171,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // --- LAYER CONFIG CONFIGURATION ---
   const layerConfig = useMemo<LayerConfig | undefined>(() => {
     const currentLayer = originalEntity?.type?.toLowerCase() || '';
     if (!theme.layerMetadata) return undefined;
@@ -246,7 +247,9 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       direction: 'outgoing' as const,
       relatedEntity: c.targetEntity,
       relatedEntityId: c.targetEntityId,
-      status: String(c.metadata?.status || 'active')
+      status: String(c.metadata?.status || 'active'),
+      startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
+      endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined
     }));
 
     const incoming = localTargetConnections.map(c => ({
@@ -254,7 +257,9 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       direction: 'incoming' as const,
       relatedEntity: c.sourceEntity,
       relatedEntityId: c.sourceEntityId,
-      status: String(c.metadata?.status || 'active')
+      status: String(c.metadata?.status || 'active'),
+      startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
+      endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined
     }));
 
     return [...outgoing, ...incoming].sort((a, b) => {
@@ -264,7 +269,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     });
   }, [localConnections, localTargetConnections]);
 
-  // --- BASIC FIELD HANDLERS ---
   const handleImageInputChange = (key: string, value: string) => {
     setImageInputs(prev => ({ ...prev, [key]: value }));
   };
@@ -320,15 +324,19 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     setMetadataInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
   };
 
-  const handleConnectionStatusChange = (connId: number, direction: 'outgoing' | 'incoming', newStatus: string) => {
+  const handleConnectionMetadataChange = (
+    connId: number, 
+    direction: 'outgoing' | 'incoming', 
+    key: string, 
+    value: string
+  ) => {
+    const updateTargetList = (prev: HydratedEntityConnection[]) =>
+      prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, [key]: value } } : c));
+
     if (direction === 'outgoing') {
-      setLocalConnections(prev =>
-        prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, status: newStatus } } : c))
-      );
+      setLocalConnections(updateTargetList);
     } else {
-      setLocalTargetConnections(prev =>
-        prev.map(c => (c.id === connId ? { ...c, metadata: { ...c.metadata, status: newStatus } } : c))
-      );
+      setLocalTargetConnections(updateTargetList);
     }
   };
 
@@ -356,7 +364,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     const selectedLayerLevel = LAYER_ORDER[selectedNode.type.toLowerCase()] || 99;
 
     const connectionId = -1 - Math.floor(Math.random() * 1000000);
-    const baseMeta = { status: 'active' };
+    const baseMeta = { status: 'active', startDate: '', endDate: '' };
 
     if (currentLayerLevel <= selectedLayerLevel) {
       const newOutgoingConn: HydratedEntityConnection = {
@@ -381,7 +389,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     }
   };
 
-  // --- FIXED MEDIA PORTAL HANDLING ---
   const handleParseAlbum = () => {
     if (!albumInput.trim()) return;
 
@@ -391,7 +398,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .filter(url => url.startsWith('http://') || url.startsWith('https://'));
 
     const currentlyAssigned = Object.values(imageInputs)
-      .flatMap(val => val.split(',').map(s => s.trim()))
+      .flatMap(val => val.split(/[\s,]+/).map(s => s.trim()))
       .filter(Boolean);
 
     const filteredNewUrls = detectedUrls.filter(url => !currentlyAssigned.includes(url));
@@ -409,10 +416,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       const currentVal = prev[key] ? prev[key].trim() : '';
       if (!currentVal) return { ...prev, [key]: url };
       
-      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+      const urls = currentVal.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
       if (urls.includes(url)) return prev;
       
-      return { ...prev, [key]: [...urls, url].join(', ') };
+      return { ...prev, [key]: [...urls, url].join('\n') };
     });
     setUnassignedImages(prev => prev.filter(u => u !== url));
   };
@@ -420,9 +427,9 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   const handleUnassignImage = (url: string, key: string) => {
     setImageInputs(prev => {
       const currentVal = prev[key] || '';
-      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+      const urls = currentVal.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
       const updatedUrls = urls.filter(u => u !== url);
-      return { ...prev, [key]: updatedUrls.join(', ') };
+      return { ...prev, [key]: updatedUrls.join('\n') };
     });
     setUnassignedImages(prev => {
       if (prev.includes(url)) return prev;
@@ -439,10 +446,12 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       const rawValue = currentInputs[key];
       if (!rawValue || !rawValue.trim()) return;
 
-      if (Array.isArray(originalImage[key]) || rawValue.includes(',')) {
-        result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
+      const cleanUrls = rawValue.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+
+      if (Array.isArray(originalImage[key]) || cleanUrls.length > 1) {
+        result[key] = cleanUrls;
       } else {
-        result[key] = rawValue.trim();
+        result[key] = cleanUrls[0] || '';
       }
     });
     return result;
@@ -594,7 +603,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     handleAddMetadataField,
     handleRemoveImageField,
     handleRemoveMetadataField,
-    handleConnectionStatusChange,
+    handleConnectionMetadataChange,
     handleRemoveConnection,
     handleAddConnection,
     handleParseAlbum,

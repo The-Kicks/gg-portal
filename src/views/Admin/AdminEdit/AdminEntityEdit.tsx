@@ -3,7 +3,6 @@ import { useAdminEntityEdit, CORE_IMAGE_FIELDS } from './useAdminEntityEdit';
 import type { Theme, HydratedEntity } from '../../../types';
 import styles from '../AdminGlobal.module.css';
 
-// Completely linter-proof mock service placeholder
 const entityService = {
   update: async (themeId: string, id: string, data: unknown): Promise<void> => {
     void themeId;
@@ -19,10 +18,6 @@ interface AdminEntityEditProps {
   onCancel: () => void | Promise<void>;
 }
 
-/**
- * Helper function to format all media assets strictly as space-separated strings.
- * Built to be fully type-safe without using the 'any' type.
- */
 const formatEntityImages = (imageObj: Record<string, unknown>): Record<string, string> => {
   const formatted: Record<string, string> = {};
 
@@ -50,15 +45,11 @@ const formatEntityImages = (imageObj: Record<string, unknown>): Record<string, s
 
 export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityId, onSave, onCancel }) => {
 
-  // Intercept the save process to format all media assets strictly as space-separated strings
   const handleLocalSave = async (updatedEntity: HydratedEntity) => {
     if (updatedEntity.image) {
       const formattedImage = formatEntityImages(updatedEntity.image as Record<string, unknown>);
-      
-      // Type-assert explicitly to EntityImages to satisfy strict type requirements without using any
       updatedEntity.image = formattedImage as NonNullable<HydratedEntity['image']>;
     }
-
     await onSave(updatedEntity);
   };
 
@@ -100,7 +91,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     handleAddMetadataField,
     handleRemoveImageField,
     handleRemoveMetadataField,
-    handleConnectionStatusChange,
+    handleConnectionMetadataChange,
     handleRemoveConnection,
     handleAddConnection,
     handleAssignImage,
@@ -112,7 +103,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     return <div className={styles.textWarning}>Error: Target entity profile could not be localized.</div>;
   }
 
-  // Helper function to check if a URL represents a video asset
   const isVideoUrl = (url: string): boolean => {
     const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
     const videoPlatforms = ['youtube.com', 'youtu.be', 'vimeo.com', 'twitch.tv', 'streamable.com'];
@@ -123,7 +113,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     );
   };
 
-  // Helper function to generate embeds for YouTube and Vimeo previews
   const getVideoEmbedUrl = (url: string): string | null => {
     const lowerUrl = url.toLowerCase();
     if (lowerUrl.includes('youtube.com/watch')) {
@@ -141,17 +130,14 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     return null;
   };
 
-  // Enhanced bulk ingestion handler to block duplicates directly
   const handleCustomParseAlbum = () => {
     if (!albumInput.trim()) return;
 
-    // Retrieve all unique URLs from the bulk field based on spaces/newlines/commas
     const freshUrls = albumInput
       .split(/[\s,]+/)
       .map(s => s.trim())
       .filter(Boolean);
 
-    // Gather all URLs currently linked somewhere in the asset fields
     const dynamicAssignedUrls: string[] = [];
     Object.keys(imageInputs).forEach(key => {
       const val = imageInputs[key];
@@ -163,7 +149,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       }
     });
 
-    // Filter the fresh input: must not already be in the unassigned pool or in an asset
     const uniqueFreshUrls = freshUrls.filter(url => {
       const isAlreadyInPool = unassignedImages.includes(url);
       const isAlreadyInAssets = dynamicAssignedUrls.includes(url);
@@ -174,7 +159,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       setUnassignedImages(prev => [...prev, ...uniqueFreshUrls]);
     }
 
-    setAlbumInput(''); // Clear the input field
+    setAlbumInput('');
   };
 
   return (
@@ -207,7 +192,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
 
         <div>
           <div className={styles.fieldLabel}>Passing Date</div>
-          <input type="text" placeholder="DD-MM-YYYY" value={metadataInputs['PassingDate'] || ''} onChange={e => handleMetadataInputChange('PassingDate', e.target.value)} className={styles.inputField} />
+          <input type="text" placeholder="DD-MM-YYYY of YYYY" value={metadataInputs['PassingDate'] || ''} onChange={e => handleMetadataInputChange('PassingDate', e.target.value)} className={styles.inputField} />
         </div>
 
         <div>
@@ -215,6 +200,62 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           <input type="checkbox" checked={isStandalone} onChange={e => setIsStandalone(e.target.checked)} className={styles.checkbox} />
         </div>
       </div>
+
+      {/* CONDITIONELE HOEK: STANDALONE PERIOD DETAILS */}
+      {isStandalone && (
+        <div className={styles.requiredSection} style={{ borderLeftColor: 'var(--primary-color, #3b82f6)', background: 'rgba(59, 130, 246, 0.02)' }}>
+          <h3 className={styles.requiredTitle} style={{ color: 'var(--primary-color, #3b82f6)' }}>👤 Standalone / Individual Track Properties</h3>
+          <p className={`${styles.labelSubText} ${styles.textMuted}`}>Configure how this entity behaves when working outside of assigned groups, teams or collectives.</p>
+          
+          <div className={styles.twoColumnGrid} style={{ marginTop: '10px' }}>
+            <div>
+              <div className={styles.requiredLabel}>Timeline Display Label <small className={styles.textMuted}>(e.g. Solo, Free Agent, Individual)</small></div>
+              <input 
+                type="text" 
+                placeholder="Leave empty for fallback defaults" 
+                value={metadataInputs['standaloneLabel'] || ''} 
+                onChange={e => handleMetadataInputChange('standaloneLabel', e.target.value)}
+                className={styles.inputField}
+              />
+            </div>
+
+            <div>
+              <div className={styles.requiredLabel}>Individual Status</div>
+              <select 
+                value={metadataInputs['standaloneStatus'] || 'active'} 
+                onChange={e => handleMetadataInputChange('standaloneStatus', e.target.value)}
+                className={styles.inputField}
+              >
+                <option value="active">Active Track</option>
+                <option value="former">Ended / Former Track</option>
+              </select>
+            </div>
+
+            <div>
+              <div className={styles.requiredLabel}>Track Start Date <span style={{ color: '#d32f2f' }}>*</span></div>
+              <input 
+                type="text" 
+                placeholder="YYYY-MM-DD or YYYY" 
+                value={metadataInputs['standaloneStartDate'] || ''} 
+                onChange={e => handleMetadataInputChange('standaloneStartDate', e.target.value)}
+                className={styles.inputField}
+                style={{ borderColor: !metadataInputs['standaloneStartDate'] ? '#ef4444' : undefined }}
+              />
+            </div>
+
+            <div>
+              <div className={styles.requiredLabel}>Track End Date <small className={styles.textMuted}>(Optional)</small></div>
+              <input 
+                type="text" 
+                placeholder="YYYY-MM-DD / YYYY (Keep blank if active)" 
+                value={metadataInputs['standaloneEndDate'] || ''} 
+                onChange={e => handleMetadataInputChange('standaloneEndDate', e.target.value)}
+                className={styles.inputField}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SECTION A: CORE REQUIRED GAME FIELDS */}
       {originalEntity.type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
@@ -281,8 +322,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       {/* Media Assets */}
       <h3 className={styles.sectionTitle}>Media Assets (Images & Videos)</h3>
       <div className={styles.innerSection}>
-
-        {/* Bulk Link Ingestion Field */}
         <div style={{ marginBottom: '15px' }}>
           <div className={styles.fieldLabel} style={{ fontSize: '12px' }}>📋 Bulk Link Ingestion List</div>
           <div className={styles.innerActionRow} style={{ marginTop: '5px' }}>
@@ -294,22 +333,15 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               rows={2}
               style={{ width: '100%', resize: 'vertical' }}
             />
-            <button
-              type="button"
-              onClick={handleCustomParseAlbum}
-              className={`${styles.btn} ${styles.btnPrimary}`}
-            >
-              In Pool Laden
-            </button>
+            <button type="button" onClick={handleCustomParseAlbum} className={`${styles.btn} ${styles.btnPrimary}`}>In Pool Laden</button>
           </div>
         </div>
 
-        {/* Unassigned Drag Pool Container */}
         {unassignedImages.length > 0 && (
           <div
             className={styles.innerActionRow}
             style={{
-              marginBottom: '20px', padding: '15px', border: '1px dashed var(--text-muted, #ccc)', borderRadius: '6px',
+              marginBottom: '20px', padding: '15px', border: '1px dashed var(--border-color, #ccc)', borderRadius: '6px',
               display: 'flex', gap: '15px', overflowX: 'auto', minHeight: '140px', background: 'rgba(0,0,0,0.02)'
             }}
             onDragOver={e => e.preventDefault()}
@@ -319,7 +351,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               try {
                 const { url, sourceKey } = JSON.parse(dragData);
                 if (sourceKey) {
-                  // Safely disconnect asset directly out of field back into staging pool
                   handleUnassignImage(url, sourceKey);
                 }
               } catch {
@@ -337,7 +368,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   key={`${url}-${idx}`}
                   draggable
                   onDragStart={e => {
-                    // Pass payload indicating this asset originates from the staging pool (sourceKey: null)
                     e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: null }));
                   }}
                   style={{ position: 'relative', cursor: 'grab', flexShrink: 0 }}
@@ -347,23 +377,11 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                       {embedUrl ? (
                         <iframe src={embedUrl} title="Video preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }} />
                       ) : (
-                        <video
-                          src={url}
-                          muted
-                          loop
-                          autoPlay
-                          draggable={false} // Disable native video dragging to let parent container handle it
-                          style={{ width: '110px', height: '110px', objectFit: 'cover' }}
-                        />
+                        <video src={url} muted loop autoPlay draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover' }} />
                       )}
                     </div>
                   ) : (
-                    <img
-                      src={url}
-                      alt="Staging thumb"
-                      draggable={false} // CRITICAL: Disables native browser image dragging from hijacking the event
-                      style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-                    />
+                    <img src={url} alt="Staging thumb" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
                   )}
                 </div>
               );
@@ -371,11 +389,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           </div>
         )}
 
-        {/* Media Fields Grid */}
         <div className={styles.twoColumnGrid}>
           {Object.keys(imageInputs).map(key => {
             const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
-
             const rawValue = imageInputs[key];
             const assignedUrls = Array.isArray(rawValue)
               ? rawValue
@@ -395,7 +411,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     if (sourceKey === key) return;
 
                     if (sourceKey) {
-                      // Bypass the pool completely to avoid state batching race conditions and annoying flickers
                       const sourceList = (Array.isArray(imageInputs[sourceKey])
                         ? imageInputs[sourceKey]
                         : typeof imageInputs[sourceKey] === 'string'
@@ -414,11 +429,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                         targetList.push(url);
                       }
 
-                      // Execute both mutations synchronously in one clean batch pass
                       handleImageInputChange(sourceKey, sourceList.join('\n'));
                       handleImageInputChange(key, targetList.join('\n'));
                     } else {
-                      // Coming directly from the unassigned staging pool
                       handleAssignImage(url, key);
                     }
                   } catch {
@@ -462,7 +475,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                             <img src={url} alt="Asset preview" style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid currentColor', boxShadow: '0 4px 6px rgba(0,0,0,0.15)' }} />
                           )}
 
-                          {/* Plus button (+) to duplicate the asset to the unassigned staging pool */}
                           <button
                             type="button"
                             title="Dupliceren naar Pool"
@@ -518,7 +530,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           const isExpanded = expandedChildId === conn.relatedEntityId;
 
           return (
-            <div key={conn.id} className={styles.connectionRow}>
+            <div key={conn.id} className={styles.connectionRow} style={{ marginBottom: '15px', padding: '10px', border: '1px solid rgba(0,0,0,0.05)', borderRadius: '6px' }}>
               <div className={styles.connectionHeader}>
                 <span className={styles.connectionRowLeft}>
                   <button type="button" onClick={() => setExpandedChildId(isExpanded ? null : conn.relatedEntityId)} className={styles.filterBtn} style={{ padding: '2px 8px', fontSize: '13px' }}>
@@ -531,19 +543,43 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   <strong className={styles.textPrimary}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
                   {isL4ToL4 && <span className={styles.textWarning}>Cross-individual connection</span>}
                 </span>
-                <div className={styles.buttonGroup} style={{ gap: '10px' }}>
-                  <select value={conn.status} onChange={e =>handleConnectionStatusChange(conn.id, conn.direction, e.target.value)} className={styles.inputField} style={{ padding: '6px 10px', width: 'auto' }}>
+
+                <div className={styles.connectionDates}>
+                  <div className={styles.dateFieldGroup}>
+                    <div className={styles.dateLabel}>Start:</div>
+                    <input 
+                      type="text" 
+                      placeholder="YYYY-MM-DD / YYYY" 
+                      value={conn.startDate || ''} 
+                      onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'startDate', e.target.value)}
+                      className={styles.dateHeaderInput}
+                    />
+                  </div>
+                  <div className={styles.dateFieldGroup}>
+                    <div className={styles.dateLabel}>End:</div>
+                    <input 
+                      type="text" 
+                      placeholder="YYYY-MM-DD / YYYY" 
+                      value={conn.endDate || ''} 
+                      onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'endDate', e.target.value)}
+                      className={styles.dateHeaderInput}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.buttonGroup}>
+                  <select value={conn.status} onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'status', e.target.value)} className={styles.inputField} style={{ padding: '6px 10px', width: 'auto' }}>
                     <option value="active">Active</option>
                     <option value="former">Former</option>
                     <option value="inactive">Inactive</option>
                     <option value="retired">Retired</option>
                   </select>
-                  <button type="button" onClick={() =>handleRemoveConnection(conn.id, conn.direction)} className={styles.btnUnlink}>Unlink</button>
+                  <button type="button" onClick={() => handleRemoveConnection(conn.id, conn.direction)} className={styles.btnUnlink}>Unlink</button>
                 </div>
               </div>
 
               {isExpanded && conn.relatedEntity && (
-                <div className={styles.portalSection}>
+                <div className={styles.portalSection} style={{ marginTop: '12px' }}>
                   <h4 className={styles.portalTitle}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
                   <AdminEntityEdit
                     theme={theme}
@@ -573,7 +609,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           );
         })}
 
-        {/* Search & Selection Dropdown */}
         <div ref={dropdownRef} className={styles.dropdownWrapper}>
           <input
             type="text"

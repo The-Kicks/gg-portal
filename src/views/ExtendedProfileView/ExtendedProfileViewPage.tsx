@@ -26,6 +26,14 @@ export interface TeammateStructure {
   l3: BaseEntity[];
 }
 
+export interface TimelineItem {
+  id: string;
+  groupName: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+}
+
 const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   const lowerCaseFile = file.toLowerCase();
   if (lowerCaseFile.includes('youtube.com') || lowerCaseFile.includes('youtu.be')) return 'video-embed';
@@ -99,6 +107,17 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
   const { id } = useParams<{ id: string }>();
   const [mediaDimensions, setMediaDimensions] = useState<Record<string, boolean>>({});
 
+  const layerMetadataConfig = useMemo(() => {
+    if (!theme.layerMetadata) return null;
+    try {
+      return typeof theme.layerMetadata === 'string'
+        ? JSON.parse(theme.layerMetadata)
+        : theme.layerMetadata;
+    } catch {
+      return null;
+    }
+  }, [theme.layerMetadata]);
+
   const profileDetails = useMemo(() => {
     if (!id || !theme.entities) return null;
     const targetEntity = theme.entities.find(e => e.id === id);
@@ -124,23 +143,25 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
   const assets = useProfileAssetValidator(profileDetails?.targetEntity);
 
-  const relatedTeammates = useMemo<TeammateStructure[]>(() => {
-    if (!profileDetails || !id || !theme.entities) return [];
+  /* English comment: Group teammates directly by group id to preserve context-specific connection metadata */
+  const groupedTeammates = useMemo(() => {
+    const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
+    if (!profileDetails || !id || !theme.entities) return groups;
 
     const targetEntity = profileDetails.targetEntity;
     const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
 
-    const parentL3s: BaseEntity[] = [];
+    const parentL3s = new Map<string, BaseEntity>();
     allConns.forEach(conn => {
       const parent = conn.sourceEntity?.type === 'l3'
         ? conn.sourceEntity
         : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
-      if (parent && !parentL3s.some(p => p.id === parent.id)) {
-        parentL3s.push(parent);
+      if (parent) {
+        parentL3s.set(parent.id, parent);
       }
     });
 
-    const teammatesMap = new Map<string, TeammateStructure>();
+    const formerTriggerValue = String(layerMetadataConfig?.['l4']?.statusTriggers?.former?.value || 'former').toLowerCase();
 
     theme.entities.forEach(entity => {
       if (entity.type !== 'l4') return;
@@ -152,61 +173,32 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
           ? conn.sourceEntity
           : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
 
-        if (p && parentL3s.some(parentL3 => parentL3.id === p.id)) {
-          const membershipStatus = conn.metadata?.status || 'active';
+        if (p && parentL3s.has(p.id)) {
+          /* English comment: Resolve membership status specific to this entity and this group connection */
+          const membershipStatus = String(conn.metadata?.status || 'active').toLowerCase();
+          const isFormerTeammate = ['former', 'retired', 'ex', 'disbanded', formerTriggerValue].includes(membershipStatus);
 
-          if (!teammatesMap.has(entity.id)) {
+          if (!groups[p.id]) {
+            groups[p.id] = { groupName: p.name, members: [] };
+          }
+
+          if (!groups[p.id].members.some(m => m.l4.id === entity.id)) {
             const enrichedEntity: HydratedEntity = {
               ...entity,
               metadata: {
                 ...entity.metadata,
-                membershipStatus
+                groupStatus: isFormerTeammate ? 'former' : 'active'
               }
             };
-            teammatesMap.set(entity.id, { l4: enrichedEntity, l3: [p] });
-          } else {
-            const existing = teammatesMap.get(entity.id);
-            if (existing && !existing.l3.some(group => group.id === p.id)) {
-              existing.l3.push(p);
-            }
+
+            groups[p.id].members.push({ l4: enrichedEntity, l3: [p] });
           }
         }
       });
     });
 
-    const rawTeammates = Array.from(teammatesMap.values());
-    const formerTriggerValue = String(theme.layerMetadata?.['l4']?.statusTriggers?.former?.value || 'former').toLowerCase();
-
-    return rawTeammates.map(member => {
-      const explicitStatus = String(member.l4?.metadata?.['membershipStatus'] || '').toLowerCase();
-      const isFormerTeammate = explicitStatus === 'former' || explicitStatus === formerTriggerValue;
-
-      return {
-        ...member,
-        l4: {
-          ...member.l4,
-          metadata: {
-            ...(member.l4.metadata || {}),
-            groupStatus: isFormerTeammate ? 'former' : 'active'
-          }
-        }
-      };
-    });
-  }, [id, profileDetails, theme.entities, theme.layerMetadata]);
-
-  const groupedTeammates = useMemo(() => {
-    const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
-    
-    relatedTeammates.forEach(member => {
-      member.l3.forEach(group => {
-        if (!groups[group.id]) {
-          groups[group.id] = { groupName: group.name, members: [] };
-        }
-        groups[group.id].members.push(member);
-      });
-    });
     return groups;
-  }, [relatedTeammates]);
+  }, [id, profileDetails, theme.entities, layerMetadataConfig]);
 
   const groupKeys = useMemo(() => {
     return Object.keys(groupedTeammates).sort((a, b) => {
@@ -219,6 +211,77 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [groupedTeammates]);
 
+  /* Compile, prioritize active memberships/standalone windows by duration, and push inactive to the bottom */
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    if (!profileDetails?.targetEntity) return [];
+    
+    const targetEntity = profileDetails.targetEntity;
+    const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
+    const extractedEvents: TimelineItem[] = [];
+
+    // 1. Verwerk alle groepsconnecties (L3)
+    allConns.forEach(conn => {
+      const group = conn.sourceEntity?.type === 'l3' 
+        ? conn.sourceEntity 
+        : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
+
+      if (group) {
+        const rawStartDate = conn.metadata?.startDate || conn.metadata?.startdate;
+        const rawEndDate = conn.metadata?.endDate || conn.metadata?.enddate;
+        const rawStatus = conn.metadata?.status;
+
+        const startDate = rawStartDate ? String(rawStartDate) : undefined;
+        const endDate = rawEndDate ? String(rawEndDate) : undefined;
+        const status = rawStatus ? String(rawStatus) : undefined;
+
+        if (startDate || endDate) {
+          extractedEvents.push({
+            id: String(conn.id || `${group.id}-${startDate || 'unknown'}`),
+            groupName: group.name,
+            startDate,
+            endDate,
+            status
+          });
+        }
+      }
+    });
+
+    // 2. Standalone tracks ophalen op basis van de specifieke opgeslagen standalone track metadata (bijv. Nayeon)
+    if (targetEntity.isStandalone) {
+      const standaloneStartDate = targetEntity.metadata?.standaloneStartDate || targetEntity.metadata?.startDate || targetEntity.metadata?.startdate;
+      const standaloneEndDate = targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate;
+      const standaloneLabel = targetEntity.metadata?.standaloneLabel || 'Solo / Standalone Activities';
+
+      if (standaloneStartDate || standaloneEndDate) {
+        extractedEvents.push({
+          id: `standalone-track-${targetEntity.id}`,
+          groupName: String(standaloneLabel),
+          startDate: standaloneStartDate ? String(standaloneStartDate) : undefined,
+          endDate: standaloneEndDate ? String(standaloneEndDate) : undefined,
+          status: targetEntity.status || 'active'
+        });
+      }
+    }
+
+    return extractedEvents.sort((a, b) => {
+      const isAActive = a.status?.toLowerCase() === 'active' || (!a.endDate && a.startDate);
+      const isBActive = b.status?.toLowerCase() === 'active' || (!b.endDate && b.startDate);
+
+      if (isAActive && !isBActive) return -1;
+      if (!isAActive && isBActive) return 1;
+
+      if (isAActive && isBActive) {
+        const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+        const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+        return dateA - dateB;
+      }
+
+      const dateA = a.startDate || '';
+      const dateB = b.startDate || '';
+      return dateB.localeCompare(dateA);
+    });
+  }, [profileDetails]);
+
   const sidebarSubLabel = useMemo(() => {
     if (!profileDetails) return '';
     const { parents, activeLayer } = profileDetails;
@@ -229,9 +292,17 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     if (!profileDetails?.targetEntity) return [];
 
     const { targetEntity, activeLayer } = profileDetails;
-    const standardExclusions = new Set<string>(['description']);
+    // Sluit de standalone administratieve velden ook direct uit van de reguliere statistiekenlijst
+    const standardExclusions = new Set<string>([
+      'description', 
+      'startdate', 
+      'enddate', 
+      'standalonestartdate', 
+      'standaloneenddate', 
+      'standalonelabel'
+    ]);
     const dynamicStatusKeys = new Set<string>();
-    const layerMeta = theme.layerMetadata?.[activeLayer];
+    const layerMeta = layerMetadataConfig?.[activeLayer];
 
     if (layerMeta?.statusTriggers && typeof layerMeta.statusTriggers === 'object') {
       Object.values(layerMeta.statusTriggers).forEach((trigger) => {
@@ -265,7 +336,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
         label: theme.labels[key] ?? key,
         displayValue: Array.isArray(value) ? value.join(', ') : String(value)
       }));
-  }, [profileDetails, theme.labels, theme.layerMetadata]);
+  }, [profileDetails, theme.labels, layerMetadataConfig]);
 
   const preparedMediaSections = useMemo(() => {
     const entityImages = profileDetails?.targetEntity.image as EntityImages | undefined;
@@ -316,6 +387,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       setMediaDimensions={setMediaDimensions}
       groupedTeammates={groupedTeammates}
       groupKeys={groupKeys}
+      timelineItems={timelineItems}
       {...assets}
     />
   );
