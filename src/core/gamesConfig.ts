@@ -1,4 +1,3 @@
-// src/core/gamesConfig.ts
 import type { GameID } from '../types';
 
 // ==========================================
@@ -6,14 +5,14 @@ import type { GameID } from '../types';
 // ==========================================
 
 // 1. Alle mogelijke kolom IDs die jouw tabel snapt
-export type GuessWhoColumnID = 
-  | 'profile' 
-  | 'name' 
-  | 'org' 
-  | 'nationality' 
-  | 'role' 
-  | 'debut' 
-  | 'age' 
+export type GuessWhoColumnID =
+  | 'profile'
+  | 'name'
+  | 'org'
+  | 'nationality'
+  | 'role'
+  | 'debut'
+  | 'age'
   | 'height';
 
 export interface GuessWhoColumnDefinition {
@@ -35,12 +34,16 @@ export const GUESSWHO_AVAILABLE_COLUMNS: GuessWhoColumnDefinition[] = [
 ];
 
 export interface GuessWhoSettings {
-  disabledColumns?: GuessWhoColumnID[]; 
+  disabledColumns?: GuessWhoColumnID[];
   [key: string]: unknown;
 }
 
+export interface BlindRankingSettings {
+  availableCategories: string[];
+  disabledCategories: string[];
+}
+
 export interface SorterSettings { [key: string]: unknown; }
-export interface BlindRankingSettings { [key: string]: unknown; }
 
 export type ThemeGameSettings = {
   guesswho?: GuessWhoSettings;

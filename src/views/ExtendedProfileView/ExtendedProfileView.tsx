@@ -50,14 +50,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   const [isHeroScrolledPast, setIsHeroScrolledPast] = useState(false);
   const heroSectionRef = useRef<HTMLDivElement>(null);
 
-  // Dynamische pixel-meting voor perfect uitgelijnde onderkanten
   const [columnPaddings, setColumnPaddings] = useState<Record<string, number[]>>({});
   const colContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const navigate = useNavigate();
   const { themeName } = useParams();
 
-  // Gefixt: Gewrapt in useMemo om een oneindige loop te voorkomen en linter tevreden te stellen
   const gallerySectionKeys = useMemo(() => {
     return Object.keys(mediaSections).filter(key => mediaSections[key]?.length > 0);
   }, [mediaSections]);
@@ -133,7 +131,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     });
 
     return () => observer.disconnect();
-  }, [gallerySectionKeys, hasMedia]); // Gefixt: gallerySectionKeys hier veilig toegevoegd
+  }, [gallerySectionKeys, hasMedia]);
 
   const renderTitleBox = () => (
     <div className={styles.titleBox}>
@@ -224,7 +222,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                     {[0, 1, 2].map((colIndex) => {
                       const itemsInColumn = galleryItems.filter((_, index) => index % 3 === colIndex);
                       const rawPadding = columnPaddings[sectionKey]?.[colIndex] || 0;
-
                       const finalPlaceholderHeight = rawPadding - 24;
 
                       return (
@@ -261,7 +258,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                             })}
                           </div>
 
-                          {/* Dynamic Placeholder die de kortere kolommen waterpas trekt */}
                           {finalPlaceholderHeight > 10 && (
                             <div
                               className={`${styles.mediaItem} ${styles.decorativePlaceholder}`}
@@ -291,7 +287,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <div className={styles.emptyMediaContainer}>
               <div className={styles.emptyMediaInner}>
                 <div className={styles.emptyMediaIconWrapper}>
-                  {/* Modern minimalistisch foto/video-placeholder icoon */}
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
                     <circle cx="9" cy="9" r="2" />
@@ -328,8 +323,8 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                               activeKey="l4"
                               theme={theme}
                               labels={theme.labels}
-                              organization={member.l3?.[0]}
-                              customLabel={member.l3?.[0]?.name ?? 'Member'}
+                              organization={member.l3?.find(g => g.id === groupId)}
+                              customLabel={member.l3?.find(g => g.id === groupId)?.name ?? 'Member'}
                             />
                           </div>
                         );

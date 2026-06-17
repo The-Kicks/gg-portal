@@ -1,8 +1,6 @@
 /**
  * HOOK: useAdminTheme.ts
  * Doel: Beheert de state en logica voor het bewerken en opslaan van thema-instellingen.
- * Functies: Afhandeling van form-input, API-calls voor CRUD-acties op thema's,
- * en het vertalen van ruwe metadata naar de vereiste systeem-structuur.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +25,10 @@ const emptyTheme: Partial<Theme> = {
     miniViewLayers: ['l1'], games: ['sorter'], navbarItems: ['l4', 'l3', 'l1'],
     labels: { l1: 'Industry', l2: 'Label', l3: 'Group', l4: 'Driver' },
     layerMetadata: {},
-    gameSettings: { guesswho: { disabledColumns: [] } }
+    gameSettings: { 
+        guesswho: { disabledColumns: [] },
+        blindranking: { availableCategories: [], disabledCategories: [] }
+    }
 };
 
 export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string) {
@@ -37,6 +38,10 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
     const [error, setError] = useState<string | null>(null);
     const [metaInputs, setMetaInputs] = useState<Record<string, MetaInputState>>({});
     const [guesswhoDisabledColumns, setGuesswhoDisabledColumns] = useState<GuessWhoColumnID[]>([]);
+    
+    // Blind Ranking States
+    const [blindRankingCustomInput, setBlindRankingCustomInput] = useState<string>('');
+    const [blindRankingDisabled, setBlindRankingDisabled] = useState<string[]>([]);
 
     const handleReturnToControlPanel = () => {
         navigate(`/${themeName || 'default'}/admin`);
@@ -53,6 +58,8 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         });
         setMetaInputs(initialMetaInputs);
         setGuesswhoDisabledColumns([]);
+        setBlindRankingCustomInput('');
+        setBlindRankingDisabled([]);
         setEditingTheme({
             ...emptyTheme,
             layerMetadata: { 
@@ -73,6 +80,17 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         setIsNew(false);
         setError(null);
         setGuesswhoDisabledColumns(theme.gameSettings?.guesswho?.disabledColumns || []);
+        
+        const l4MediaKeys = theme.layerMetadata?.l4?.mediaKeys || [];
+        const savedAvailableCategories = theme.gameSettings?.blindranking?.availableCategories || [];
+        
+        // Filter out normal ranking and L4 media keys to extract purely the custom strings
+        const customCats = savedAvailableCategories.filter(
+            c => c !== 'Normal Ranking' && !l4MediaKeys.includes(c)
+        );
+        
+        setBlindRankingCustomInput(customCats.join(', '));
+        setBlindRankingDisabled(theme.gameSettings?.blindranking?.disabledCategories || []);
 
         const initialMetaInputs: Record<string, MetaInputState> = {};
         const layerMetadataRecord = (theme.layerMetadata || {}) as Record<string, MetaDataStandard>;
@@ -109,6 +127,7 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             return;
         }
 
+        const themeId = editingTheme.id;
         const finalLayerMetadata: Record<string, MetaDataStandard> = {};
         const currentMetaObj = (editingTheme.layerMetadata || {}) as Record<string, MetaDataStandard>;
 
@@ -117,7 +136,6 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             const inputs = metaInputs[layer];
             if (!inputs) return;
 
-            // Split string op komma's, trim witruimtes en filter lege waarden eruit
             const gridKeysArr = inputs.gridKeys.split(',').map(s => s.trim()).filter(Boolean);
             const mediaKeysArr = inputs.mediaKeys.split(',').map(s => s.trim()).filter(Boolean);
             
@@ -131,7 +149,6 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             const badgeKey = layerData?.badgeKey || '';
             const subtitleKey = layerData?.subtitleKey || '';
 
-            // Neem de laag mee als er minimaal één relevante eigenschap is ingevuld (inclusief mediaKeys)
             if (badgeKey || subtitleKey || gridKeysArr.length || mediaKeysArr.length || Object.keys(statusTriggers).length > 0) {
                 finalLayerMetadata[layer] = {
                     badgeKey, 
@@ -143,20 +160,39 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             }
         });
 
+        // Compile dynamic lists for validation and payload saving
+        const l4MediaKeys = metaInputs.l4?.mediaKeys
+            ? metaInputs.l4.mediaKeys.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+        const customKeys = blindRankingCustomInput
+            ? blindRankingCustomInput.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+
+        const finalAvailableCats = ['Normal Ranking', ...l4MediaKeys, ...customKeys];
+        
+        // Exclude 'Normal Ranking' from disabled capabilities to lock it down entirely
+        const finalDisabledCats = blindRankingDisabled.filter(
+            cat => finalAvailableCats.includes(cat) && cat !== 'Normal Ranking'
+        );
+
         const payload = {
             ...editingTheme,
             layerMetadata: finalLayerMetadata,
             gameSettings: {
                 ...(editingTheme.gameSettings || {}),
-                guesswho: { disabledColumns: guesswhoDisabledColumns }
+                guesswho: { disabledColumns: guesswhoDisabledColumns },
+                blindranking: {
+                    availableCategories: finalAvailableCats,
+                    disabledCategories: finalDisabledCats
+                }
             }
         };
 
         try {
             if (isNew) {
-                await createTheme(payload as Theme);
+                await createTheme(payload as unknown as Theme);
             } else {
-                await updateTheme(editingTheme.id, payload as Theme);
+                await updateTheme(themeId, payload as unknown as Theme);
             }
             setEditingTheme(null);
             window.dispatchEvent(new Event('refresh-database'));
@@ -167,16 +203,20 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
     };
 
     const updateLabel = (key: string, val: string) => {
-        if (!editingTheme) return;
-        setEditingTheme({ ...editingTheme, labels: { ...(editingTheme.labels || {}), [key]: val } });
+        setEditingTheme(prev => {
+            if (!prev) return null;
+            return { ...prev, labels: { ...(prev.labels || {}), [key]: val } };
+        });
     };
 
     const updateLayerString = (layer: string, key: 'badgeKey' | 'subtitleKey', val: string) => {
-        if (!editingTheme) return;
-        const currentMeta = { ...((editingTheme.layerMetadata || {}) as Record<string, MetaDataStandard>) };
-        const baseLayer = currentMeta[layer] || { badgeKey: '', subtitleKey: '', gridKeys: [] };
-        currentMeta[layer] = { ...baseLayer, [key]: val };
-        setEditingTheme({ ...editingTheme, layerMetadata: currentMeta });
+        setEditingTheme(prev => {
+            if (!prev) return null;
+            const currentMeta = { ...((prev.layerMetadata || {}) as Record<string, MetaDataStandard>) };
+            const baseLayer = currentMeta[layer] || { badgeKey: '', subtitleKey: '', gridKeys: [] };
+            currentMeta[layer] = { ...baseLayer, [key]: val };
+            return { ...prev, layerMetadata: currentMeta };
+        });
     };
 
     const updateLayerArrayInput = (layer: string, key: keyof MetaInputState, val: string) => {
@@ -184,19 +224,28 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
     };
 
     const handleArrayToggle = (field: 'miniViewLayers' | 'games' | 'navbarItems', value: string) => {
-        if (!editingTheme) return;
-        const currentArray = (editingTheme[field] as string[]) || [];
-        const newArray = currentArray.includes(value) ? currentArray.filter(item => item !== value) : [...currentArray, value];
-        setEditingTheme({ ...editingTheme, [field]: newArray });
+        setEditingTheme(prev => {
+            if (!prev) return null;
+            const currentArray = (prev[field] as string[]) || [];
+            const newArray = currentArray.includes(value) ? currentArray.filter(item => item !== value) : [...currentArray, value];
+            return { ...prev, [field]: newArray };
+        });
     };
 
     const handleGuessWhoColumnToggle = (columnId: GuessWhoColumnID) => {
         setGuesswhoDisabledColumns(prev => prev.includes(columnId) ? prev.filter(id => id !== columnId) : [...prev, columnId]);
     };
 
+    const handleBlindRankingDisabledToggle = (category: string) => {
+        setBlindRankingDisabled(prev => 
+            prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
+        );
+    };
+
     return {
         handleReturnToControlPanel, editingTheme, isNew, error, metaInputs, guesswhoDisabledColumns, setEditingTheme,
         handleStartCreate, handleStartEdit, handleDelete, handleSave,
-        updateLabel, updateLayerString, updateLayerArrayInput, handleArrayToggle, handleGuessWhoColumnToggle
+        updateLabel, updateLayerString, updateLayerArrayInput, handleArrayToggle, handleGuessWhoColumnToggle,
+        blindRankingCustomInput, setBlindRankingCustomInput, blindRankingDisabled, handleBlindRankingDisabledToggle
     };
 }

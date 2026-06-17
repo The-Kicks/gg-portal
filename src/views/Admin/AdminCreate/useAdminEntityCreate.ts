@@ -1,20 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import type { Theme, HydratedEntity, BaseEntity } from '../../types';
-import { entityService } from './EntityService';
-import styles from './AdminGlobal.module.css';
+import { useState, useEffect, useMemo } from 'react';
+import type { Theme, HydratedEntity, BaseEntity } from '../../../types';
+import { entityService } from '../EntityService';
 
-interface Props {
-  theme: Theme;
-  onSave: (newEntity: HydratedEntity) => void;
-  onCancel: () => void;
-}
-
-interface TriggerConfig {
+export interface TriggerConfig {
   key: string;
   value: string;
 }
 
-interface LayerConfig {
+export interface LayerConfig {
   badgeKey?: string;
   subtitleKey?: string;
   gridKeys?: string[];
@@ -22,16 +15,21 @@ interface LayerConfig {
   mediaKeys?: string[];
 }
 
-interface LayerMetadataMap {
+export interface LayerMetadataMap {
   [layerKey: string]: LayerConfig | undefined;
 }
 
-type MetadataValue = string | number | boolean | string[] | undefined;
+export type MetadataValue = string | number | boolean | string[] | undefined;
 
-const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
-const CORE_IMAGE_FIELDS = ['profileCard', 'heroBanner'];
+export const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
+export const CORE_IMAGE_FIELDS = ['profileCard', 'heroBanner'];
 
-export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
+interface UseAdminEntityCreateProps {
+  theme: Theme;
+  onSave: (newEntity: HydratedEntity) => void;
+}
+
+export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProps) => {
   // --- Form Local States ---
   const [name, setName] = useState('');
   const [customSuffix, setCustomSuffix] = useState('');
@@ -40,10 +38,23 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   const [isStandalone, setIsStandalone] = useState(true);
   const [idStatus, setIdStatus] = useState<'idle' | 'available' | 'taken'>('idle');
 
+  // --- Staging Pool States ---
+  const [albumInput, setAlbumInput] = useState('');
+  const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
+
+  // --- Helper: Normalize Imgur Links (.gifv format workaround) ---
+  const cleanImgUrl = (url: string): string => {
+    const trimmed = url.trim();
+    if (trimmed.toLowerCase().endsWith('.gifv')) {
+      return trimmed.slice(0, -5) + '.mp4';
+    }
+    return trimmed;
+  };
+
   // --- LAZY STATE INITIALIZATION: MEDIA ASSETS ---
   const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
     const nextImages: Record<string, string> = {};
-    
+
     CORE_IMAGE_FIELDS.forEach(field => {
       nextImages[field] = '';
     });
@@ -68,7 +79,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   // --- LAZY STATE INITIALIZATION: METADATA ---
   const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
     const nextInputs: Record<string, string> = {};
-    
+
     REQUIRED_L4_FIELDS.forEach(field => {
       nextInputs[field] = '';
     });
@@ -146,14 +157,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     };
   }, [metadataInputs, type]);
 
-  const partitionedImageKeys = useMemo(() => {
-    const allImageKeys = Object.keys(imageInputs);
-    return {
-      coreKeys: allImageKeys.filter(k => CORE_IMAGE_FIELDS.includes(k)),
-      dynamicKeys: allImageKeys.filter(k => !CORE_IMAGE_FIELDS.includes(k))
-    };
-  }, [imageInputs]);
-
   // --- Debounced Async ID/Slug check ---
   useEffect(() => {
     const baseSlug = name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
@@ -177,14 +180,64 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     return () => clearTimeout(delayDebounceFn);
   }, [name, customSuffix, theme.id]);
 
-  // --- Handlers ---
+  // --- Synchronous Drop Action Handlers ---
+  const handleAssignImage = (url: string, key: string) => {
+    const cleanedUrl = cleanImgUrl(url);
+    console.log(`[Hook Log] handleAssignImage executed -> target field: "${key}", url: "${cleanedUrl}"`);
+    
+    setImageInputs(prev => {
+      const currentVal = prev[key] ? prev[key].trim() : '';
+      
+      if (!currentVal) {
+        console.log(`[Hook Log] Field "${key}" was empty. Appending asset directly.`);
+        return { ...prev, [key]: cleanedUrl };
+      }
+      
+      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+      if (urls.includes(cleanedUrl)) {
+        console.warn(`[Hook Log] Prevented assignment: "${cleanedUrl}" already registered inside field "${key}".`);
+        return prev;
+      }
+      
+      console.log(`[Hook Log] Field "${key}" has existing data. Merging array list.`);
+      return { ...prev, [key]: [...urls, cleanedUrl].join(', ') };
+    });
+
+    setUnassignedImages(prev => {
+      const filtered = prev.filter(u => cleanImgUrl(u) !== cleanedUrl);
+      console.log(`[Hook Log] Staging pool update. Previous count: ${prev.length}, Next count: ${filtered.length}`);
+      return filtered;
+    });
+  };
+
+  const handleUnassignImage = (url: string, sourceKey: string) => {
+    const cleanedUrl = cleanImgUrl(url);
+    console.log(`[Hook Log] handleUnassignImage executed -> returning asset from field "${sourceKey}" back to pool.`);
+
+    setImageInputs(prev => {
+      const currentVal = prev[sourceKey] || '';
+      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
+      const updatedUrls = urls.filter(u => cleanImgUrl(u) !== cleanedUrl);
+      return { ...prev, [sourceKey]: updatedUrls.join(', ') };
+    });
+
+    setUnassignedImages(prev => {
+      const normalizedPrev = prev.map(cleanImgUrl);
+      if (normalizedPrev.includes(cleanedUrl)) {
+        console.log("[Hook Log] Asset already safely present in staging pool. Skipping duplicate push.");
+        return prev;
+      }
+      return [...prev, cleanedUrl];
+    });
+  };
+
   const handleTypeChange = (newType: string) => {
     setType(newType);
     setIsStandalone(newType.toLowerCase() === 'l4');
     setStatus('active');
 
     const currentLayer = newType.toLowerCase();
-    
+
     const nextImages: Record<string, string> = {};
     CORE_IMAGE_FIELDS.forEach(field => { nextImages[field] = ''; });
 
@@ -257,7 +310,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
   };
 
   const handleRemoveImageField = (key: string) => {
-    if (CORE_IMAGE_FIELDS.includes(key)) {
+    if (CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
       alert(`Field "${key}" is core and cannot be removed.`);
       return;
     }
@@ -297,6 +350,23 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     return result;
   };
 
+  const reconstructImageObject = (
+    currentInputs: Record<string, string>
+  ): Record<string, string | string[]> => {
+    const result: Record<string, string | string[]> = {};
+    Object.keys(currentInputs).forEach(key => {
+      const rawValue = currentInputs[key];
+      if (!rawValue || !rawValue.trim()) return;
+
+      if (rawValue.includes(',')) {
+        result[key] = rawValue.split(',').map(s => cleanImgUrl(s)).filter(Boolean);
+      } else {
+        result[key] = cleanImgUrl(rawValue);
+      }
+    });
+    return result;
+  };
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       alert("Please enter a valid name.");
@@ -331,12 +401,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       updatedMetadata[trigger.key] = trigger.value;
     }
 
-    const cleanedImages: Record<string, string> = {};
-    Object.keys(imageInputs).forEach(k => {
-      if (imageInputs[k] && imageInputs[k].trim()) {
-        cleanedImages[k] = imageInputs[k].trim();
-      }
-    });
+    const updatedImage = reconstructImageObject(imageInputs);
 
     const newSkeleton: BaseEntity = {
       id: generatedId,
@@ -345,7 +410,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       type: type,
       status: status,
       isStandalone: isStandalone,
-      image: cleanedImages as unknown as BaseEntity['image'],
+      image: updatedImage as unknown as BaseEntity['image'],
       metadata: updatedMetadata
     };
 
@@ -359,220 +424,39 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     }
   };
 
-  const getInputValidationClass = () => {
-    if (idStatus === 'available') return styles.inputAvailable;
-    if (idStatus === 'taken') return styles.inputTaken;
-    return '';
+  return {
+    name,
+    setName,
+    customSuffix,
+    setCustomSuffix,
+    type,
+    status,
+    setStatus,
+    isStandalone,
+    setIsStandalone,
+    idStatus,
+    imageInputs,
+    metadataInputs,
+    newImageKey,
+    setNewImageKey,
+    newMetadataKey,
+    setNewMetadataKey,
+    dynamicTriggers,
+    triggerFieldsMap,
+    partitionedMetadataKeys,
+    albumInput,
+    setAlbumInput,
+    unassignedImages,
+    setUnassignedImages,
+    handleTypeChange,
+    handleImageInputChange,
+    handleMetadataInputChange,
+    handleAddImageField,
+    handleAddMetadataField,
+    handleRemoveImageField,
+    handleRemoveMetadataField,
+    handleAssignImage,
+    handleUnassignImage,
+    handleSubmit
   };
-
-  return (
-    <div className={styles.formCard}>
-      <h2 className={styles.formCardTitle}>Create New Entity Records</h2>
-
-      {/* Core Base Info Grid */}
-      <div className={styles.baseInfoGrid}>
-        <div>
-          <div className={styles.fieldLabel}>
-            Name {idStatus === 'taken' && <span className={styles.textError}>(ID taken!)</span>}
-          </div>
-          <input
-            type="text"
-            placeholder="e.g., Johan Cruijff"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            className={`${styles.inputField} ${getInputValidationClass()}`}
-          />
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Unique Suffix (Optional)</div>
-          <input
-            type="text"
-            placeholder="e.g., Ajax"
-            value={customSuffix}
-            onChange={e => setCustomSuffix(e.target.value)}
-            className={`${styles.inputField} ${getInputValidationClass()}`}
-          />
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Tier / Layer Type</div>
-          <select
-            value={type}
-            onChange={e => handleTypeChange(e.target.value)}
-            className={styles.inputField}
-          >
-            {[
-              { key: 'l1', fallback: 'Layer 1 (Main Category)' },
-              { key: 'l2', fallback: 'Layer 2 (Governing Body)' },
-              { key: 'l3', fallback: 'Layer 3 (Team / Club)' },
-              { key: 'l4', fallback: 'Layer 4 (Individual / Player)' },
-            ].map(({ key, fallback }) => {
-              const customLabel = theme?.labels?.[key];
-              return (
-                <option key={key} value={key}>
-                  {customLabel ? `${customLabel} (${key.toUpperCase()})` : fallback}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Status</div>
-          <select
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-            className={styles.inputField}
-          >
-            <option value="active">Active</option>
-            <option value="disbanded">Disbanded</option>
-            <option value="inactive">Inactive</option>
-            <option value="retired">Retired</option>
-            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => (
-              <option key={triggerKey} value={triggerKey}>
-                {triggerConfig.value.charAt(0).toUpperCase() + triggerConfig.value.slice(1)} (Schema Trigger)
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Standalone Node</div>
-          <input
-            type="checkbox"
-            checked={isStandalone}
-            onChange={e => setIsStandalone(e.target.checked)}
-            className={styles.checkbox}
-          />
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Passing Date</div>
-          <input
-            type="text"
-            placeholder="DD-MM-YYYY"
-            value={metadataInputs['PassingDate'] || ''}
-            onChange={e => handleMetadataInputChange('PassingDate', e.target.value)}
-            className={styles.inputField}
-          />
-        </div>
-      </div>
-
-      {/* SECTIE A: CORE REQUIRED GAME FIELDS */}
-      {type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
-        <div className={styles.requiredSection}>
-          <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
-          <div className={styles.twoColumnGrid}>
-            {partitionedMetadataKeys.requiredKeys.map(key => (
-              <div key={key}>
-                <div className={styles.requiredLabel}>{key}</div>
-                <input
-                  type="text"
-                  placeholder={`Enter required ${key}`}
-                  value={metadataInputs[key] || ''}
-                  onChange={e => handleMetadataInputChange(key, e.target.value)}
-                  className={`${styles.inputField} ${styles.requiredInput}`}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* SECTIE B: DYNAMIC THEME ATTRIBUTES */}
-      <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Populated via {type.toUpperCase()} Theme Schema)</h3>
-      <div className={styles.innerSection}>
-        {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
-          <p className={styles.textMuted}>No specific layout metadata schema properties injected for this layer.</p>
-        ) : (
-          <div className={styles.twoColumnGrid}>
-            {partitionedMetadataKeys.dynamicKeys.map(key => {
-              const triggerValues = triggerFieldsMap[key];
-              return (
-                <div key={key}>
-                  <div className={styles.labelActionRow}>
-                    <span>
-                      {key}
-                      {triggerValues && <small className={styles.textWarning}> (Required by theme 🔒)</small>}
-                    </span>
-                    <button type="button" onClick={() => handleRemoveMetadataField(key)} className={styles.btnRemove}>Remove</button>
-                  </div>
-
-                  {triggerValues ? (
-                    <select
-                      value={metadataInputs[key] || ''}
-                      onChange={e => handleMetadataInputChange(key, e.target.value)}
-                      className={styles.inputField}
-                    >
-                      <option value="">-- Active / Normal --</option>
-                      {triggerValues.map(val => (
-                        <option key={val} value={val}>
-                          {val.charAt(0).toUpperCase() + val.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={metadataInputs[key] || ''}
-                      onChange={e => handleMetadataInputChange(key, e.target.value)}
-                      className={styles.inputField}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <div className={styles.innerActionRow}>
-          <input type="text" placeholder="e.g., Twitter" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} className={styles.inlineInput} />
-          <button type="button" onClick={handleAddMetadataField} className={`${styles.btn} ${styles.btnPrimary}`}>Add Attribute Property</button>
-        </div>
-      </div>
-
-      {/* SECTIE C: MEDIA ASSETS */}
-      <h3 className={styles.sectionTitle}>📸 Media Assets (Optional per Theme {type.toUpperCase()} Schema)</h3>
-      <div className={styles.innerSection}>
-        <div className={styles.twoColumnGrid}>
-          {partitionedImageKeys.coreKeys.map(key => (
-            <div key={key}>
-              <div className={styles.labelActionRow}>
-                <span>{key} <small className={styles.textMuted}>(Core Asset)</small></span>
-              </div>
-              <input
-                type="text"
-                placeholder="https://image-url.com/asset.png"
-                value={imageInputs[key] || ''}
-                onChange={e => handleImageInputChange(key, e.target.value)}
-                className={styles.inputField}
-              />
-            </div>
-          ))}
-
-          {partitionedImageKeys.dynamicKeys.map(key => (
-            <div key={key}>
-              <div className={styles.labelActionRow}>
-            <span>{key} <small className={styles.textWarning}>(Optional Theme-decided Key)</small></span>
-                <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove</button>
-              </div>
-              <input
-                type="text"
-                placeholder="https://image-url.com/dynamic-asset.png"
-                value={imageInputs[key] || ''}
-                onChange={e => handleImageInputChange(key, e.target.value)}
-                className={styles.inputField}
-              />
-            </div>
-          ))}
-        </div>
-        
-        <div className={styles.innerActionRow}>
-          <input type="text" placeholder="e.g., logo or fanart" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} className={styles.inlineInput} />
-          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>Add Asset Field</button>
-        </div>
-      </div>
-
-      {/* Action Footers */}
-      <div className={styles.footerActions}>
-        <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
-        <button type="button" onClick={handleSubmit} className={`${styles.btn} ${styles.btnPrimary}`}>Create & Save</button>
-      </div>
-    </div>
-  );
 };
