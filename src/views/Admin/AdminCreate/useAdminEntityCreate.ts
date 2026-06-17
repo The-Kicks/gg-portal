@@ -1,170 +1,65 @@
-import { useState, useEffect, useMemo } from 'react';
-import type { Theme, HydratedEntity, BaseEntity } from '../../../types';
+import { useState, useEffect } from 'react';
+import type { Theme, HydratedEntity, BaseEntity, LayerKey, HydratedEntityConnection } from '../../../types';
 import { entityService } from '../EntityService';
 
-export interface TriggerConfig {
-  key: string;
-  value: string;
-}
-
-export interface LayerConfig {
-  badgeKey?: string;
-  subtitleKey?: string;
-  gridKeys?: string[];
-  statusTriggers?: Record<string, TriggerConfig>;
-  mediaKeys?: string[];
-}
-
-export interface LayerMetadataMap {
-  [layerKey: string]: LayerConfig | undefined;
-}
-
-export type MetadataValue = string | number | boolean | string[] | undefined;
-
-export const REQUIRED_L4_FIELDS = ['Nationality', 'Role', 'DebutYear', 'Birthday', 'Height'];
-export const CORE_IMAGE_FIELDS = ['profileCard', 'heroBanner'];
+import { useStandardEntityAttributes } from '../adminUtils/useStandardEntityAttributes';
+import { useDynamicAttributes, buildMetadataInputs } from '../adminUtils/useDynamicAttributes';
+import type { MetadataValue } from '../adminUtils/useDynamicAttributes';
+import { useMediaCategories, buildImageInputs } from '../adminUtils/useMediaCategories';
+import { useTimelineBuilder } from '../adminUtils/useTimelineBuilder';
 
 interface UseAdminEntityCreateProps {
   theme: Theme;
-  onSave: (newEntity: HydratedEntity) => void;
+  onSave: (newEntity: HydratedEntity) => void | Promise<void>;
 }
 
 export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProps) => {
-  // --- Form Local States ---
-  const [name, setName] = useState('');
-  const [customSuffix, setCustomSuffix] = useState('');
-  const [type, setType] = useState('l4');
-  const [status, setStatus] = useState('active');
-  const [isStandalone, setIsStandalone] = useState(true);
+  const [type, setType] = useState<LayerKey>('l4');
+  const [customSuffix, setCustomSuffix] = useState<string>('');
   const [idStatus, setIdStatus] = useState<'idle' | 'available' | 'taken'>('idle');
 
-  // --- Staging Pool States ---
-  const [albumInput, setAlbumInput] = useState('');
-  const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
+  // Haal de metadata-standaard op voor de huidige geselecteerde laag uit het Theme
+  const currentLayerMetadata = theme.layerMetadata[type];
 
-  // --- Helper: Normalize Imgur Links (.gifv format workaround) ---
-  const cleanImgUrl = (url: string): string => {
-    const trimmed = url.trim();
-    if (trimmed.toLowerCase().endsWith('.gifv')) {
-      return trimmed.slice(0, -5) + '.mp4';
-    }
-    return trimmed;
+  // Initialiseer de sub-hooks
+  const standardAttrs = useStandardEntityAttributes(undefined);
+  const dynamicAttrs = useDynamicAttributes(undefined, theme, type);
+  const mediaCategories = useMediaCategories(undefined, theme, currentLayerMetadata, type);
+  const timelineBuilder = useTimelineBuilder(undefined, theme, '', type);
+
+  // Handmatige type switch via de dropdown
+  const handleTypeChange = (newType: LayerKey) => {
+    setType(newType);
+    standardAttrs.setStatus('active');
+
+    // Automatische suggestie bij laagwissel, maar overschrijfbaar via de checkbox
+    standardAttrs.setIsStandalone(newType.toLowerCase() === 'l4');
+
+    mediaCategories.setAlbumInput('');
+    mediaCategories.setUnassignedImages([]);
+    mediaCategories.setImageInputs(buildImageInputs(undefined, theme, newType));
+    dynamicAttrs.setMetadataInputs(buildMetadataInputs(undefined, theme, newType));
+    timelineBuilder.setLocalConnections([]);
+    timelineBuilder.setLocalTargetConnections([]);
   };
 
-  // --- LAZY STATE INITIALIZATION: MEDIA ASSETS ---
-  const [imageInputs, setImageInputs] = useState<Record<string, string>>(() => {
-    const nextImages: Record<string, string> = {};
+  // Handmatige toggle voor de standalone checkbox in de UI
+  const handleStandaloneChange = (checked: boolean) => {
+    standardAttrs.setIsStandalone(checked);
 
-    CORE_IMAGE_FIELDS.forEach(field => {
-      nextImages[field] = '';
-    });
-
-    if (theme.layerMetadata) {
-      try {
-        const parsed = typeof theme.layerMetadata === 'string'
-          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
-          : (theme.layerMetadata as unknown as LayerMetadataMap);
-        const initialConfig = parsed['l4'];
-
-        if (initialConfig?.mediaKeys && Array.isArray(initialConfig.mediaKeys)) {
-          initialConfig.mediaKeys.forEach(k => { if (k) nextImages[k] = ''; });
-        }
-      } catch (e: unknown) {
-        console.error("Error loading initial media assets in lazy state:", e);
-      }
+    if (checked && !dynamicAttrs.metadataInputs['standaloneStatus']) {
+      dynamicAttrs.handleMetadataInputChange('standaloneStatus', 'active');
     }
-    return nextImages;
-  });
+  };
 
-  // --- LAZY STATE INITIALIZATION: METADATA ---
-  const [metadataInputs, setMetadataInputs] = useState<Record<string, string>>(() => {
-    const nextInputs: Record<string, string> = {};
-
-    REQUIRED_L4_FIELDS.forEach(field => {
-      nextInputs[field] = '';
-    });
-
-    if (theme.layerMetadata) {
-      try {
-        const parsed = typeof theme.layerMetadata === 'string'
-          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
-          : (theme.layerMetadata as unknown as LayerMetadataMap);
-        const initialConfig = parsed['l4'];
-
-        if (initialConfig) {
-          if (initialConfig.badgeKey) nextInputs[initialConfig.badgeKey] = '';
-          if (initialConfig.subtitleKey) nextInputs[initialConfig.subtitleKey] = '';
-          if (Array.isArray(initialConfig.gridKeys)) {
-            initialConfig.gridKeys.forEach(k => { if (k) nextInputs[k] = ''; });
-          }
-          if (initialConfig.statusTriggers) {
-            Object.values(initialConfig.statusTriggers).forEach(t => { if (t?.key) nextInputs[t.key] = ''; });
-          }
-        }
-      } catch (e: unknown) {
-        console.error("Error loading initial schema attributes in lazy state:", e);
-      }
-    }
-    return nextInputs;
-  });
-
-  // --- UI Control States ---
-  const [newImageKey, setNewImageKey] = useState('');
-  const [newMetadataKey, setNewMetadataKey] = useState('');
-
-  // --- Layer Config Resolution ---
-  const layerConfig = useMemo<LayerConfig | undefined>(() => {
-    if (!theme.layerMetadata) return undefined;
-    try {
-      const parsedConfig = typeof theme.layerMetadata === 'string'
-        ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
-        : (theme.layerMetadata as unknown as LayerMetadataMap);
-      return parsedConfig[type.toLowerCase()];
-    } catch (err: unknown) {
-      console.error("Error parsing layerMetadata layout configuration:", err);
-      return undefined;
-    }
-  }, [theme.layerMetadata, type]);
-
-  const dynamicTriggers = useMemo(() => layerConfig?.statusTriggers || {}, [layerConfig]);
-
-  const triggerFieldsMap = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    Object.values(dynamicTriggers).forEach(trigger => {
-      if (trigger && trigger.key) {
-        if (!map[trigger.key]) map[trigger.key] = [];
-        if (!map[trigger.key].includes(trigger.value)) {
-          map[trigger.key].push(trigger.value);
-        }
-      }
-    });
-    return map;
-  }, [dynamicTriggers]);
-
-  const partitionedMetadataKeys = useMemo(() => {
-    const allKeys = Object.keys(metadataInputs);
-    const isL4 = type.toLowerCase() === 'l4';
-
-    return {
-      requiredKeys: allKeys.filter(key =>
-        isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())
-      ),
-      dynamicKeys: allKeys.filter(key => {
-        const isRequired = isL4 && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
-        const isPassingDate = key.toLowerCase() === 'passingdate';
-        return !isRequired && !isPassingDate;
-      })
-    };
-  }, [metadataInputs, type]);
-
-  // --- Debounced Async ID/Slug check ---
+  // Debounced unique ID check
   useEffect(() => {
-    const baseSlug = name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
+    const baseSlug = standardAttrs.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
     const suffix = customSuffix.trim() ? customSuffix.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') : '';
     const idToCheck = suffix ? `${baseSlug}-${suffix}` : baseSlug;
 
     const delayDebounceFn = setTimeout(async () => {
-      if (!name.trim()) {
+      if (!standardAttrs.name.trim()) {
         setIdStatus('idle');
         return;
       }
@@ -178,171 +73,91 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     }, 400);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [name, customSuffix, theme.id]);
+  }, [standardAttrs.name, customSuffix, theme.id]);
 
-  // --- Synchronous Drop Action Handlers ---
-  const handleAssignImage = (url: string, key: string) => {
-    const cleanedUrl = cleanImgUrl(url);
-    console.log(`[Hook Log] handleAssignImage executed -> target field: "${key}", url: "${cleanedUrl}"`);
-    
-    setImageInputs(prev => {
-      const currentVal = prev[key] ? prev[key].trim() : '';
-      
-      if (!currentVal) {
-        console.log(`[Hook Log] Field "${key}" was empty. Appending asset directly.`);
-        return { ...prev, [key]: cleanedUrl };
-      }
-      
-      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
-      if (urls.includes(cleanedUrl)) {
-        console.warn(`[Hook Log] Prevented assignment: "${cleanedUrl}" already registered inside field "${key}".`);
-        return prev;
-      }
-      
-      console.log(`[Hook Log] Field "${key}" has existing data. Merging array list.`);
-      return { ...prev, [key]: [...urls, cleanedUrl].join(', ') };
-    });
+  /**
+     * Genereert een inline virtuele track/node zonder directe relationele binding,
+     * identiek aan de geavanceerde Edit-module functionaliteit.
+     */
+  const handleCreateNonRelationalTrack = () => {
+    const trackName = prompt('Enter custom track or layout display name (e.g. "World Cup Squad", "Independents"):');
+    if (!trackName || !trackName.trim()) return;
 
-    setUnassignedImages(prev => {
-      const filtered = prev.filter(u => cleanImgUrl(u) !== cleanedUrl);
-      console.log(`[Hook Log] Staging pool update. Previous count: ${prev.length}, Next count: ${filtered.length}`);
-      return filtered;
-    });
-  };
+    const generatedTrackId = `track-virtual-${Date.now()}`;
 
-  const handleUnassignImage = (url: string, sourceKey: string) => {
-    const cleanedUrl = cleanImgUrl(url);
-    console.log(`[Hook Log] handleUnassignImage executed -> returning asset from field "${sourceKey}" back to pool.`);
-
-    setImageInputs(prev => {
-      const currentVal = prev[sourceKey] || '';
-      const urls = currentVal.split(',').map(s => s.trim()).filter(Boolean);
-      const updatedUrls = urls.filter(u => cleanImgUrl(u) !== cleanedUrl);
-      return { ...prev, [sourceKey]: updatedUrls.join(', ') };
-    });
-
-    setUnassignedImages(prev => {
-      const normalizedPrev = prev.map(cleanImgUrl);
-      if (normalizedPrev.includes(cleanedUrl)) {
-        console.log("[Hook Log] Asset already safely present in staging pool. Skipping duplicate push.");
-        return prev;
-      }
-      return [...prev, cleanedUrl];
-    });
-  };
-
-  const handleTypeChange = (newType: string) => {
-    setType(newType);
-    setIsStandalone(newType.toLowerCase() === 'l4');
-    setStatus('active');
-
-    const currentLayer = newType.toLowerCase();
-
-    const nextImages: Record<string, string> = {};
-    CORE_IMAGE_FIELDS.forEach(field => { nextImages[field] = ''; });
-
-    const nextInputs: Record<string, string> = {};
-    if (currentLayer === 'l4') {
-      REQUIRED_L4_FIELDS.forEach(field => { nextInputs[field] = ''; });
-    }
-
-    if (theme.layerMetadata) {
-      try {
-        const parsed = typeof theme.layerMetadata === 'string'
-          ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
-          : (theme.layerMetadata as unknown as LayerMetadataMap);
-        const nextConfig = parsed[currentLayer];
-
-        if (nextConfig) {
-          if (nextConfig.mediaKeys && Array.isArray(nextConfig.mediaKeys)) {
-            nextConfig.mediaKeys.forEach(k => { if (k) nextImages[k] = ''; });
-          }
-          if (nextConfig.badgeKey) nextInputs[nextConfig.badgeKey] = '';
-          if (nextConfig.subtitleKey) nextInputs[nextConfig.subtitleKey] = '';
-          if (Array.isArray(nextConfig.gridKeys)) {
-            nextConfig.gridKeys.forEach(k => { if (k) nextInputs[k] = ''; });
-          }
-          if (nextConfig.statusTriggers) {
-            Object.values(nextConfig.statusTriggers).forEach(t => { if (t?.key) nextInputs[t.key] = ''; });
-          }
+    // Voeg toe aan de lokale uitgaande connecties binnen de timelineBuilder state
+    timelineBuilder.setLocalConnections(prev => [
+      ...prev,
+      {
+        id: Date.now(),
+        themeId: theme.id,
+        entityId: '',
+        sourceEntityId: '',
+        targetEntityId: generatedTrackId,
+        relatedEntityId: generatedTrackId,
+        direction: 'outgoing',
+        status: 'active',
+        startDate: '',
+        endDate: '',
+        metadata: {
+          status: 'active' // Mocht je applicatie hier runtime op crashen, dan staat er nu iig een fallback
+        },
+        relatedEntity: {
+          id: generatedTrackId,
+          themeId: theme.id,
+          name: trackName.trim(),
+          type: 'l3',
+          status: 'active',
+          isStandalone: false,
+          image: {},
+          metadata: {},
+          connections: [],
+          targetConnections: []
         }
-      } catch (e: unknown) {
-        console.error("Error parsing schema metadata upon layer switch:", e);
+      } as HydratedEntityConnection // <-- De BEVRIJDENDE CAST! Dit stopt de TS-kettingreactie direct.
+    ]);
+  };
+
+  const reconstructImageObject = (currentInputs: Record<string, string>): Record<string, string | string[]> => {
+    const result: Record<string, string | string[]> = {};
+    Object.keys(currentInputs).forEach(key => {
+      const rawValue = currentInputs[key];
+      if (!rawValue || !rawValue.trim()) return;
+
+      const cleanUrls = rawValue.split(/[\s\n,]+/).map(s => s.trim()).filter(Boolean);
+
+      if (cleanUrls.length > 1) {
+        result[key] = cleanUrls;
+      } else {
+        result[key] = cleanUrls[0] || '';
       }
-    }
-
-    setImageInputs(nextImages);
-    setMetadataInputs(nextInputs);
+    });
+    return result;
   };
 
-  const handleImageInputChange = (key: string, value: string) => {
-    setImageInputs(prev => ({ ...prev, [key]: value }));
-  };
-
-  const handleMetadataInputChange = (key: string, value: string) => {
-    setMetadataInputs(prev => ({ ...prev, [key]: value }));
-  };
-
-  const handleAddImageField = () => {
-    const cleanKey = newImageKey.trim();
-    if (!cleanKey || imageInputs[cleanKey] !== undefined) return;
-    setImageInputs(prev => ({ ...prev, [cleanKey]: '' }));
-    setNewImageKey('');
-  };
-
-  const handleAddMetadataField = () => {
-    const cleanKey = newMetadataKey.trim();
-    if (!cleanKey) return;
-
-    if (metadataInputs[cleanKey] !== undefined) {
-      alert("Dit veld bestaat al.");
-      return;
-    }
-
-    const isCoreField = REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === cleanKey.toLowerCase());
-    if (isCoreField) {
-      alert(`Het veld "${cleanKey}" is een gereserveerd systeem-veld.`);
-      return;
-    }
-
-    setMetadataInputs(prev => ({ ...prev, [cleanKey]: '' }));
-    setNewMetadataKey('');
-  };
-
-  const handleRemoveImageField = (key: string) => {
-    if (CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
-      alert(`Field "${key}" is core and cannot be removed.`);
-      return;
-    }
-    setImageInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
-  };
-
-  const handleRemoveMetadataField = (key: string) => {
-    if (type.toLowerCase() === 'l4' && REQUIRED_L4_FIELDS.some(f => f.toLowerCase() === key.toLowerCase())) {
-      alert(`Field "${key}" is strictly required for the trivia logic engine and cannot be stripped.`);
-      return;
-    }
-    setMetadataInputs(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
-  };
-
-  const reconstructObject = (
-    currentInputs: Record<string, string>
-  ): Record<string, MetadataValue> => {
+  const reconstructObject = (currentInputs: Record<string, string>): Record<string, MetadataValue> => {
     const result: Record<string, MetadataValue> = {};
 
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
       if (!rawValue || !rawValue.trim()) return;
 
-      if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
+      const lowerKey = key.toLowerCase();
+
+      if (
+        lowerKey === 'passingdate' ||
+        lowerKey === 'birthday' ||
+        lowerKey === 'standalonestartdate' ||
+        lowerKey === 'standaloneenddate'
+      ) {
         result[key] = rawValue.trim();
         return;
       }
 
-      if (key.toLowerCase() === 'nationality' || rawValue.includes(',')) {
+      if (lowerKey === 'nationality' || rawValue.includes(',')) {
         result[key] = rawValue.split(',').map(s => s.trim()).filter(Boolean);
-      } else if (key.toLowerCase() === 'height' || key.toLowerCase() === 'debutyear') {
-        result[key] = Number(rawValue.trim()) || 0;
+      } else if ((lowerKey === 'height' || lowerKey === 'debutyear') && !isNaN(Number(rawValue.trim()))) {
+        result[key] = Number(rawValue.trim());
       } else {
         result[key] = rawValue.trim();
       }
@@ -350,25 +165,13 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     return result;
   };
 
-  const reconstructImageObject = (
-    currentInputs: Record<string, string>
-  ): Record<string, string | string[]> => {
-    const result: Record<string, string | string[]> = {};
-    Object.keys(currentInputs).forEach(key => {
-      const rawValue = currentInputs[key];
-      if (!rawValue || !rawValue.trim()) return;
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
-      if (rawValue.includes(',')) {
-        result[key] = rawValue.split(',').map(s => cleanImgUrl(s)).filter(Boolean);
-      } else {
-        result[key] = cleanImgUrl(rawValue);
-      }
-    });
-    return result;
-  };
-
-  const handleSubmit = async () => {
-    if (!name.trim()) {
+    if (!standardAttrs.name.trim()) {
       alert("Please enter a valid name.");
       return;
     }
@@ -378,85 +181,145 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       return;
     }
 
+    // Valideer de REQUIRED ATTRIBUTES via dezelfde array als de UI (partitionedMetadataKeys.requiredKeys)
     if (type.toLowerCase() === 'l4') {
-      for (const field of REQUIRED_L4_FIELDS) {
-        const foundKey = Object.keys(metadataInputs).find(k => k.toLowerCase() === field.toLowerCase());
-        const value = foundKey ? metadataInputs[foundKey] : undefined;
+      const requiredFields = dynamicAttrs.partitionedMetadataKeys.requiredKeys || [];
+      for (const field of requiredFields) {
+        const value = dynamicAttrs.metadataInputs[field];
 
         if (!value || !value.trim()) {
-          alert(`Game Error: The field "${field}" is strictly required for Layer 4 entities.`);
+          alert(`Validation Error: The field "${field}" is strictly required by the GuessWho game configuration engine.`);
           return;
         }
       }
     }
 
-    const baseSlug = name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
+    // EXTRA VALIDATIE: Als standalone aanstaat, is de Track Start Date verplicht!
+    if (standardAttrs.isStandalone) {
+      const standaloneStart = dynamicAttrs.metadataInputs['standaloneStartDate'];
+      if (!standaloneStart || !standaloneStart.trim()) {
+        alert("Validation Error: Track Start Date is required when Standalone Node is enabled.");
+        return;
+      }
+    }
+
+    // Algemene datum-notatie validaties (indien ingevuld)
+    const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
+    const birthdayKey = Object.keys(dynamicAttrs.metadataInputs).find((k: string) => k.toLowerCase() === 'birthday');
+    const birthdayVal = birthdayKey ? dynamicAttrs.metadataInputs[birthdayKey]?.trim() : undefined;
+    if (birthdayVal && !dateRegex.test(birthdayVal)) {
+      alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
+      return;
+    }
+
+    const passingDateKey = Object.keys(dynamicAttrs.metadataInputs).find((k: string) => k.toLowerCase() === 'passingdate');
+    const passingDateVal = passingDateKey ? dynamicAttrs.metadataInputs[passingDateKey]?.trim() : undefined;
+    if (passingDateVal && !dateRegex.test(passingDateVal)) {
+      alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
+      return;
+    }
+
+    const baseSlug = standardAttrs.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
     const suffix = customSuffix.trim() ? customSuffix.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') : '';
     const generatedId = suffix ? `${baseSlug}-${suffix}` : baseSlug;
 
-    const updatedMetadata = reconstructObject(metadataInputs);
+    const updatedMetadata = reconstructObject(dynamicAttrs.metadataInputs);
+    const updatedImage = reconstructImageObject(mediaCategories.imageInputs);
 
-    if (dynamicTriggers[status]) {
-      const trigger = dynamicTriggers[status];
-      updatedMetadata[trigger.key] = trigger.value;
+    if (currentLayerMetadata?.statusTriggers) {
+      const triggers = currentLayerMetadata.statusTriggers;
+      const matchingTrigger = Object.values(triggers).find(t => t && t.key);
+      if (matchingTrigger && standardAttrs.status === matchingTrigger.key) {
+        updatedMetadata[matchingTrigger.key] = matchingTrigger.value;
+      }
     }
 
-    const updatedImage = reconstructImageObject(imageInputs);
+    if (standardAttrs.isStandalone && !updatedMetadata['standaloneStatus']) {
+      updatedMetadata['standaloneStatus'] = 'active';
+    }
 
-    const newSkeleton: BaseEntity = {
+    const newEntitySkeleton: BaseEntity = {
       id: generatedId,
       themeId: theme.id,
-      name: name.trim(),
+      name: standardAttrs.name.trim(),
       type: type,
-      status: status,
-      isStandalone: isStandalone,
-      image: updatedImage as unknown as BaseEntity['image'],
+      status: standardAttrs.status,
+      isStandalone: standardAttrs.isStandalone,
+      image: updatedImage as BaseEntity['image'],
       metadata: updatedMetadata
     };
 
     try {
-      const savedEntity: HydratedEntity = await entityService.create(theme.id, newSkeleton);
+      const savedEntity = await entityService.create(theme.id, newEntitySkeleton);
       window.dispatchEvent(new Event('refresh-database'));
-      if (onSave) onSave(savedEntity);
-    } catch (err: unknown) {
-      console.error(err);
-      alert(`Could not persist the new record.`);
+
+      if (onSave) {
+        await onSave({
+          ...savedEntity,
+          connections: timelineBuilder.localConnections,
+          targetConnections: timelineBuilder.localTargetConnections
+        });
+      }
+    } catch {
+      alert("Could not persist the new record.");
     }
   };
 
   return {
-    name,
-    setName,
+    type,
+    handleTypeChange,
     customSuffix,
     setCustomSuffix,
-    type,
-    status,
-    setStatus,
-    isStandalone,
-    setIsStandalone,
     idStatus,
-    imageInputs,
-    metadataInputs,
-    newImageKey,
-    setNewImageKey,
-    newMetadataKey,
-    setNewMetadataKey,
-    dynamicTriggers,
-    triggerFieldsMap,
-    partitionedMetadataKeys,
-    albumInput,
-    setAlbumInput,
-    unassignedImages,
-    setUnassignedImages,
-    handleTypeChange,
-    handleImageInputChange,
-    handleMetadataInputChange,
-    handleAddImageField,
-    handleAddMetadataField,
-    handleRemoveImageField,
-    handleRemoveMetadataField,
-    handleAssignImage,
-    handleUnassignImage,
+    currentLayerMetadata,
+    handleStandaloneChange,
+
+    name: standardAttrs.name,
+    setName: standardAttrs.setName,
+    status: standardAttrs.status,
+    setStatus: standardAttrs.setStatus,
+    isStandalone: standardAttrs.isStandalone,
+
+    albumInput: mediaCategories.albumInput,
+    setAlbumInput: mediaCategories.setAlbumInput,
+    unassignedImages: mediaCategories.unassignedImages,
+    setUnassignedImages: mediaCategories.setUnassignedImages,
+    imageInputs: mediaCategories.imageInputs,
+    newImageKey: mediaCategories.newImageKey,
+    setNewImageKey: mediaCategories.setNewImageKey,
+
+    metadataInputs: dynamicAttrs.metadataInputs,
+    newMetadataKey: dynamicAttrs.newMetadataKey,
+    setNewMetadataKey: dynamicAttrs.setNewMetadataKey,
+    dynamicTriggers: dynamicAttrs.dynamicTriggers,
+    triggerFieldsMap: dynamicAttrs.triggerFieldsMap,
+    partitionedMetadataKeys: dynamicAttrs.partitionedMetadataKeys,
+    handleMetadataInputChange: dynamicAttrs.handleMetadataInputChange,
+
+    expandedChildId: timelineBuilder.expandedChildId,
+    setExpandedChildId: timelineBuilder.setExpandedChildId,
+    connectionSearchTerm: timelineBuilder.connectionSearchTerm,
+    setConnectionSearchTerm: timelineBuilder.setConnectionSearchTerm,
+    isConnectionDropdownOpen: timelineBuilder.isConnectionDropdownOpen,
+    setIsConnectionDropdownOpen: timelineBuilder.setIsConnectionDropdownOpen,
+    dropdownRef: timelineBuilder.dropdownRef,
+    filteredAvailableTargets: timelineBuilder.filteredAvailableTargets,
+    unifiedConnections: timelineBuilder.unifiedConnections,
+    setLocalConnections: timelineBuilder.setLocalConnections,
+    setLocalTargetConnections: timelineBuilder.setLocalTargetConnections,
+
+    handleImageInputChange: mediaCategories.handleImageInputChange,
+    handleAddImageField: mediaCategories.handleAddImageField,
+    handleAddMetadataField: dynamicAttrs.handleAddMetadataField,
+    handleRemoveImageField: mediaCategories.handleRemoveImageField,
+    handleRemoveMetadataField: dynamicAttrs.handleRemoveMetadataField,
+    handleConnectionMetadataChange: timelineBuilder.handleConnectionMetadataChange,
+    handleRemoveConnection: timelineBuilder.handleRemoveConnection,
+    handleAddConnection: timelineBuilder.handleAddConnection,
+    handleParseAlbum: mediaCategories.handleParseAlbum,
+    handleAssignImage: mediaCategories.handleAssignImage,
+    handleUnassignImage: mediaCategories.handleUnassignImage,
+    handleCreateNonRelationalTrack,
     handleSubmit
   };
 };

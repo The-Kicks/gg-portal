@@ -88,6 +88,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   /* English comment: Format date string cleanly for timeline view */
   const formatTimelineDate = (dateStr?: string) => {
     if (!dateStr) return '';
+
+    // Als de string puur een jaartal is (bijv. "2015"), geef deze dan direct terug zonder maand
+    if (/^\d{4}$/.test(dateStr.trim())) {
+      return dateStr.trim();
+    }
+
     const dateObj = new Date(dateStr);
     if (isNaN(dateObj.getTime())) return dateStr;
     return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
@@ -195,29 +201,31 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <div className={styles.infoCard}>
               <h3 className={styles.sidebarTitle}>Stats</h3>
               <div className={styles.statsGrid}>
-                {formattedStatistics.map((stat) => (
-                  <div key={stat.key} className={styles.statBox}>
-                    <label>{stat.label}</label>
-                    {stat.key === 'Nationality' && Array.isArray(entity.metadata?.Nationality) ? (
-                      <div className={styles.metadata} style={{ display: 'flex', gap: '5px' }}>
-                        {entity.metadata.Nationality.map((flagcode: string) => (
-                          <ReactCountryFlag
-                            key={flagcode}
-                            countryCode={flagcode}
-                            svg
-                            style={{ width: '1.5em', height: '1.5em' }}
-                            title={flagcode}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <span>{stat.displayValue}</span>
-                    )}
-                  </div>
-                ))}
+                {formattedStatistics
+                  .filter((stat) => stat.key !== 'customTracks') // Dit filtert de customTracks eruit
+                  .map((stat) => (
+                    <div key={stat.key} className={styles.statBox}>
+                      <label>{stat.label}</label>
+                      {stat.key === 'Nationality' && Array.isArray(entity.metadata?.Nationality) ? (
+                        <div className={styles.metadata} style={{ display: 'flex', gap: '5px' }}>
+                          {entity.metadata.Nationality.map((flagcode: string) => (
+                            <ReactCountryFlag
+                              key={flagcode}
+                              countryCode={flagcode}
+                              svg
+                              style={{ width: '1.5em', height: '1.5em' }}
+                              title={flagcode}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <span>{stat.displayValue}</span>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
-          </div>
+            </div>
         </aside>
 
         <main className={styles.contentArea}>

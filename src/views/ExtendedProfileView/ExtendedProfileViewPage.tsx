@@ -211,7 +211,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [groupedTeammates]);
 
-  /* Compile, prioritize active memberships/standalone windows by duration, and push inactive to the bottom */
+/* Compile, prioritize active memberships/standalone windows by duration, and push inactive to the bottom */
   const timelineItems = useMemo<TimelineItem[]>(() => {
     if (!profileDetails?.targetEntity) return [];
     
@@ -219,25 +219,38 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
     const extractedEvents: TimelineItem[] = [];
 
-    // 1. Verwerk alle groepsconnecties (L3)
+    // Hulpfunctie om vreemde objecten of lege databasetypes te filteren en te forceren naar een string
+    const safeStringCast = (val: unknown): string | undefined => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'object' && Object.keys(val).length === 0) return undefined;
+      if (typeof val === 'object') return undefined;
+      const str = String(val).trim();
+      return str !== '' ? str : undefined;
+    };
+
+    // 1. Verwerk alle connecties uit de database (Echte groepen, (Nep)relaties, F1 teams, Voetbalclubs)
     allConns.forEach(conn => {
-      const group = conn.sourceEntity?.type === 'l3' 
-        ? conn.sourceEntity 
-        : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
+      const connectedEntity = conn.sourceEntity?.id !== id ? conn.sourceEntity : conn.targetEntity;
 
-      if (group) {
-        const rawStartDate = conn.metadata?.startDate || conn.metadata?.startdate;
-        const rawEndDate = conn.metadata?.endDate || conn.metadata?.enddate;
+      if (connectedEntity) {
+        const startDate = safeStringCast(conn.metadata?.startDate || conn.metadata?.startdate);
+        const endDate = safeStringCast(conn.metadata?.endDate || conn.metadata?.enddate);
         const rawStatus = conn.metadata?.status;
+        
+        const status = safeStringCast(rawStatus);
 
-        const startDate = rawStartDate ? String(rawStartDate) : undefined;
-        const endDate = rawEndDate ? String(rawEndDate) : undefined;
-        const status = rawStatus ? String(rawStatus) : undefined;
+        // Bepaal de naam: Prioriteit aan eventName/relationshipLabel, anders de naam van de connectie
+        const groupName = safeStringCast(conn.metadata?.eventName) || 
+                          safeStringCast(conn.metadata?.relationshipLabel) || 
+                          (connectedEntity.type === 'l3' ? connectedEntity.name : connectedEntity.name);
 
-        if (startDate || endDate) {
+        // Connecties tonen we als er datums zijn óf als het een relatie/show betreft (alles wat geen standaard L3 groep is)
+        const isGroupMembership = connectedEntity.type === 'l3';
+        
+        if (startDate || endDate || !isGroupMembership) {
           extractedEvents.push({
-            id: String(conn.id || `${group.id}-${startDate || 'unknown'}`),
-            groupName: group.name,
+            id: String(conn.id || `${connectedEntity.id}-${startDate || 'unknown'}`),
+            groupName: groupName,
             startDate,
             endDate,
             status
@@ -246,23 +259,73 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       }
     });
 
-    // 2. Standalone tracks ophalen op basis van de specifieke opgeslagen standalone track metadata (bijv. Nayeon)
-    if (targetEntity.isStandalone) {
-      const standaloneStartDate = targetEntity.metadata?.standaloneStartDate || targetEntity.metadata?.startDate || targetEntity.metadata?.startdate;
-      const standaloneEndDate = targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate;
-      const standaloneLabel = targetEntity.metadata?.standaloneLabel || 'Solo / Standalone Activities';
+  // 2. Verwerk de 'customTracks' rechtstreeks uit de metadata (zoals SIXTEEN (Show))
+    if (Array.isArray(targetEntity.metadata?.customTracks)) {
+      // Cast de array expliciet naar unknown[] om de string[] aanname van TS te omzeilen
+      (targetEntity.metadata.customTracks as unknown[]).forEach((item, index) => {
+        // Controleer of het item daadwerkelijk een object is en niet stiekem een losse string
+        if (item && typeof item === 'object') {
+          const track = item as { 
+            name?: unknown; 
+            startDate?: unknown; 
+            startdate?: unknown; 
+            endDate?: unknown; 
+            enddate?: unknown; 
+            status?: unknown; 
+          };
 
-      if (standaloneStartDate || standaloneEndDate) {
+          const trackName = safeStringCast(track.name);
+          if (trackName) {
+            extractedEvents.push({
+              id: `custom-track-${targetEntity.id}-${index}`,
+              groupName: trackName,
+              startDate: safeStringCast(track.startDate || track.startdate),
+              endDate: safeStringCast(track.endDate || track.enddate),
+              status: safeStringCast(track.status)
+            });
+          }
+        }
+      });
+    }
+
+    // 3. Slimme Automatische Standalone/Solo Logica (Indien aanwezig via algemene datums)
+    const standaloneStartDate = safeStringCast(targetEntity.metadata?.standaloneStartDate || targetEntity.metadata?.startDate || targetEntity.metadata?.startdate);
+    const standaloneEndDate = safeStringCast(targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate);
+
+    if (targetEntity.isStandalone || standaloneStartDate || standaloneEndDate) {
+      let standaloneLabel = safeStringCast(targetEntity.metadata?.standaloneLabel) || 'Solo / Standalone Activities';
+      
+      if (!targetEntity.metadata?.standaloneLabel) {
+        const metadataKeys = targetEntity.metadata ? Object.keys(targetEntity.metadata) : [];
+        const hasFootballFields = metadataKeys.some(k => ['position', 'club', 'goals', 'caps'].includes(k.toLowerCase()));
+        const hasF1Fields = metadataKeys.some(k => ['number', 'podiums', 'wins', 'championships'].includes(k.toLowerCase()));
+
+        if (hasFootballFields) {
+          standaloneLabel = 'Professional Football Career';
+        } else if (hasF1Fields) {
+          standaloneLabel = 'Formula 1 Racing Career';
+        } else if (targetEntity.type === 'l4') {
+          standaloneLabel = 'Solo Career / Individual Activities';
+        }
+      }
+
+      const entityStatus = safeStringCast(targetEntity.status) || 'active';
+
+      // Alleen toevoegen als we dit niet al dubbelop via customTracks doen
+      const isDuplicate = extractedEvents.some(e => e.groupName === standaloneLabel);
+
+      if (!isDuplicate && (standaloneStartDate || standaloneEndDate || targetEntity.isStandalone)) {
         extractedEvents.push({
           id: `standalone-track-${targetEntity.id}`,
-          groupName: String(standaloneLabel),
-          startDate: standaloneStartDate ? String(standaloneStartDate) : undefined,
-          endDate: standaloneEndDate ? String(standaloneEndDate) : undefined,
-          status: targetEntity.status || 'active'
+          groupName: standaloneLabel,
+          startDate: standaloneStartDate,
+          endDate: standaloneEndDate,
+          status: entityStatus
         });
       }
     }
 
+    // Sorteren op basis van actieve status en datum
     return extractedEvents.sort((a, b) => {
       const isAActive = a.status?.toLowerCase() === 'active' || (!a.endDate && a.startDate);
       const isBActive = b.status?.toLowerCase() === 'active' || (!b.endDate && b.startDate);
@@ -280,7 +343,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       const dateB = b.startDate || '';
       return dateB.localeCompare(dateA);
     });
-  }, [profileDetails]);
+  }, [profileDetails, id]);
 
   const sidebarSubLabel = useMemo(() => {
     if (!profileDetails) return '';

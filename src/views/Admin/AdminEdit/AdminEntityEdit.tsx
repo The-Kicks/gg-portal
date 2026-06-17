@@ -1,15 +1,9 @@
 import React from 'react';
-import { useAdminEntityEdit, CORE_IMAGE_FIELDS } from './useAdminEntityEdit';
+import { useAdminEntityEdit } from './useAdminEntityEdit';
+import { CORE_IMAGE_FIELDS } from '../adminUtils/useMediaCategories';
+import { formatEntityImages, isVideoUrl, getVideoEmbedUrl } from '../adminUtils/adminEntityHelpers';
 import type { Theme, HydratedEntity } from '../../../types';
 import styles from '../AdminGlobal.module.css';
-
-const entityService = {
-  update: async (themeId: string, id: string, data: unknown): Promise<void> => {
-    void themeId;
-    void id;
-    void data;
-  }
-};
 
 interface AdminEntityEditProps {
   theme: Theme;
@@ -18,30 +12,9 @@ interface AdminEntityEditProps {
   onCancel: () => void | Promise<void>;
 }
 
-const formatEntityImages = (imageObj: Record<string, unknown>): Record<string, string> => {
-  const formatted: Record<string, string> = {};
-
-  Object.keys(imageObj).forEach(key => {
-    const value = imageObj[key];
-    if (Array.isArray(value)) {
-      formatted[key] = value
-        .flatMap(v => typeof v === 'string' ? v.split(/[\s,]+/) : [])
-        .map(s => s.trim())
-        .filter(Boolean)
-        .join(' ');
-    } else if (typeof value === 'string') {
-      formatted[key] = value
-        .split(/[\s,]+/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .join(' ');
-    } else {
-      formatted[key] = '';
-    }
-  });
-
-  return formatted;
-};
+interface DynamicTriggerConfig {
+  value: string;
+}
 
 export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityId, onSave, onCancel }) => {
 
@@ -59,8 +32,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     setName,
     status,
     setStatus,
-    isStandalone,
-    setIsStandalone,
     albumInput,
     setAlbumInput,
     unassignedImages,
@@ -71,8 +42,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     setNewImageKey,
     newMetadataKey,
     setNewMetadataKey,
-    expandedChildId,
-    setExpandedChildId,
     connectionSearchTerm,
     setConnectionSearchTerm,
     isConnectionDropdownOpen,
@@ -83,8 +52,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     partitionedMetadataKeys,
     filteredAvailableTargets,
     unifiedConnections,
-    setLocalConnections,
-    setLocalTargetConnections,
     handleImageInputChange,
     handleMetadataInputChange,
     handleAddImageField,
@@ -93,6 +60,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     handleRemoveMetadataField,
     handleConnectionMetadataChange,
     handleRemoveConnection,
+    handleCreateNonRelationalTrack,
     handleAddConnection,
     handleAssignImage,
     handleUnassignImage,
@@ -102,33 +70,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
   if (!originalEntity) {
     return <div className={styles.textWarning}>Error: Target entity profile could not be localized.</div>;
   }
-
-  const isVideoUrl = (url: string): boolean => {
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
-    const videoPlatforms = ['youtube.com', 'youtu.be', 'vimeo.com', 'twitch.tv', 'streamable.com'];
-    const lowerUrl = url.toLowerCase();
-    return (
-      videoExtensions.some(ext => lowerUrl.includes(ext)) ||
-      videoPlatforms.some(platform => lowerUrl.includes(platform))
-    );
-  };
-
-  const getVideoEmbedUrl = (url: string): string | null => {
-    const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes('youtube.com/watch')) {
-      const videoId = url.split('v=')[1]?.split('&')[0];
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-    }
-    if (lowerUrl.includes('youtu.be/')) {
-      const videoId = url.split('youtu.be/')[1]?.split('?')[0];
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-    }
-    if (lowerUrl.includes('vimeo.com/')) {
-      const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
-      return videoId ? `https://player.vimeo.com/video/${videoId}` : null;
-    }
-    return null;
-  };
 
   const handleCustomParseAlbum = () => {
     if (!albumInput.trim()) return;
@@ -182,11 +123,14 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
             <option value="disbanded">Disbanded</option>
             <option value="inactive">Inactive</option>
             <option value="retired">Retired</option>
-            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => (
-              <option key={triggerKey} value={triggerKey}>
-                {triggerConfig.value.charAt(0).toUpperCase() + triggerConfig.value.slice(1)} (Schema Trigger)
-              </option>
-            ))}
+            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => {
+              const config = triggerConfig as DynamicTriggerConfig;
+              return (
+                <option key={triggerKey} value={triggerKey}>
+                  {config.value.charAt(0).toUpperCase() + config.value.slice(1)} (Schema Trigger)
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -194,70 +138,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           <div className={styles.fieldLabel}>Passing Date</div>
           <input type="text" placeholder="DD-MM-YYYY of YYYY" value={metadataInputs['PassingDate'] || ''} onChange={e => handleMetadataInputChange('PassingDate', e.target.value)} className={styles.inputField} />
         </div>
-
-        <div>
-          <div className={styles.fieldLabel}>Standalone Node</div>
-          <input type="checkbox" checked={isStandalone} onChange={e => setIsStandalone(e.target.checked)} className={styles.checkbox} />
-        </div>
       </div>
 
-      {/* CONDITIONELE HOEK: STANDALONE PERIOD DETAILS */}
-      {isStandalone && (
-        <div className={styles.requiredSection} style={{ borderLeftColor: 'var(--primary-color, #3b82f6)', background: 'rgba(59, 130, 246, 0.02)' }}>
-          <h3 className={styles.requiredTitle} style={{ color: 'var(--primary-color, #3b82f6)' }}>👤 Standalone / Individual Track Properties</h3>
-          <p className={`${styles.labelSubText} ${styles.textMuted}`}>Configure how this entity behaves when working outside of assigned groups, teams or collectives.</p>
-          
-          <div className={styles.twoColumnGrid} style={{ marginTop: '10px' }}>
-            <div>
-              <div className={styles.requiredLabel}>Timeline Display Label <small className={styles.textMuted}>(e.g. Solo, Free Agent, Individual)</small></div>
-              <input 
-                type="text" 
-                placeholder="Leave empty for fallback defaults" 
-                value={metadataInputs['standaloneLabel'] || ''} 
-                onChange={e => handleMetadataInputChange('standaloneLabel', e.target.value)}
-                className={styles.inputField}
-              />
-            </div>
-
-            <div>
-              <div className={styles.requiredLabel}>Individual Status</div>
-              <select 
-                value={metadataInputs['standaloneStatus'] || 'active'} 
-                onChange={e => handleMetadataInputChange('standaloneStatus', e.target.value)}
-                className={styles.inputField}
-              >
-                <option value="active">Active Track</option>
-                <option value="former">Ended / Former Track</option>
-              </select>
-            </div>
-
-            <div>
-              <div className={styles.requiredLabel}>Track Start Date <span style={{ color: '#d32f2f' }}>*</span></div>
-              <input 
-                type="text" 
-                placeholder="YYYY-MM-DD or YYYY" 
-                value={metadataInputs['standaloneStartDate'] || ''} 
-                onChange={e => handleMetadataInputChange('standaloneStartDate', e.target.value)}
-                className={styles.inputField}
-                style={{ borderColor: !metadataInputs['standaloneStartDate'] ? '#ef4444' : undefined }}
-              />
-            </div>
-
-            <div>
-              <div className={styles.requiredLabel}>Track End Date <small className={styles.textMuted}>(Optional)</small></div>
-              <input 
-                type="text" 
-                placeholder="YYYY-MM-DD / YYYY (Keep blank if active)" 
-                value={metadataInputs['standaloneEndDate'] || ''} 
-                onChange={e => handleMetadataInputChange('standaloneEndDate', e.target.value)}
-                className={styles.inputField}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SECTION A: CORE REQUIRED GAME FIELDS */}
+      {/* Core Required Game Fields */}
       {originalEntity.type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
         <div className={styles.requiredSection}>
           <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
@@ -281,7 +164,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
         </div>
       )}
 
-      {/* SECTION B: DYNAMIC THEME ATTRIBUTES */}
+      {/* Dynamic Theme Attributes */}
       <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes</h3>
       <div className={styles.innerSection}>
         {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
@@ -319,7 +202,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
         </div>
       </div>
 
-      {/* Media Assets */}
+      {/* Media Assets Section */}
       <h3 className={styles.sectionTitle}>Media Assets (Images & Videos)</h3>
       <div className={styles.innerSection}>
         <div style={{ marginBottom: '15px' }}>
@@ -522,115 +405,160 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
         </div>
       </div>
 
-      {/* Mapped Registry Entity Connections */}
-      <h3 className={styles.sectionTitle}>Mapped Registry Entity Connections</h3>
+      {/* Relational Graph & Timeline Connections */}
+      <h3 className={styles.sectionTitle}>🔗 Map Network Relations & Timeline History</h3>
       <div className={styles.innerSection}>
-        {unifiedConnections.map(conn => {
-          const isL4ToL4 = originalEntity.type.toLowerCase() === 'l4' && conn.relatedEntity?.type?.toLowerCase() === 'l4';
-          const isExpanded = expandedChildId === conn.relatedEntityId;
+        <div style={{ position: 'relative', marginBottom: '20px' }} ref={dropdownRef}>
+          <label className={styles.fieldLabel}>Connect with Existing Node OR Create Shared Custom Track</label>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              type="text"
+              placeholder="Search existing node OR type a custom track name (e.g., Simulator Driver at Ferrari, Clubless)..."
+              value={connectionSearchTerm}
+              onChange={e => setConnectionSearchTerm(e.target.value)}
+              onFocus={() => setIsConnectionDropdownOpen(true)}
+              className={styles.inputField}
+            />
+            {connectionSearchTerm.trim().length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleCreateNonRelationalTrack(connectionSearchTerm.trim());
+                  setConnectionSearchTerm('');
+                  setIsConnectionDropdownOpen(false);
+                }}
+                className={`${styles.btn} ${styles.btnOutline}`}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                ➕ Add Custom Track
+              </button>
+            )}
+          </div>
 
-          return (
-            <div key={conn.id} className={styles.connectionRow} style={{ marginBottom: '15px', padding: '10px', border: '1px solid rgba(0,0,0,0.05)', borderRadius: '6px' }}>
-              <div className={styles.connectionHeader}>
-                <span className={styles.connectionRowLeft}>
-                  <button type="button" onClick={() => setExpandedChildId(isExpanded ? null : conn.relatedEntityId)} className={styles.filterBtn} style={{ padding: '2px 8px', fontSize: '13px' }}>
-                    {isExpanded ? 'Collapse' : 'Expand'}
-                  </button>
-                  <span className={conn.direction === 'incoming' ? styles.badgeInbound : styles.badgeOutbound}>
-                    {conn.direction === 'incoming' ? 'INBOUND' : 'OUTBOUND'}
-                  </span>
-                  <span className={styles.layerBadge}>{conn.relatedEntity?.type?.toUpperCase() || 'L4'}</span>
-                  <strong className={styles.textPrimary}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
-                  {isL4ToL4 && <span className={styles.textWarning}>Cross-individual connection</span>}
-                </span>
-
-                <div className={styles.connectionDates}>
-                  <div className={styles.dateFieldGroup}>
-                    <div className={styles.dateLabel}>Start:</div>
-                    <input 
-                      type="text" 
-                      placeholder="YYYY-MM-DD / YYYY" 
-                      value={conn.startDate || ''} 
-                      onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'startDate', e.target.value)}
-                      className={styles.dateHeaderInput}
-                    />
-                  </div>
-                  <div className={styles.dateFieldGroup}>
-                    <div className={styles.dateLabel}>End:</div>
-                    <input 
-                      type="text" 
-                      placeholder="YYYY-MM-DD / YYYY" 
-                      value={conn.endDate || ''} 
-                      onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'endDate', e.target.value)}
-                      className={styles.dateHeaderInput}
-                    />
-                  </div>
-                </div>
-
-                <div className={styles.buttonGroup}>
-                  <select value={conn.status} onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'status', e.target.value)} className={styles.inputField} style={{ padding: '6px 10px', width: 'auto' }}>
-                    <option value="active">Active</option>
-                    <option value="former">Former</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="retired">Retired</option>
-                  </select>
-                  <button type="button" onClick={() => handleRemoveConnection(conn.id, conn.direction)} className={styles.btnUnlink}>Unlink</button>
-                </div>
-              </div>
-
-              {isExpanded && conn.relatedEntity && (
-                <div className={styles.portalSection} style={{ marginTop: '12px' }}>
-                  <h4 className={styles.portalTitle}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
-                  <AdminEntityEdit
-                    theme={theme}
-                    entityId={conn.relatedEntityId}
-                    onSave={async (updatedChild) => {
-                      try {
-                        if (updatedChild.image) {
-                          const childFormattedImage = formatEntityImages(updatedChild.image as Record<string, unknown>);
-                          updatedChild.image = childFormattedImage as NonNullable<HydratedEntity['image']>;
-                        }
-
-                        await entityService.update(theme.id, updatedChild.id, updatedChild);
-                        setLocalConnections(prev => prev.map(c => c.targetEntityId === updatedChild.id ? { ...c, targetEntity: updatedChild } : c));
-                        setLocalTargetConnections(prev => prev.map(c => c.sourceEntityId === updatedChild.id ? { ...c, sourceEntity: updatedChild } : c));
-                        window.dispatchEvent(new Event('refresh-database'));
-                        setExpandedChildId(null);
-                      } catch (err) {
-                        console.error(err);
-                        alert("Could not update the downstream relational entity.");
-                      }
-                    }}
-                    onCancel={() => setExpandedChildId(null)}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        <div ref={dropdownRef} className={styles.dropdownWrapper}>
-          <input
-            type="text"
-            placeholder="Type to search entities..."
-            value={connectionSearchTerm}
-            onFocus={() => setIsConnectionDropdownOpen(true)}
-            onChange={e => { setConnectionSearchTerm(e.target.value); setIsConnectionDropdownOpen(true); }}
-            className={styles.inputField}
-          />
-          {isConnectionDropdownOpen && (
+          {/* Dropdown voor bestaande nodes */}
+          {isConnectionDropdownOpen && filteredAvailableTargets.length > 0 && (
             <div className={styles.dropdownMenu}>
-              {filteredAvailableTargets.length > 0 ? (
-                filteredAvailableTargets.map(t => (
-                  <div key={t.id} onClick={() => { handleAddConnection(t.id); setConnectionSearchTerm(''); setIsConnectionDropdownOpen(false); }} className={styles.dropdownItem}>
-                    <span className={styles.textBold}>{t.name}</span>
-                    <span className={styles.layerBadge}>{t.type.toUpperCase()}</span>
-                  </div>
-                ))
-              ) : (
-                <div className={styles.dropdownNoResults}>No matching entities found...</div>
-              )}
+              {filteredAvailableTargets.map(target => (
+                <div
+                  key={target.id}
+                  onClick={() => {
+                    handleAddConnection(target.id);
+                    setConnectionSearchTerm('');
+                    setIsConnectionDropdownOpen(false);
+                  }}
+                  className={styles.dropdownItem}
+                >
+                  <strong>{target.name}</strong> <small>({target.type.toUpperCase()} • ID: {target.id})</small>
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {unifiedConnections.length === 0 ? (
+            <p className={styles.textMuted}>This new record is currently isolated. Connect it to map it into the timeline graph engine.</p>
+          ) : (
+            unifiedConnections.map(conn => {
+              const uniqueConnKey = `${conn.direction}-${conn.id}-${conn.relatedEntityId}`;
+              const isNonRelational = conn.metadata?.isNonRelational || conn.relatedEntityId.startsWith('virtual-track:');
+              
+              const displayName = isNonRelational
+                ? (conn.metadata?.customTargetName || 'Custom Shared Track')
+                : (conn.relatedEntity?.name || conn.relatedEntityId);
+
+              return (
+                <div key={uniqueConnKey} className={styles.connectionRow}>
+                  <div className={styles.connectionHeader}>
+                    
+                    {/* Linkerzijde met badge, naam en optionele layer info */}
+                    <div className={styles.connectionRowLeft}>
+                      <span className={conn.direction === 'outgoing' ? styles.badgeOutbound : styles.badgeInbound}>
+                        {isNonRelational ? 'TRACK' : conn.direction === 'outgoing' ? 'OUTGOING' : 'INBOUND'}
+                      </span>
+                      <span className={styles.textBold}>{displayName}</span>
+                      {!isNonRelational && (
+                        <span className={styles.layerBadge}>
+                          {conn.relatedEntity?.type?.toUpperCase() || 'L4'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Rechterzijde met alle inline select- en datumelementen */}
+                    <div className={styles.connectionDates}>
+                      
+                      {/* Relational Lifecycle Status Dropdown */}
+                      <div className={styles.dateFieldGroup}>
+                        <select
+                          value={conn.status || 'active'}
+                          onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'status', e.target.value)}
+                          className={styles.dateHeaderInput}
+                          style={{ width: '110px' }}
+                        >
+                          <option value="active">Active</option>
+                          <option value="past">Past</option>
+                          <option value="loan">Loan</option>
+                        </select>
+                      </div>
+
+                      {/* Start Datum (GEKORRIGEERD: textAlign i.p.v. textCenter) */}
+                      <div className={styles.dateFieldGroup}>
+                        <span className={styles.dateLabel}>From</span>
+                        <input
+                          type="text"
+                          placeholder="YYYY"
+                          value={conn.startDate || ''}
+                          onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'startDate', e.target.value)}
+                          className={styles.dateHeaderInput}
+                          style={{ width: '70px', padding: '6px 8px', textAlign: 'center' }}
+                        />
+                      </div>
+
+                      {/* Eind Datum (GEKORRIGEERD: textAlign i.p.v. textCenter) */}
+                      <div className={styles.dateFieldGroup}>
+                        <span className={styles.dateLabel}>To</span>
+                        <input
+                          type="text"
+                          placeholder="Pres."
+                          value={conn.endDate || ''}
+                          onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'endDate', e.target.value)}
+                          className={styles.dateHeaderInput}
+                          style={{ width: '70px', padding: '6px 8px', textAlign: 'center' }}
+                        />
+                      </div>
+
+                      {/* Disconnect Knop */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveConnection(conn.id, conn.direction)}
+                        className={styles.btnUnlink}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Milestones / Comebacks Input */}
+                  <div style={{ marginTop: '10px', paddingLeft: '5px' }}>
+                    <textarea
+                      placeholder="Milestones, Achievements or Custom Track Notes (Comma or newline separated)..."
+                      value={conn.metadata?.milestones || ''}
+                      onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'milestones', e.target.value)}
+                      className={styles.textareaField}
+                      rows={1}
+                      style={{ 
+                        height: '34px', 
+                        minHeight: '34px', 
+                        padding: '6px 12px', 
+                        fontSize: '13px', 
+                        resize: 'none',
+                        backgroundColor: 'rgba(0,0,0,0.15)'
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
