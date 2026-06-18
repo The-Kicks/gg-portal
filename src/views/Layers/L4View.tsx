@@ -14,18 +14,44 @@ interface Props {
 }
 
 /**
- * L4View renders the individual performers operating at the active base of the framework.
+ * Type-safe helperfunctie om diep door de metadata te zoeken naar het standalone trefwoord.
+ * Maakt gebruik van 'unknown' en runtime typeguards in plaats van 'any'.
  */
+const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean => {
+  if (!metadata || !term) return false;
+  const lowerTerm = term.toLowerCase().trim();
+
+  const scan = (value: unknown): boolean => {
+    // 1. Check op strings
+    if (typeof value === 'string') {
+      return value.toLowerCase().includes(lowerTerm);
+    }
+    
+    // 2. Check op Arrays
+    if (Array.isArray(value)) {
+      return value.some((item: unknown) => scan(item));
+    }
+    
+    // 3. Check op Objecten (zoals customTracks)
+    if (typeof value === 'object' && value !== null) {
+      return Object.values(value).some((val: unknown) => scan(val));
+    }
+    
+    return false;
+  };
+
+  return scan(metadata);
+};
+
 export const L4View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const parentMap = new Map<string, ParentBucket>();
 
-  // Extract all individual Level 4 operational node data models
+  // Alle L4 entiteiten ophalen
   const endpoints = theme.entities?.filter((e) => e.type === 'l4') || [];
 
   /**
-   * Dynamic Status Trigger Scanner:
-   * We lezen hier de configuratie uit exact zoals EntityCard dat straks ook gaat doen.
+   * Dynamic Status Trigger Scanner
    */
   const layerStandard = useMemo(() => {
     if (!theme.layerMetadata) return undefined;
@@ -44,6 +70,16 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
   const triggers = layerStandard?.statusTriggers;
 
+  // Labels configureren vanuit het thema
+  const standaloneLabel = theme.labels['l4_standalone'] ?? 'Solo Career / Standalone';
+  const inactiveLabel = theme.labels['disbanded_tag'] ?? 'Inactive / Historical';
+
+  // Bepaal de zoekterm op basis van het label (bijv. "Solo acts" -> "solo")
+  const standaloneSearchTerm = useMemo(() => {
+    const rawLabel = theme.labels['l4_standalone'] || 'Solo';
+    return rawLabel.split(' ')[0].toLowerCase();
+  }, [theme.labels]);
+
   if (endpoints.length === 0) {
     return (
       <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
@@ -55,9 +91,9 @@ export const L4View: React.FC<Props> = ({ theme }) => {
     );
   }
 
-  // 🛡️ GECORRIGEERD: Filters down clean standalone performers profiles en verrijkt inactieve solo-acts direct met de isFormer-tag
+  // 🛡️ DYNAMISCHE STANDALONE FILTERING: Nu volledig type-safe aangeroepen
   const standaloneEntities = endpoints
-    .filter((endpoint) => endpoint.isStandalone)
+    .filter((endpoint) => checkIsStandaloneByMetadata(endpoint.metadata, standaloneSearchTerm))
     .map((entity) => {
       const l4Status = (entity.status || '').toLowerCase().trim();
       const isDeceased = !!entity.metadata?.PassingDate;
@@ -67,14 +103,14 @@ export const L4View: React.FC<Props> = ({ theme }) => {
           ...entity,
           metadata: {
             ...(entity.metadata || {}),
-            isFormer: true // Schiet direct door naar de EntityCard-fallback
+            isFormer: true
           }
         };
       }
       return entity;
     });
 
-  // MAPPING ANALYSIS SYSTEM: Routes personnel rosters contract connections into explicit L3 Team folders
+  // MAPPING ANALYSIS SYSTEM: Verwerkt relaties met L3 groepen
   endpoints.forEach((l4Entity) => {
     const allConns = [...(l4Entity.connections || []), ...(l4Entity.targetConnections || [])];
 
@@ -88,13 +124,11 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
       if (!l3Entity) return;
 
-      // Normalization string evaluation parameters pipelines
       const connectionStatus = (conn.metadata?.status || '').toLowerCase().trim();
       const parentStatus = (l3Entity.status || '').toLowerCase().trim();
       const l4Status = (l4Entity.status || '').toLowerCase().trim();
       const isDeceased = !!l4Entity.metadata?.PassingDate;
 
-      // Relational check 1: Verifies if a person's explicit team contract link is broken/past history
       const isFormerConnection =
         connectionStatus.includes('former') ||
         connectionStatus === 'ex' ||
@@ -102,17 +136,11 @@ export const L4View: React.FC<Props> = ({ theme }) => {
         conn.metadata?.isFormer === true ||
         isDeceased;
 
-      // Relational check 2: Verifies if the individual person is globally retired/inactive themselves
       const isL4EntityInactive = ['retired', 'inactive'].includes(l4Status) || isDeceased;
-
-      // Relational check 3: Verifies if the parent constructor group itself is officially active
       const isParentInactive = ['disbanded', 'inactive', 'retired', 'historical'].includes(parentStatus);
       const isParentActive = !isParentInactive;
 
-      // AUTOMATIC FILTERING HIDE ENGINE
       const autoHide = (isFormerConnection || isL4EntityInactive) && isParentActive;
-
-      // CRITICAL DATA ENGINE OVERRIDE
       const isHidden = !isParentInactive && (conn.metadata?.hideFromGrid === true || autoHide);
 
       if (!isHidden) {
@@ -120,16 +148,12 @@ export const L4View: React.FC<Props> = ({ theme }) => {
           parentMap.set(l3Entity.id, { parent: l3Entity, children: [] });
         }
         const bucket = parentMap.get(l3Entity.id)!;
-
-        // Kopieer de bestaande metadata om mutatie-side-effects te voorkomen
         const enrichedMetadata = { ...(l4Entity.metadata || {}) };
 
-        // 🛡️ DYNAMISCHE INJECTIE: Als het een oud-lid/connectie is, markeren we dit ALTIJD
         if (isFormerConnection) {
-          enrichedMetadata.isFormer = true; // Dit activeert direct de nieuwe achterwacht in EntityCard!
+          enrichedMetadata.isFormer = true;
         }
 
-        // Als er database-triggers zijn, vullen we ook de specifieke key-value paren aan
         if (isFormerConnection && triggers) {
           const formerTriggerEntry = Object.entries(triggers).find(
             ([key]) => key.toLowerCase() === 'former'
@@ -137,9 +161,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
           if (formerTriggerEntry) {
             const [, triggerConfig] = formerTriggerEntry;
-
-            if (triggerConfig && typeof triggerConfig === 'object' && 'key' in triggerConfig && 'value' in triggerConfig) {
-              // Injecteer de exacte configuratie-key en bijbehorende waarde (bijv. racingStatus: 'Retired')
+            if (triggerConfig && typeof triggerConfig === 'object' && triggerConfig !== null && 'key' in triggerConfig && 'value' in triggerConfig) {
               enrichedMetadata[String(triggerConfig.key)] = String(triggerConfig.value);
             }
           }
@@ -186,12 +208,9 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
   standaloneEntities.sort((a, b) => a.name.localeCompare(b.name));
 
-  const standaloneLabel = theme.labels['l4_standalone'] ?? 'Solo Career / Standalone';
-  const inactiveLabel = theme.labels['disbanded_tag'] ?? 'Inactive / Historical';
-
   return (
     <div className={styles.layerContainer}>
-      {/* SECTION 1: Active Constructors */}
+      {/* SECTION 1: Active Groups / Teams */}
       {activeBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{parent.name}</h2>
@@ -216,7 +235,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
         </div>
       ))}
 
-      {/* SECTION 2: Standalone Drivers */}
+      {/* SECTION 2: Standalone / Solo Section */}
       {standaloneEntities.length > 0 && (
         <div className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{standaloneLabel}</h2>
@@ -240,7 +259,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
         </div>
       )}
 
-      {/* SECTION 3: Defunct & Historical Constructors */}
+      {/* SECTION 3: Disbanded & Historical Groups */}
       {inactiveBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{parent.name} ({inactiveLabel})</h2>

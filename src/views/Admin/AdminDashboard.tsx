@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Theme } from '../../types';
-import styles from './AdminGlobal.module.css'; 
+import styles from './AdminGlobal.module.css';
 
-interface Props { 
-  theme: Theme | undefined | null; 
+interface Props {
+  theme: Theme | undefined | null;
 }
 
 const LAYER_ORDER: Record<string, number> = { l1: 1, l2: 2, l3: 3, l4: 4 };
@@ -22,6 +22,7 @@ interface ExpectedConnection {
 interface TableRow {
   entity: ThemeEntity;
   displayParent: string;
+  displayParentId: string;
   rowId: string;
 }
 
@@ -30,60 +31,83 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const [filterType, setFilterType] = useState<string>('all');
 
-  const resolveParentAssignment = (entity: ThemeEntity, allEntities: ThemeEntity[]): string => {
+  const resolveParentAssignments = (entity: ThemeEntity, allEntities: ThemeEntity[]): Array<{ name: string; id: string }> => {
     const currentLayer = entity.type.toLowerCase();
-    
-    if (currentLayer === 'l1') return '-';
 
-    const extendedEntity = entity as ThemeEntity & { 
+    if (currentLayer === 'l1') return [{ name: '-', id: '-' }];
+
+    const extendedEntity = entity as ThemeEntity & {
       connections?: ExpectedConnection[];
-      targetConnections?: ExpectedConnection[]; 
+      targetConnections?: ExpectedConnection[];
     };
-    
+
     const allConnections = [
       ...(extendedEntity.connections || []),
       ...(extendedEntity.targetConnections || [])
     ];
 
-    if (allConnections.length === 0) return '-';
+    if (allConnections.length === 0) return [{ name: '-', id: '-' }];
 
     let targetLayers: string[] = [];
     if (currentLayer === 'l4') targetLayers = ['l3', 'l2', 'l1'];
     if (currentLayer === 'l3') targetLayers = ['l2', 'l1'];
     if (currentLayer === 'l2') targetLayers = ['l1'];
 
+    const foundParents: Array<{ name: string; id: string }> = [];
+
+    // We lopen door de hiërarchie heen (eerst zoeken naar l3, dan l2, etc.)
     for (const targetLayer of targetLayers) {
       for (const conn of allConnections) {
-        if (conn.sourceEntity?.type.toLowerCase() === targetLayer) return conn.sourceEntity.name;
-        if (conn.targetEntity?.type.toLowerCase() === targetLayer) return conn.targetEntity.name;
+        // Check directe parent info in de connectie
+        if (conn.sourceEntity?.type.toLowerCase() === targetLayer && conn.sourceEntity.id) {
+          if (!foundParents.some(p => p.id === conn.sourceEntity?.id)) {
+            foundParents.push({ name: conn.sourceEntity.name, id: conn.sourceEntity.id });
+          }
+        }
+        if (conn.targetEntity?.type.toLowerCase() === targetLayer && conn.targetEntity.id) {
+          if (!foundParents.some(p => p.id === conn.targetEntity?.id)) {
+            foundParents.push({ name: conn.targetEntity.name, id: conn.targetEntity.id });
+          }
+        }
 
+        // Check via ID's in de database-entiteitenlijst
         const possibleIds = [conn.entityId, conn.sourceEntityId, conn.targetEntityId, conn.id].filter(Boolean);
-        
         for (const id of possibleIds) {
           const linkedEntity = allEntities.find(e => e.id === id);
           if (linkedEntity && linkedEntity.type.toLowerCase() === targetLayer) {
-            return linkedEntity.name;
+            if (!foundParents.some(p => p.id === linkedEntity.id)) {
+              foundParents.push({ name: linkedEntity.name, id: linkedEntity.id });
+            }
           }
         }
       }
+
+      // Belangrijk: als we op het hoogst mogelijke niveau (bijv. L3 voor een L4) al 
+      // ouders hebben gevonden, stoppen we, zodat we geen L2-labels als directe ouders tonen.
+      if (foundParents.length > 0) break;
     }
 
-    return '-';
+    return foundParents.length > 0 ? foundParents : [{ name: '-', id: '-' }];
   };
 
   const sortedAndFilteredRows = useMemo(() => {
     const allEntities = theme?.entities || [];
-    const baseEntities = allEntities.filter(e => 
+
+    const baseEntities = allEntities.filter(e =>
       filterType === 'all' || e.type.toLowerCase() === filterType.toLowerCase()
     );
 
-    const rows: TableRow[] = baseEntities.map(entity => {
-      const parentName = resolveParentAssignment(entity, allEntities);
-      return {
+    // Gebruik flatMap om entiteiten met meerdere relaties op te splitsen in unieke rijen
+    const rows: TableRow[] = baseEntities.flatMap(entity => {
+      const parents = resolveParentAssignments(entity, allEntities);
+
+      return parents.map(parent => ({
         entity,
-        displayParent: parentName,
-        rowId: `${entity.id}-${parentName}`
-      };
+        displayParent: parent.name,
+        displayParentId: parent.id,
+        // Genereer een gegarandeerd unieke rowId voor React's key rendering
+        rowId: `${entity.id}-${parent.id}`
+      }));
     });
 
     return rows.sort((a, b) => {
@@ -97,13 +121,16 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
       const parentA = a.displayParent;
       const parentB = b.displayParent;
-      
+
+      // Zorg dat entiteiten zonder parent netjes onderaan hun tier-sectie bungelen
       if (parentA === '-' && parentB !== '-') return 1;
       if (parentB === '-' && parentA !== '-') return -1;
 
+      // Sorteer alfabetisch op groepsnaam (Parent)
       const parentCompare = parentA.localeCompare(parentB);
       if (parentCompare !== 0) return parentCompare;
 
+      // Als de groep hetzelfde is, sorteer alfabetisch op idol/entiteit naam
       return a.entity.name.localeCompare(b.entity.name);
     });
   }, [theme?.entities, filterType]);
@@ -119,10 +146,10 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
   return (
     <div className={styles.container}>
-      
+
       <div className={styles.header}>
         <h1 className={styles.title}>{theme.title} - Admin Dashboard</h1>
-        
+
         <div className={styles.buttonGroup}>
           <button
             onClick={() => navigate(`/${themeName}/admin/theme`)}
@@ -139,11 +166,11 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
           </button>
         </div>
       </div>
-      
+
       <div className={styles.filterGroup}>
         {['all', 'l1', 'l2', 'l3', 'l4'].map(type => (
-          <button 
-            key={type} 
+          <button
+            key={type}
             onClick={() => setFilterType(type)}
             className={filterType === type ? styles.filterBtnActive : styles.filterBtn}
           >
@@ -173,18 +200,18 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
             sortedAndFilteredRows.map((row, index) => {
               const { entity, displayParent, rowId } = row;
               const currentType = entity.type.toLowerCase();
-              
+
               const currentSectionKey = `${currentType}-${displayParent}`;
               const nextRow = sortedAndFilteredRows[index + 1];
-              const nextSectionKey = nextRow 
+              const nextSectionKey = nextRow
                 ? `${nextRow.entity.type.toLowerCase()}-${nextRow.displayParent}`
                 : null;
 
               const isLastOfSection = nextRow && currentSectionKey !== nextSectionKey;
 
               return (
-                <tr 
-                  key={rowId} 
+                <tr
+                  key={rowId}
                   className={isLastOfSection ? styles.rowSectionEnd : styles.rowNormal}
                 >
                   <td className={`${styles.td} ${styles.textBold}`}>{entity.name}</td>
@@ -196,7 +223,7 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
                   </td>
                   <td className={styles.td}>{entity.status || 'active'}</td>
                   <td className={styles.td}>
-                    <button 
+                    <button
                       onClick={() => navigate(`/${themeName}/admin/edit/${entity.id}`)}
                       className={styles.btnEdit}
                     >
