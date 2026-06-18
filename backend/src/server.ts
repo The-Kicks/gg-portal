@@ -389,6 +389,120 @@ app.delete('/api/themes/:id', async (req: Request, res: Response) => {
 });
 
 // --- ENTITY ROUTES (CREATE & UPDATE) ---
+// --- ENTITY ROUTES (CREATE) ---
+
+// Interface voor inkomende connecties vanuit de frontend die mogelijk extra UI-flags bevatten
+interface IncomingFrontendConnection {
+    id: string;
+    themeId: string;
+    sourceEntityId: string;
+    targetEntityId: string;
+    metadata: ConnectionMetadata;
+    direction?: string; // Optionele UI-flag om incoming/outgoing te onderscheiden
+}
+
+app.post(
+    '/api/themes/:themeId/entities',
+    async (
+        req: Request<{ themeId: string }, UpdateEntityResponse | BaseEntity, HydratedEntity>, 
+        res: Response<UpdateEntityResponse | BaseEntity>
+    ) => {
+        const { themeId } = req.params;
+        const { id, name, type, status, isStandalone, image, metadata, connections } = req.body;
+
+        if (!id || !name) {
+            return res.status(400).json({ error: "Missing required fields: id and name are strictly required." });
+        }
+
+        try {
+            // Type-safe cast van de connecties naar onze uitgebreide frontend interface
+            const safeConnections = (connections || []) as IncomingFrontendConnection[];
+
+            // 1. Filter de virtuele tracks eruit om ze als metadata op te slaan (net als in je PUT route)
+            const virtualTracks = safeConnections.filter(conn => {
+                const targetId = conn.targetEntityId || conn.id;
+                return targetId && targetId.startsWith('virtual-track:');
+            });
+
+            const customTracksData = virtualTracks.map(track => {
+                return {
+                    name: track.metadata?.customTargetName || track.id.replace('virtual-track:', ''),
+                    startDate: (track.metadata?.startDate as string) || '',
+                    endDate: (track.metadata?.endDate as string) || '',
+                    status: track.metadata?.status || 'active',
+                    milestones: (track.metadata?.milestones as string) || ''
+                };
+            });
+
+            const updatedMetadata = {
+                ...(metadata || {}),
+                customTracks: customTracksData
+            };
+
+            // 2. Filter de echte database connecties (sluit incoming & virtuele tracks uit)
+            const connectionsToInsert = safeConnections
+                .filter(conn => {
+                    const targetId = conn.targetEntityId || conn.id;
+                    return targetId && !targetId.startsWith('virtual-track:') && conn.direction !== 'incoming';
+                })
+                .map((conn) => ({
+                    themeId,
+                    sourceEntityId: id, // De ID van de nieuw aan te maken entiteit
+                    targetEntityId: conn.targetEntityId || conn.id,
+                    metadata: (conn.metadata || { status: 'active' }) as unknown as Prisma.InputJsonValue
+                }));
+
+          // 3. Voer alles atomair uit binnen een Prisma Transactie
+            const [newEntity] = await prisma.$transaction([
+                // Maak de basis entiteit aan
+                prisma.entity.create({
+                    data: {
+                        id,
+                        name,
+                        type,
+                        status: status || 'active',
+                        isStandalone: Boolean(isStandalone),
+                        image: (image || {}) as unknown as Prisma.InputJsonValue,
+                        metadata: updatedMetadata as Prisma.InputJsonValue,
+                        theme: {
+                            connect: { id: themeId }
+                        }
+                    }
+                }),
+
+                // Voeg eventuele initiële database-connecties toe
+                prisma.entityConnection.createMany({
+                    data: connectionsToInsert
+                })
+            ]);
+
+            // Map de database-velden expliciet naar de verwachte BaseEntity structuur
+            const responsePayload: BaseEntity = {
+                id: newEntity.id,
+                themeId: newEntity.themeId,
+                name: newEntity.name,
+                type: newEntity.type,
+                status: newEntity.status,
+                isStandalone: newEntity.isStandalone,
+                // Veilige type-cast van de database JsonValue naar de verwachte EntityImages
+                image: (newEntity.image || { profileCard: '', heroBanner: '' }) as unknown as EntityImages,
+                metadata: (newEntity.metadata || {}) as Record<string, unknown>
+            };
+
+            // Geef de nu 100% matchende BaseEntity terug aan de frontend
+            res.status(201).json(responsePayload);
+        } catch (error: unknown) {
+            console.error("Error creating graph entity and relationships:", error);
+            
+            // Type-safe error handhaving voor Prisma error-codes
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+                return res.status(409).json({ error: "An entity with this unique ID combination already exists within this theme." });
+            }
+
+            res.status(500).json({ error: "Internal server error during entity creation." });
+        }
+    }
+);
 
 type UpdateEntityResponse = { success: boolean; message: string } | { error: string };
 
@@ -401,13 +515,12 @@ app.put(
         try {
             const safeConnections = connections || [];
 
-            // 1. Vis de virtuele tracks (zoals Sixteen) eruit om ze in de metadata te redden
+
             const virtualTracks = safeConnections.filter(conn => {
                 const targetId = conn.targetEntityId || conn.id;
                 return targetId && targetId.startsWith('virtual-track:');
             });
 
-            // Bouw een schone lijst op van de custom track namen/data
             const customTracksData = virtualTracks.map(track => {
                 const t = track as typeof track & { direction?: string };
                 return {
@@ -419,19 +532,16 @@ app.put(
                 };
             });
 
-            // Voeg de custom tracks toe aan het bestaande metadata object
             const updatedMetadata = {
                 ...(metadata || {}),
                 customTracks: customTracksData
             };
 
-            // 2. Filter de ECHTE database-connecties (alleen uitgaand, om je relaties naar boven niet te slopen)
             const connectionsToInsert = safeConnections
                 .filter(conn => {
                     const targetId = conn.targetEntityId || conn.id;
                     const frontendConn = conn as typeof conn & { direction?: string };
 
-                    // Sla virtuele tracks én inkomende relaties over voor de koppeltabel
                     return targetId && !targetId.startsWith('virtual-track:') && frontendConn.direction !== 'incoming';
                 })
                 .map((conn) => {

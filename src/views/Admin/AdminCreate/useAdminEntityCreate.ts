@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import type { Theme, HydratedEntity, BaseEntity, LayerKey, HydratedEntityConnection } from '../../../types';
+import type { Theme, HydratedEntity, BaseEntity, LayerKey } from '../../../types';
 import { entityService } from '../EntityService';
 
 import { useStandardEntityAttributes } from '../adminUtils/useStandardEntityAttributes';
 import { useDynamicAttributes, buildMetadataInputs } from '../adminUtils/useDynamicAttributes';
 import type { MetadataValue } from '../adminUtils/useDynamicAttributes';
 import { useMediaCategories, buildImageInputs } from '../adminUtils/useMediaCategories';
-import { useTimelineBuilder } from '../adminUtils/useTimelineBuilder';
 
 interface UseAdminEntityCreateProps {
   theme: Theme;
@@ -26,11 +25,9 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
   // Haal de metadata-standaard op voor de huidige geselecteerde laag uit het Theme
   const currentLayerMetadata = theme.layerMetadata[type];
 
-  // Initialiseer de sub-hooks
-  const standardAttrs = useStandardEntityAttributes(undefined);
-  const dynamicAttrs = useDynamicAttributes(undefined, theme, type);
+const standardAttrs = useStandardEntityAttributes(undefined);
+  const dynamicAttrs = useDynamicAttributes(undefined, theme, type); // Zorg dat deze hook de triggers berekent
   const mediaCategories = useMediaCategories(undefined, theme, currentLayerMetadata, type);
-  const timelineBuilder = useTimelineBuilder(undefined, theme, '', type);
 
   // Handmatige type switch via de dropdown
   const handleTypeChange = (newType: LayerKey) => {
@@ -44,8 +41,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     mediaCategories.setUnassignedImages([]);
     mediaCategories.setImageInputs(buildImageInputs(undefined, theme, newType));
     dynamicAttrs.setMetadataInputs(buildMetadataInputs(undefined, theme, newType));
-    timelineBuilder.setLocalConnections([]);
-    timelineBuilder.setLocalTargetConnections([]);
   };
 
   // Handmatige toggle voor de standalone checkbox in de UI
@@ -79,72 +74,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
 
     return () => clearTimeout(delayDebounceFn);
   }, [standardAttrs.name, customSuffix, theme.id]);
-
-  /**
-   * Genereert een inline virtuele track/node zonder directe relationele binding,
-   * identiek aan de geavanceerde Edit-module functionaliteit.
-   */
-  const handleCreateNonRelationalTrack = () => {
-    const trackName = prompt('Enter custom track or layout display name (e.g. "World Cup Squad", "Independents"):');
-    if (!trackName || !trackName.trim()) return;
-
-    const generatedTrackId = `track-virtual-${Date.now()}`;
-
-    // Voeg toe aan de lokale uitgaande connecties binnen de timelineBuilder state
-    timelineBuilder.setLocalConnections(prev => [
-      ...prev,
-      {
-        id: Date.now(),
-        themeId: theme.id,
-        entityId: '',
-        sourceEntityId: '',
-        targetEntityId: generatedTrackId,
-        relatedEntityId: generatedTrackId,
-        direction: 'outgoing',
-        status: 'active',
-        startDate: '',
-        endDate: '',
-        metadata: {
-          status: 'active'
-        },
-        relatedEntity: {
-          id: generatedTrackId,
-          themeId: theme.id,
-          name: trackName.trim(),
-          type: 'l3',
-          status: 'active',
-          isStandalone: false,
-          image: {},
-          metadata: {},
-          connections: [],
-          targetConnections: []
-        }
-      } as HydratedEntityConnection
-    ]);
-  };
-
-  // Helper om objecten weer terug te zetten naar platte tekst (indien nodig)
-  const formatMilestonesToText = (milestones: unknown): string => {
-    if (!milestones) return '';
-    if (typeof milestones === 'string') return milestones;
-
-    if (Array.isArray(milestones)) {
-      return milestones
-        .map(m => {
-          if (m && typeof m === 'object') {
-            const typed = m as Partial<MilestoneStructure>;
-            const date = typed.date ? String(typed.date).trim() : '';
-            const title = typed.title ? String(typed.title).trim() : '';
-            if (date && title) return `${date}: ${title}`;
-            return title || date;
-          }
-          return String(m);
-        })
-        .filter(Boolean)
-        .join('\n');
-    }
-    return '';
-  };
 
   // Type-safe parser voor de milestone strings uit de admin textarea
   const parseAdminMilestones = (rawText: unknown): MilestoneStructure[] => {
@@ -198,8 +127,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       const rawValue = currentInputs[key];
       if (!rawValue || !rawValue.trim()) return;
 
-      // VOORKOM DUBBELE VERWERKING: l3Milestones sluiten we hier uit, 
-      // die parsen we apart in de handleSubmit tot object-array.
       if (key === 'l3Milestones') return;
 
       const lowerKey = key.toLowerCase();
@@ -241,20 +168,18 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       return;
     }
 
-    // Valideer de REQUIRED ATTRIBUTES via dezelfde array als de UI (partitionedMetadataKeys.requiredKeys)
     if (type.toLowerCase() === 'l4') {
       const requiredFields = dynamicAttrs.partitionedMetadataKeys.requiredKeys || [];
       for (const field of requiredFields) {
         const value = dynamicAttrs.metadataInputs[field];
 
         if (!value || !value.trim()) {
-          alert(`Validation Error: The field "${field}" is strictly required by the GuessWho game configuration engine.`);
+          alert(`Validation Error: The field "${field}" is strictly required.`);
           return;
         }
       }
     }
 
-    // EXTRA VALIDATIE: Als standalone aanstaat, is de Track Start Date verplicht!
     if (standardAttrs.isStandalone) {
       const standaloneStart = dynamicAttrs.metadataInputs['standaloneStartDate'];
       if (!standaloneStart || !standaloneStart.trim()) {
@@ -263,7 +188,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       }
     }
 
-    // Algemene datum-notatie validaties (indien ingevuld)
     const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
     const birthdayKey = Object.keys(dynamicAttrs.metadataInputs).find((k: string) => k.toLowerCase() === 'birthday');
     const birthdayVal = birthdayKey ? dynamicAttrs.metadataInputs[birthdayKey]?.trim() : undefined;
@@ -285,8 +209,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
 
     const rebuiltMetadata = reconstructObject(dynamicAttrs.metadataInputs);
     
-    // GESTRUCTUREERD PARSEN: Als we een L3 bouwen en er is milestone-input, 
-    // zetten we de platte tekst om naar de vereiste [{date, title}] structuur.
     if (type.toLowerCase() === 'l3' && dynamicAttrs.metadataInputs['l3Milestones']) {
       rebuiltMetadata['l3Milestones'] = parseAdminMilestones(dynamicAttrs.metadataInputs['l3Milestones']) as unknown as MetadataValue;
     }
@@ -316,32 +238,17 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       metadata: rebuiltMetadata
     };
 
-    // Herbouw de verbindingen en transformeer de metadata milestones naar arrays met objecten
-    const finalConnections: HydratedEntityConnection[] = timelineBuilder.localConnections.map(c => ({
-      ...c,
-      metadata: {
-        ...c.metadata,
-        milestones: parseAdminMilestones(c.metadata?.milestones)
-      }
-    }));
-
-    const finalTargetConnections: HydratedEntityConnection[] = timelineBuilder.localTargetConnections.map(c => ({
-      ...c,
-      metadata: {
-        ...c.metadata,
-        milestones: parseAdminMilestones(c.metadata?.milestones)
-      }
-    }));
-
     try {
+      // Sla puur en alleen de entiteit op
       const savedEntity = await entityService.create(theme.id, newEntitySkeleton);
       window.dispatchEvent(new Event('refresh-database'));
 
       if (onSave) {
+        // Lever een HydratedEntity structuur op met lege connectie-arrays
         await onSave({
           ...savedEntity,
-          connections: finalConnections,
-          targetConnections: finalTargetConnections
+          connections: [],
+          targetConnections: []
         });
       }
     } catch {
@@ -349,7 +256,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     }
   };
 
-  return {
+return {
     type,
     handleTypeChange,
     customSuffix,
@@ -364,6 +271,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     setStatus: standardAttrs.setStatus,
     isStandalone: standardAttrs.isStandalone,
 
+    // Media
     albumInput: mediaCategories.albumInput,
     setAlbumInput: mediaCategories.setAlbumInput,
     unassignedImages: mediaCategories.unassignedImages,
@@ -372,39 +280,26 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     newImageKey: mediaCategories.newImageKey,
     setNewImageKey: mediaCategories.setNewImageKey,
 
+    // Dynamic Attributes (Zorg dat deze variabelen correct zijn doorgegeven)
     metadataInputs: dynamicAttrs.metadataInputs,
     newMetadataKey: dynamicAttrs.newMetadataKey,
     setNewMetadataKey: dynamicAttrs.setNewMetadataKey,
+    
+    // HIER: De triggers die de dropdown in de UI aansturen
     dynamicTriggers: dynamicAttrs.dynamicTriggers,
     triggerFieldsMap: dynamicAttrs.triggerFieldsMap,
+    
     partitionedMetadataKeys: dynamicAttrs.partitionedMetadataKeys,
     handleMetadataInputChange: dynamicAttrs.handleMetadataInputChange,
 
-    expandedChildId: timelineBuilder.expandedChildId,
-    setExpandedChildId: timelineBuilder.setExpandedChildId,
-    connectionSearchTerm: timelineBuilder.connectionSearchTerm,
-    setConnectionSearchTerm: timelineBuilder.setConnectionSearchTerm,
-    isConnectionDropdownOpen: timelineBuilder.isConnectionDropdownOpen,
-    setIsConnectionDropdownOpen: timelineBuilder.setIsConnectionDropdownOpen,
-    dropdownRef: timelineBuilder.dropdownRef,
-    filteredAvailableTargets: timelineBuilder.filteredAvailableTargets,
-    unifiedConnections: timelineBuilder.unifiedConnections,
-    setLocalConnections: timelineBuilder.setLocalConnections,
-    setLocalTargetConnections: timelineBuilder.setLocalTargetConnections,
-
+    // Handlers
     handleImageInputChange: mediaCategories.handleImageInputChange,
     handleAddImageField: mediaCategories.handleAddImageField,
     handleAddMetadataField: dynamicAttrs.handleAddMetadataField,
     handleRemoveImageField: mediaCategories.handleRemoveImageField,
     handleRemoveMetadataField: dynamicAttrs.handleRemoveMetadataField,
-    handleConnectionMetadataChange: timelineBuilder.handleConnectionMetadataChange,
-    handleRemoveConnection: timelineBuilder.handleRemoveConnection,
-    handleAddConnection: timelineBuilder.handleAddConnection,
-    handleParseAlbum: mediaCategories.handleParseAlbum,
     handleAssignImage: mediaCategories.handleAssignImage,
     handleUnassignImage: mediaCategories.handleUnassignImage,
-    handleCreateNonRelationalTrack,
-    formatMilestonesToText,
     handleSubmit
   };
 };

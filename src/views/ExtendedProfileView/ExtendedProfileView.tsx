@@ -242,10 +242,10 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                 {timelineItems.map((item) => {
                   const isExpanded = !!expandedMilestones[item.id];
                   const totalMilestones = item.milestones?.length || 0;
-                  
+
                   // Bepaal welke milestones we renderen (max 3 als hij ingeklapt is)
-                  const visibleMilestones = isExpanded 
-                    ? item.milestones || [] 
+                  const visibleMilestones = isExpanded
+                    ? item.milestones || []
                     : (item.milestones || []).slice(0, 3);
 
                   const hasMoreThanLimit = totalMilestones > 3;
@@ -258,7 +258,10 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                       <div className={styles.timelineCard}>
                         <div className={styles.timelineMeta}>
                           <span className={styles.timelineDuration}>
-                            {formatTimelineDate(item.startDate)} {item.endDate ? ` - ${formatTimelineDate(item.endDate)}` : ' - Present'}
+                            {formatTimelineDate(item.startDate)}
+                            {item.endDate
+                              ? ` - ${formatTimelineDate(item.endDate)}`
+                              : (item.status === 'active' ? ' - Present' : '')}
                           </span>
                           {item.status && (
                             <span className={`${styles.timelineBadge} ${styles[String(item.status).toLowerCase()] || ''}`}>
@@ -288,18 +291,18 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
                             {/* Toon de Expand/Collapse knop als er meer dan 3 milestones zijn */}
                             {hasMoreThanLimit && (
-                              <button 
+                              <button
                                 onClick={() => toggleMilestones(item.id)}
                                 className={styles.milestoneExpandButton}
                               >
                                 {isExpanded ? (
                                   <>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-                                  	Show less
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+                                    Show less
                                   </>
                                 ) : (
                                   <>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                                     Show {totalMilestones - 3} more milestones
                                   </>
                                 )}
@@ -316,7 +319,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             </section>
           )}
 
-          {/* Media & Teammates secties blijven ongewijzigd... */}
+          {/* Media & Teammates secties */}
           {hasMedia ? (
             gallerySectionKeys.map(sectionKey => {
               const galleryItems = mediaSections[sectionKey];
