@@ -26,12 +26,18 @@ export interface TeammateStructure {
   l3: BaseEntity[];
 }
 
+export interface TimelineMilestone {
+  date: string;
+  title: string;
+}
+
 export interface TimelineItem {
   id: string;
   groupName: string;
   startDate?: string;
   endDate?: string;
   status?: string;
+  milestones?: TimelineMilestone[];
 }
 
 const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
@@ -143,7 +149,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
   const assets = useProfileAssetValidator(profileDetails?.targetEntity);
 
-  /* English comment: Group teammates directly by group id to preserve context-specific connection metadata */
   const groupedTeammates = useMemo(() => {
     const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
     if (!profileDetails || !id || !theme.entities) return groups;
@@ -174,7 +179,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
           : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
 
         if (p && parentL3s.has(p.id)) {
-          /* English comment: Resolve membership status specific to this entity and this group connection */
           const membershipStatus = String(conn.metadata?.status || 'active').toLowerCase();
           const isFormerTeammate = ['former', 'retired', 'ex', 'disbanded', formerTriggerValue].includes(membershipStatus);
 
@@ -211,15 +215,13 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [groupedTeammates]);
 
-/* Compile, prioritize active memberships/standalone windows by duration, and push inactive to the bottom */
   const timelineItems = useMemo<TimelineItem[]>(() => {
     if (!profileDetails?.targetEntity) return [];
-    
+
     const targetEntity = profileDetails.targetEntity;
     const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
     const extractedEvents: TimelineItem[] = [];
 
-    // Hulpfunctie om vreemde objecten of lege databasetypes te filteren en te forceren naar een string
     const safeStringCast = (val: unknown): string | undefined => {
       if (val === null || val === undefined) return undefined;
       if (typeof val === 'object' && Object.keys(val).length === 0) return undefined;
@@ -228,73 +230,94 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       return str !== '' ? str : undefined;
     };
 
-    // 1. Verwerk alle connecties uit de database (Echte groepen, (Nep)relaties, F1 teams, Voetbalclubs)
+    const parseMilestones = (rawMilestones: unknown): TimelineMilestone[] | undefined => {
+      if (!Array.isArray(rawMilestones)) return undefined;
+      return (rawMilestones as unknown[])
+        .map(m => {
+          if (m && typeof m === 'object') {
+            const milestone = m as { date?: unknown; title?: unknown };
+            const date = safeStringCast(milestone.date);
+            const title = safeStringCast(milestone.title);
+            if (date && title) return { date, title };
+          }
+          return null;
+        })
+        .filter((m): m is TimelineMilestone => m !== null);
+    };
+
+    // 1. Database Connecties
     allConns.forEach(conn => {
       const connectedEntity = conn.sourceEntity?.id !== id ? conn.sourceEntity : conn.targetEntity;
 
       if (connectedEntity) {
         const startDate = safeStringCast(conn.metadata?.startDate || conn.metadata?.startdate);
-        const endDate = safeStringCast(conn.metadata?.endDate || conn.metadata?.enddate);
-        const rawStatus = conn.metadata?.status;
-        
-        const status = safeStringCast(rawStatus);
+        let endDate = safeStringCast(conn.metadata?.endDate || conn.metadata?.enddate);
+        const status = safeStringCast(conn.metadata?.status);
 
-        // Bepaal de naam: Prioriteit aan eventName/relationshipLabel, anders de naam van de connectie
-        const groupName = safeStringCast(conn.metadata?.eventName) || 
-                          safeStringCast(conn.metadata?.relationshipLabel) || 
-                          (connectedEntity.type === 'l3' ? connectedEntity.name : connectedEntity.name);
+        // FIX: Als start en einddatum hetzelfde zijn (bijv. 2015-2015), zet endDate op undefined
+        if (startDate && endDate && startDate === endDate) {
+          endDate = undefined;
+        }
 
-        // Connecties tonen we als er datums zijn óf als het een relatie/show betreft (alles wat geen standaard L3 groep is)
+        const groupName = safeStringCast(conn.metadata?.eventName) ||
+          safeStringCast(conn.metadata?.relationshipLabel) ||
+          connectedEntity.name;
+
         const isGroupMembership = connectedEntity.type === 'l3';
-        
+
         if (startDate || endDate || !isGroupMembership) {
           extractedEvents.push({
             id: String(conn.id || `${connectedEntity.id}-${startDate || 'unknown'}`),
             groupName: groupName,
             startDate,
             endDate,
-            status
+            status,
+            milestones: parseMilestones(conn.metadata?.milestones)
           });
         }
       }
     });
 
-  // 2. Verwerk de 'customTracks' rechtstreeks uit de metadata (zoals SIXTEEN (Show))
+    // 2. Custom Tracks
     if (Array.isArray(targetEntity.metadata?.customTracks)) {
-      // Cast de array expliciet naar unknown[] om de string[] aanname van TS te omzeilen
       (targetEntity.metadata.customTracks as unknown[]).forEach((item, index) => {
-        // Controleer of het item daadwerkelijk een object is en niet stiekem een losse string
         if (item && typeof item === 'object') {
-          const track = item as { 
-            name?: unknown; 
-            startDate?: unknown; 
-            startdate?: unknown; 
-            endDate?: unknown; 
-            enddate?: unknown; 
-            status?: unknown; 
-          };
-
+          const track = item as { name?: unknown; startDate?: unknown; startdate?: unknown; endDate?: unknown; enddate?: unknown; status?: unknown; milestones?: unknown };
           const trackName = safeStringCast(track.name);
           if (trackName) {
+            const startDate = safeStringCast(track.startDate || track.startdate);
+            let endDate = safeStringCast(track.endDate || track.enddate);
+
+            // FIX: Voorkom duplicatie binnen custom tracks (bijv. 2015-2015)
+            if (startDate && endDate && startDate === endDate) {
+              endDate = undefined;
+            }
+
             extractedEvents.push({
               id: `custom-track-${targetEntity.id}-${index}`,
               groupName: trackName,
-              startDate: safeStringCast(track.startDate || track.startdate),
-              endDate: safeStringCast(track.endDate || track.enddate),
-              status: safeStringCast(track.status)
+              startDate,
+              endDate,
+              status: safeStringCast(track.status),
+              milestones: parseMilestones(track.milestones)
             });
           }
         }
       });
     }
 
-    // 3. Slimme Automatische Standalone/Solo Logica (Indien aanwezig via algemene datums)
+    // 3. Standalone/Solo Logica
     const standaloneStartDate = safeStringCast(targetEntity.metadata?.standaloneStartDate || targetEntity.metadata?.startDate || targetEntity.metadata?.startdate);
-    const standaloneEndDate = safeStringCast(targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate);
+    let standaloneEndDate = safeStringCast(targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate);
+
+    // FIX: Voorkom duplicatie binnen standalone track
+    if (standaloneStartDate && standaloneEndDate && standaloneStartDate === standaloneEndDate) {
+      standaloneEndDate = undefined;
+    }
 
     if (targetEntity.isStandalone || standaloneStartDate || standaloneEndDate) {
       let standaloneLabel = safeStringCast(targetEntity.metadata?.standaloneLabel) || 'Solo / Standalone Activities';
-      
+
       if (!targetEntity.metadata?.standaloneLabel) {
         const metadataKeys = targetEntity.metadata ? Object.keys(targetEntity.metadata) : [];
         const hasFootballFields = metadataKeys.some(k => ['position', 'club', 'goals', 'caps'].includes(k.toLowerCase()));
@@ -310,8 +333,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       }
 
       const entityStatus = safeStringCast(targetEntity.status) || 'active';
-
-      // Alleen toevoegen als we dit niet al dubbelop via customTracks doen
       const isDuplicate = extractedEvents.some(e => e.groupName === standaloneLabel);
 
       if (!isDuplicate && (standaloneStartDate || standaloneEndDate || targetEntity.isStandalone)) {
@@ -320,28 +341,33 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
           groupName: standaloneLabel,
           startDate: standaloneStartDate,
           endDate: standaloneEndDate,
-          status: entityStatus
+          status: entityStatus,
+          milestones: parseMilestones(targetEntity.metadata?.milestones)
         });
       }
     }
 
-    // Sorteren op basis van actieve status en datum
+    // Tracks sorteren op jouw specifieke voorwaarden
     return extractedEvents.sort((a, b) => {
-      const isAActive = a.status?.toLowerCase() === 'active' || (!a.endDate && a.startDate);
-      const isBActive = b.status?.toLowerCase() === 'active' || (!b.endDate && b.startDate);
+      // FIX: Kijk nu puur en alleen naar de expliciete status uit de database/metadata
+      const isAActive = a.status?.toLowerCase() === 'active';
+      const isBActive = b.status?.toLowerCase() === 'active';
 
+      // 1. Als de status verschilt, gaan Active tracks áltijd boven Past tracks
       if (isAActive && !isBActive) return -1;
       if (!isAActive && isBActive) return 1;
 
+      // 2. Ze zijn allebei ACTIVE -> Oudste startDate bovenaan (Chronologisch)
       if (isAActive && isBActive) {
         const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
         const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
         return dateA - dateB;
       }
 
-      const dateA = a.startDate || '';
-      const dateB = b.startDate || '';
-      return dateB.localeCompare(dateA);
+      // 3. Ze zijn allebei PAST / LOAN -> Nieuwste startDate bovenaan (Omgekeerd chronologisch)
+      const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+      const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+      return dateB - dateA;
     });
   }, [profileDetails, id]);
 
@@ -355,13 +381,12 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     if (!profileDetails?.targetEntity) return [];
 
     const { targetEntity, activeLayer } = profileDetails;
-    // Sluit de standalone administratieve velden ook direct uit van de reguliere statistiekenlijst
     const standardExclusions = new Set<string>([
-      'description', 
-      'startdate', 
-      'enddate', 
-      'standalonestartdate', 
-      'standaloneenddate', 
+      'description',
+      'startdate',
+      'enddate',
+      'standalonestartdate',
+      'standaloneenddate',
       'standalonelabel'
     ]);
     const dynamicStatusKeys = new Set<string>();

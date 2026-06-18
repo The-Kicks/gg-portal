@@ -55,6 +55,9 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   const [columnPaddings, setColumnPaddings] = useState<Record<string, number[]>>({});
   const colContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // NIEUW: State om bij te houden welke timeline tracks zijn opengeklapt
+  const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
+
   const navigate = useNavigate();
   const { themeName } = useParams();
 
@@ -85,15 +88,18 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     navigate(`/${themeName}/profile/${targetId}`);
   };
 
-  /* English comment: Format date string cleanly for timeline view */
+  const toggleMilestones = (itemId: string) => {
+    setExpandedMilestones(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
   const formatTimelineDate = (dateStr?: string) => {
     if (!dateStr) return '';
-
-    // Als de string puur een jaartal is (bijv. "2015"), geef deze dan direct terug zonder maand
     if (/^\d{4}$/.test(dateStr.trim())) {
       return dateStr.trim();
     }
-
     const dateObj = new Date(dateStr);
     if (isNaN(dateObj.getTime())) return dateStr;
     return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
@@ -202,7 +208,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
               <h3 className={styles.sidebarTitle}>Stats</h3>
               <div className={styles.statsGrid}>
                 {formattedStatistics
-                  .filter((stat) => stat.key !== 'customTracks') // Dit filtert de customTracks eruit
+                  .filter((stat) => stat.key !== 'customTracks')
                   .map((stat) => (
                     <div key={stat.key} className={styles.statBox}>
                       <label>{stat.label}</label>
@@ -225,39 +231,92 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                   ))}
               </div>
             </div>
-            </div>
+          </div>
         </aside>
 
         <main className={styles.contentArea}>
-          {/* English comment: Structural CSS classes ready for timeline styling */}
           {timelineItems.length > 0 && (
             <section className={styles.timelineSection}>
               <h2 className={styles.sectionHeading}>Timeline</h2>
               <div className={styles.timelineTrack}>
-                {timelineItems.map((item) => (
-                  <div key={item.id} className={styles.timelineItem}>
-                    <div className={styles.timelineNode}>
-                      <div className={styles.timelineDot} />
-                    </div>
-                    <div className={styles.timelineCard}>
-                      <div className={styles.timelineMeta}>
-                        <span className={styles.timelineDuration}>
-                          {formatTimelineDate(item.startDate)} {item.endDate ? ` - ${formatTimelineDate(item.endDate)}` : ' - Present'}
-                        </span>
-                        {item.status && (
-                          <span className={`${styles.timelineBadge} ${styles[String(item.status).toLowerCase()] || ''}`}>
-                            {item.status}
-                          </span>
-                        )}
+                {timelineItems.map((item) => {
+                  const isExpanded = !!expandedMilestones[item.id];
+                  const totalMilestones = item.milestones?.length || 0;
+                  
+                  // Bepaal welke milestones we renderen (max 3 als hij ingeklapt is)
+                  const visibleMilestones = isExpanded 
+                    ? item.milestones || [] 
+                    : (item.milestones || []).slice(0, 3);
+
+                  const hasMoreThanLimit = totalMilestones > 3;
+
+                  return (
+                    <div key={item.id} className={styles.timelineItem}>
+                      <div className={styles.timelineNode}>
+                        <div className={styles.timelineDot} />
                       </div>
-                      <h3 className={styles.timelineGroupTitle}>{item.groupName}</h3>
+                      <div className={styles.timelineCard}>
+                        <div className={styles.timelineMeta}>
+                          <span className={styles.timelineDuration}>
+                            {formatTimelineDate(item.startDate)} {item.endDate ? ` - ${formatTimelineDate(item.endDate)}` : ' - Present'}
+                          </span>
+                          {item.status && (
+                            <span className={`${styles.timelineBadge} ${styles[String(item.status).toLowerCase()] || ''}`}>
+                              {item.status}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className={styles.timelineGroupTitle}>{item.groupName}</h3>
+
+                        {/* Milestones rendering met limiet */}
+                        {item.milestones && totalMilestones > 0 && (
+                          <div className={styles.milestonesWrapper}>
+                            <div className={styles.milestoneDividerLine} />
+                            {visibleMilestones.map((milestone, mIdx) => (
+                              <div key={`${milestone.title}-${mIdx}`} className={styles.milestoneRow}>
+                                <span className={styles.milestoneDate}>
+                                  {formatTimelineDate(milestone.date)}
+                                </span>
+                                <div className={styles.milestoneBulletContainer}>
+                                  <div className={styles.milestoneMiniDot} />
+                                </div>
+                                <span className={styles.milestoneTitle}>
+                                  {milestone.title}
+                                </span>
+                              </div>
+                            ))}
+
+                            {/* Toon de Expand/Collapse knop als er meer dan 3 milestones zijn */}
+                            {hasMoreThanLimit && (
+                              <button 
+                                onClick={() => toggleMilestones(item.id)}
+                                className={styles.milestoneExpandButton}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                                  	Show less
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    Show {totalMilestones - 3} more milestones
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}
 
+          {/* Media & Teammates secties blijven ongewijzigd... */}
           {hasMedia ? (
             gallerySectionKeys.map(sectionKey => {
               const galleryItems = mediaSections[sectionKey];
@@ -265,7 +324,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                 <section key={sectionKey} className={styles.mediaSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
                   <div className={styles.mediaGrid}>
-
                     {[0, 1, 2].map((colIndex) => {
                       const itemsInColumn = galleryItems.filter((_, index) => index % 3 === colIndex);
                       const rawPadding = columnPaddings[sectionKey]?.[colIndex] || 0;
@@ -322,7 +380,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                               )}
                             </div>
                           )}
-
                         </div>
                       );
                     })}

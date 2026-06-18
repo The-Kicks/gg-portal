@@ -13,6 +13,11 @@ interface UseAdminEntityCreateProps {
   onSave: (newEntity: HydratedEntity) => void | Promise<void>;
 }
 
+interface MilestoneStructure {
+  date: string;
+  title: string;
+}
+
 export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProps) => {
   const [type, setType] = useState<LayerKey>('l4');
   const [customSuffix, setCustomSuffix] = useState<string>('');
@@ -76,9 +81,9 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
   }, [standardAttrs.name, customSuffix, theme.id]);
 
   /**
-     * Genereert een inline virtuele track/node zonder directe relationele binding,
-     * identiek aan de geavanceerde Edit-module functionaliteit.
-     */
+   * Genereert een inline virtuele track/node zonder directe relationele binding,
+   * identiek aan de geavanceerde Edit-module functionaliteit.
+   */
   const handleCreateNonRelationalTrack = () => {
     const trackName = prompt('Enter custom track or layout display name (e.g. "World Cup Squad", "Independents"):');
     if (!trackName || !trackName.trim()) return;
@@ -100,7 +105,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
         startDate: '',
         endDate: '',
         metadata: {
-          status: 'active' // Mocht je applicatie hier runtime op crashen, dan staat er nu iig een fallback
+          status: 'active'
         },
         relatedEntity: {
           id: generatedTrackId,
@@ -114,8 +119,59 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
           connections: [],
           targetConnections: []
         }
-      } as HydratedEntityConnection // <-- De BEVRIJDENDE CAST! Dit stopt de TS-kettingreactie direct.
+      } as HydratedEntityConnection
     ]);
+  };
+
+  // Helper om objecten weer terug te zetten naar platte tekst (indien nodig)
+  const formatMilestonesToText = (milestones: unknown): string => {
+    if (!milestones) return '';
+    if (typeof milestones === 'string') return milestones;
+
+    if (Array.isArray(milestones)) {
+      return milestones
+        .map(m => {
+          if (m && typeof m === 'object') {
+            const typed = m as Partial<MilestoneStructure>;
+            const date = typed.date ? String(typed.date).trim() : '';
+            const title = typed.title ? String(typed.title).trim() : '';
+            if (date && title) return `${date}: ${title}`;
+            return title || date;
+          }
+          return String(m);
+        })
+        .filter(Boolean)
+        .join('\n');
+    }
+    return '';
+  };
+
+  // Type-safe parser voor de milestone strings uit de admin textarea
+  const parseAdminMilestones = (rawText: unknown): MilestoneStructure[] => {
+    if (Array.isArray(rawText)) {
+      return rawText as MilestoneStructure[];
+    }
+    if (typeof rawText !== 'string' || !rawText.trim()) return [];
+    
+    const lines = rawText.split('\n');
+    return lines
+      .map(line => {
+        const cleanLine = line.trim();
+        if (!cleanLine) return null;
+
+        const match = cleanLine.match(/^([\d-]+)[\s:-]+(.*)$/);
+        if (match) {
+          return {
+            date: match[1].trim(),
+            title: match[2].trim()
+          };
+        }
+        return {
+          date: '',
+          title: cleanLine
+        };
+      })
+      .filter((m): m is MilestoneStructure => m !== null);
   };
 
   const reconstructImageObject = (currentInputs: Record<string, string>): Record<string, string | string[]> => {
@@ -141,6 +197,10 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
       if (!rawValue || !rawValue.trim()) return;
+
+      // VOORKOM DUBBELE VERWERKING: l3Milestones sluiten we hier uit, 
+      // die parsen we apart in de handleSubmit tot object-array.
+      if (key === 'l3Milestones') return;
 
       const lowerKey = key.toLowerCase();
 
@@ -223,19 +283,26 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     const suffix = customSuffix.trim() ? customSuffix.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') : '';
     const generatedId = suffix ? `${baseSlug}-${suffix}` : baseSlug;
 
-    const updatedMetadata = reconstructObject(dynamicAttrs.metadataInputs);
+    const rebuiltMetadata = reconstructObject(dynamicAttrs.metadataInputs);
+    
+    // GESTRUCTUREERD PARSEN: Als we een L3 bouwen en er is milestone-input, 
+    // zetten we de platte tekst om naar de vereiste [{date, title}] structuur.
+    if (type.toLowerCase() === 'l3' && dynamicAttrs.metadataInputs['l3Milestones']) {
+      rebuiltMetadata['l3Milestones'] = parseAdminMilestones(dynamicAttrs.metadataInputs['l3Milestones']) as unknown as MetadataValue;
+    }
+
     const updatedImage = reconstructImageObject(mediaCategories.imageInputs);
 
     if (currentLayerMetadata?.statusTriggers) {
       const triggers = currentLayerMetadata.statusTriggers;
       const matchingTrigger = Object.values(triggers).find(t => t && t.key);
       if (matchingTrigger && standardAttrs.status === matchingTrigger.key) {
-        updatedMetadata[matchingTrigger.key] = matchingTrigger.value;
+        rebuiltMetadata[matchingTrigger.key] = matchingTrigger.value;
       }
     }
 
-    if (standardAttrs.isStandalone && !updatedMetadata['standaloneStatus']) {
-      updatedMetadata['standaloneStatus'] = 'active';
+    if (standardAttrs.isStandalone && !rebuiltMetadata['standaloneStatus']) {
+      rebuiltMetadata['standaloneStatus'] = 'active';
     }
 
     const newEntitySkeleton: BaseEntity = {
@@ -246,8 +313,25 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       status: standardAttrs.status,
       isStandalone: standardAttrs.isStandalone,
       image: updatedImage as BaseEntity['image'],
-      metadata: updatedMetadata
+      metadata: rebuiltMetadata
     };
+
+    // Herbouw de verbindingen en transformeer de metadata milestones naar arrays met objecten
+    const finalConnections: HydratedEntityConnection[] = timelineBuilder.localConnections.map(c => ({
+      ...c,
+      metadata: {
+        ...c.metadata,
+        milestones: parseAdminMilestones(c.metadata?.milestones)
+      }
+    }));
+
+    const finalTargetConnections: HydratedEntityConnection[] = timelineBuilder.localTargetConnections.map(c => ({
+      ...c,
+      metadata: {
+        ...c.metadata,
+        milestones: parseAdminMilestones(c.metadata?.milestones)
+      }
+    }));
 
     try {
       const savedEntity = await entityService.create(theme.id, newEntitySkeleton);
@@ -256,8 +340,8 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       if (onSave) {
         await onSave({
           ...savedEntity,
-          connections: timelineBuilder.localConnections,
-          targetConnections: timelineBuilder.localTargetConnections
+          connections: finalConnections,
+          targetConnections: finalTargetConnections
         });
       }
     } catch {
@@ -320,6 +404,7 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     handleAssignImage: mediaCategories.handleAssignImage,
     handleUnassignImage: mediaCategories.handleUnassignImage,
     handleCreateNonRelationalTrack,
+    formatMilestonesToText,
     handleSubmit
   };
 };

@@ -64,6 +64,8 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     handleAddConnection,
     handleAssignImage,
     handleUnassignImage,
+    formatMilestonesToText,
+    handleSyncMilestones,
     handleSubmit
   } = useAdminEntityEdit({ theme, entityId, onSave: handleLocalSave });
 
@@ -102,6 +104,11 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
 
     setAlbumInput('');
   };
+
+  const isL3Entity = originalEntity.type.toLowerCase() === 'l3';
+
+  // Filter l3Milestones uit de weergave van de Dynamic Keys sectie
+  const visibleDynamicKeys = partitionedMetadataKeys.dynamicKeys.filter(key => key !== 'l3Milestones');
 
   return (
     <div className={styles.formCard}>
@@ -167,11 +174,11 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       {/* Dynamic Theme Attributes */}
       <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes</h3>
       <div className={styles.innerSection}>
-        {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
+        {visibleDynamicKeys.length === 0 ? (
           <p className={`${styles.textMuted} ${styles.labelSubText}`}>No specific layout metadata schema properties injected for this layer.</p>
         ) : (
           <div className={styles.twoColumnGrid}>
-            {partitionedMetadataKeys.dynamicKeys.map(key => {
+            {visibleDynamicKeys.map(key => {
               const triggerValues = triggerFieldsMap[key];
               const isList = key.toLowerCase() === 'nationality' || (metadataInputs[key] && metadataInputs[key].includes(','));
 
@@ -408,6 +415,42 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       {/* Relational Graph & Timeline Connections */}
       <h3 className={styles.sectionTitle}>🔗 Map Network Relations & Timeline History</h3>
       <div className={styles.innerSection}>
+
+        {/* GEZAMENLIJKE COMPONENT: L3 Milestones Network Builder */}
+        {isL3Entity && (
+          <div style={{ marginBottom: '25px', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div>
+                <div className={styles.fieldLabel} style={{ marginBottom: '2px', fontWeight: 'bold' }}>🏆 L3 Global Timeline Milestones</div>
+                <small className={styles.textMuted}>Definieer hier de chronologische milestones van deze L3 (Formaat: <code>YYYY: Milestone</code>)</small>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                <button
+                  type="button"
+                  onClick={handleSyncMilestones}
+                  className={`${styles.btn} ${styles.btnPrimary}`}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                >
+                  🔄 Sync met actieve periodes
+                </button>
+                <span style={{ fontSize: '10px', color: '#eab308', opacity: 0.85, maxWidth: '240px', textAlign: 'right' }}>
+                  ⚠️ <em>Safe-Sync: Overschrijft geen relaties waar al handmatig milestones zijn ingevuld.</em>
+                </span>
+              </div>
+            </div>
+            <textarea
+              placeholder={`Bijvoorbeeld:\n2015: Group Formed and Pre-debut Activities\n2019: First World Tour Announced`}
+              value={metadataInputs['l3Milestones'] || ''}
+              onChange={e => handleMetadataInputChange('l3Milestones', e.target.value)}
+              className={styles.textareaField}
+              rows={4}
+              style={{ width: '100%', resize: 'vertical', lineHeight: '1.5', fontFamily: 'monospace' }}
+            />
+          </div>
+        )}
+
+        {/* ... Rest van het bestaande Relational Graph / Timeline Connections component blijft ongewijzigd ... */}
+
         <div style={{ position: 'relative', marginBottom: '20px' }} ref={dropdownRef}>
           <label className={styles.fieldLabel}>Connect with Existing Node OR Create Shared Custom Track</label>
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -462,16 +505,16 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
             unifiedConnections.map(conn => {
               const uniqueConnKey = `${conn.direction}-${conn.id}-${conn.relatedEntityId}`;
               const isNonRelational = conn.metadata?.isNonRelational || conn.relatedEntityId.startsWith('virtual-track:');
-              
+
               const displayName = isNonRelational
-                ? (conn.metadata?.customTargetName || 'Custom Shared Track')
+                ? (typeof conn.metadata?.customTargetName === 'object'
+                  ? 'Custom Track (Foutief Object)'
+                  : conn.metadata?.customTargetName || 'Custom Shared Track')
                 : (conn.relatedEntity?.name || conn.relatedEntityId);
 
               return (
                 <div key={uniqueConnKey} className={styles.connectionRow}>
                   <div className={styles.connectionHeader}>
-                    
-                    {/* Linkerzijde met badge, naam en optionele layer info */}
                     <div className={styles.connectionRowLeft}>
                       <span className={conn.direction === 'outgoing' ? styles.badgeOutbound : styles.badgeInbound}>
                         {isNonRelational ? 'TRACK' : conn.direction === 'outgoing' ? 'OUTGOING' : 'INBOUND'}
@@ -484,10 +527,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                       )}
                     </div>
 
-                    {/* Rechterzijde met alle inline select- en datumelementen */}
                     <div className={styles.connectionDates}>
-                      
-                      {/* Relational Lifecycle Status Dropdown */}
                       <div className={styles.dateFieldGroup}>
                         <select
                           value={conn.status || 'active'}
@@ -501,7 +541,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                         </select>
                       </div>
 
-                      {/* Start Datum (GEKORRIGEERD: textAlign i.p.v. textCenter) */}
                       <div className={styles.dateFieldGroup}>
                         <span className={styles.dateLabel}>From</span>
                         <input
@@ -514,7 +553,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                         />
                       </div>
 
-                      {/* Eind Datum (GEKORRIGEERD: textAlign i.p.v. textCenter) */}
                       <div className={styles.dateFieldGroup}>
                         <span className={styles.dateLabel}>To</span>
                         <input
@@ -527,7 +565,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                         />
                       </div>
 
-                      {/* Disconnect Knop */}
                       <button
                         type="button"
                         onClick={() => handleRemoveConnection(conn.id, conn.direction)}
@@ -538,21 +575,29 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     </div>
                   </div>
 
-                  {/* Milestones / Comebacks Input */}
                   <div style={{ marginTop: '10px', paddingLeft: '5px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                        💡 Format per regel: <strong>YYYY: Milestone</strong> of <strong>DD-MM-YYYY: Milestone</strong>
+                      </span>
+                    </div>
                     <textarea
-                      placeholder="Milestones, Achievements or Custom Track Notes (Comma or newline separated)..."
-                      value={conn.metadata?.milestones || ''}
+                      placeholder="Example:&#10;2018: Champions League Winner&#10;12-05-2021: Voted Player of the Year"
+                      value={formatMilestonesToText(conn.metadata?.milestones)}
                       onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'milestones', e.target.value)}
                       className={styles.textareaField}
-                      rows={1}
-                      style={{ 
-                        height: '34px', 
-                        minHeight: '34px', 
-                        padding: '6px 12px', 
-                        fontSize: '13px', 
-                        resize: 'none',
-                        backgroundColor: 'rgba(0,0,0,0.15)'
+                      rows={2}
+                      style={{
+                        height: 'auto',
+                        minHeight: '55px',
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        lineHeight: '1.4',
+                        resize: 'vertical',
+                        backgroundColor: 'rgba(0,0,0,0.2)',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '4px'
                       }}
                     />
                   </div>

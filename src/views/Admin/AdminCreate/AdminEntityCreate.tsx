@@ -10,6 +10,29 @@ interface Props {
   onCancel: () => void;
 }
 
+// HELPER: Vertaalt eventuele JSON/Arrays uit de backend live terug naar platte tekstregels voor de gebruiker
+const formatMilestonesToText = (milestones: unknown): string => {
+  if (!milestones) return '';
+  if (typeof milestones === 'string') return milestones;
+
+  if (Array.isArray(milestones)) {
+    return milestones
+      .map(m => {
+        if (m && typeof m === 'object') {
+          const date = m.date ? String(m.date).trim() : '';
+          const title = m.title ? String(m.title).trim() : '';
+          
+          if (date && title) return `${date}: ${title}`;
+          return title || date;
+        }
+        return String(m);
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  return '';
+};
+
 export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
   const {
     name,
@@ -117,6 +140,103 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     }
 
     setAlbumInput('');
+  };
+
+  // ==========================================
+  // SUB-RENDER FUNCTIES (Houdt JSX overzichtelijk)
+  // ==========================================
+  
+  const renderStandaloneSection = () => {
+    if (!isStandalone) return null;
+    return (
+      <div className={styles.requiredSection} style={{ borderLeftColor: 'var(--primary-color, #3b82f6)', background: 'rgba(59, 130, 246, 0.02)' }}>
+        <h3 className={styles.requiredTitle}>👤 Standalone / Individual Track Properties</h3>
+        <p className={`${styles.labelSubText} ${styles.textMuted}`}>Configure how this entity behaves when working outside of assigned groups, teams or collectives.</p>
+        
+        <div className={styles.twoColumnGrid} style={{ marginTop: '10px' }}>
+          <div>
+            <div className={styles.requiredLabel}>Timeline Display Label <small className={styles.textMuted}>(e.g. Solo, Free Agent, Individual)</small></div>
+            <input 
+              type="text" 
+              placeholder="Leave empty for fallback defaults" 
+              value={metadataInputs['standaloneLabel'] || ''} 
+              onChange={e => handleMetadataInputChange('standaloneLabel', e.target.value)}
+              className={styles.inputField}
+            />
+          </div>
+
+          <div>
+            <div className={styles.requiredLabel}>Individual Status</div>
+            <select 
+              value={metadataInputs['standaloneStatus'] || 'active'} 
+              onChange={e => handleMetadataInputChange('standaloneStatus', e.target.value)}
+              className={styles.inputField}
+            >
+              <option value="active">Active Track</option>
+              <option value="former">Ended / Former Track</option>
+            </select>
+          </div>
+
+          <div>
+            <div className={styles.requiredLabel}>Track Start Date <span style={{ color: '#ef4444' }}>*</span></div>
+            <input 
+              type="text" 
+              placeholder="YYYY-MM-DD or YYYY" 
+              value={metadataInputs['standaloneStartDate'] || ''} 
+              onChange={e => handleMetadataInputChange('standaloneStartDate', e.target.value)}
+              className={styles.inputField}
+              style={{ borderColor: !metadataInputs['standaloneStartDate'] ? '#ef4444' : undefined }}
+            />
+          </div>
+
+          <div>
+            <div className={styles.requiredLabel}>Track End Date <small className={styles.textMuted}>(Optional)</small></div>
+            <input 
+              type="text" 
+              placeholder="YYYY-MM-DD / YYYY (Keep blank if active)" 
+              value={metadataInputs['standaloneEndDate'] || ''} 
+              onChange={e => handleMetadataInputChange('standaloneEndDate', e.target.value)}
+              className={styles.inputField}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLayerSpecificMetadata = () => {
+    const isL4 = type.toLowerCase() === 'l4';
+    const isL3 = type.toLowerCase() === 'l3';
+    
+    if ((isL4 || isL3) && partitionedMetadataKeys.requiredKeys.length > 0) {
+      return (
+        <div className={styles.requiredSection}>
+          <h3 className={styles.requiredTitle}>
+            🔒 Required Metrics ({isL3 ? 'Layer 3 Team Core' : 'Layer 4 Individual Core'})
+          </h3>
+          <p className={`${styles.labelSubText} ${styles.textMuted}`}>
+            These attributes are strictly required by the engine config for this tier level.
+          </p>
+          <div className={styles.twoColumnGrid}>
+            {partitionedMetadataKeys.requiredKeys.map(key => (
+              <div key={key}>
+                <div className={styles.requiredLabel}>
+                  {key} {key.toLowerCase() === 'nationality' && <small className={styles.textMuted}>(Comma separated list)</small>}
+                </div>
+                <input
+                  type="text"
+                  placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
+                  value={metadataInputs[key] || ''}
+                  onChange={e => handleMetadataInputChange(key, e.target.value)}
+                  className={`${styles.inputField} ${styles.requiredInput}`}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -236,85 +356,9 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         </div>
 
-        {/* Standalone Period Details */}
-        {isStandalone && (
-          <div className={styles.requiredSection} style={{ borderLeftColor: 'var(--primary-color, #3b82f6)', background: 'rgba(59, 130, 246, 0.02)' }}>
-            <h3 className={styles.requiredTitle}>👤 Standalone / Individual Track Properties</h3>
-            <p className={`${styles.labelSubText} ${styles.textMuted}`}>Configure how this entity behaves when working outside of assigned groups, teams or collectives.</p>
-            
-            <div className={styles.twoColumnGrid} style={{ marginTop: '10px' }}>
-              <div>
-                <div className={styles.requiredLabel}>Timeline Display Label <small className={styles.textMuted}>(e.g. Solo, Free Agent, Individual)</small></div>
-                <input 
-                  type="text" 
-                  placeholder="Leave empty for fallback defaults" 
-                  value={metadataInputs['standaloneLabel'] || ''} 
-                  onChange={e => handleMetadataInputChange('standaloneLabel', e.target.value)}
-                  className={styles.inputField}
-                />
-              </div>
-
-              <div>
-                <div className={styles.requiredLabel}>Individual Status</div>
-                <select 
-                  value={metadataInputs['standaloneStatus'] || 'active'} 
-                  onChange={e => handleMetadataInputChange('standaloneStatus', e.target.value)}
-                  className={styles.inputField}
-                >
-                  <option value="active">Active Track</option>
-                  <option value="former">Ended / Former Track</option>
-                </select>
-              </div>
-
-              <div>
-                <div className={styles.requiredLabel}>Track Start Date <span style={{ color: '#ef4444' }}>*</span></div>
-                <input 
-                  type="text" 
-                  placeholder="YYYY-MM-DD or YYYY" 
-                  value={metadataInputs['standaloneStartDate'] || ''} 
-                  onChange={e => handleMetadataInputChange('standaloneStartDate', e.target.value)}
-                  className={styles.inputField}
-                  style={{ borderColor: !metadataInputs['standaloneStartDate'] ? '#ef4444' : undefined }}
-                />
-              </div>
-
-              <div>
-                <div className={styles.requiredLabel}>Track End Date <small className={styles.textMuted}>(Optional)</small></div>
-                <input 
-                  type="text" 
-                  placeholder="YYYY-MM-DD / YYYY (Keep blank if active)" 
-                  value={metadataInputs['standaloneEndDate'] || ''} 
-                  onChange={e => handleMetadataInputChange('standaloneEndDate', e.target.value)}
-                  className={styles.inputField}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Core Required Game Fields */}
-        {type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
-          <div className={styles.requiredSection}>
-            <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
-            <p className={`${styles.labelSubText} ${styles.textMuted}`}>These attributes are strictly required by the GuessWho game configuration engine.</p>
-            <div className={styles.twoColumnGrid}>
-              {partitionedMetadataKeys.requiredKeys.map(key => (
-                <div key={key}>
-                  <div className={styles.requiredLabel}>
-                    {key} {key.toLowerCase() === 'nationality' && <small className={styles.textMuted}>(Comma separated list)</small>}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
-                    value={metadataInputs[key] || ''}
-                    onChange={e => handleMetadataInputChange(key, e.target.value)}
-                    className={`${styles.inputField} ${styles.requiredInput}`}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Dynamic & Layer Conditional Sections */}
+        {renderStandaloneSection()}
+        {renderLayerSpecificMetadata()}
 
         {/* Dynamic Attributes */}
         <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Theme Properties)</h3>
@@ -685,6 +729,37 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                             />
                           </div>
                         </div>
+
+                        {/* Milestones / Comebacks Textarea veld */}
+                        <div style={{ marginTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <label className={styles.fieldLabel} style={{ marginBottom: 0 }}>🏆 Milestones & Comebacks Track History</label>
+                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', alignmentBaseline: 'middle' }}>
+                              💡 Format per regel: <strong>YYYY: Milestone</strong> of <strong>DD-MM-YYYY: Milestone</strong>
+                            </span>
+                          </div>
+                          <textarea
+                            placeholder={"Example:\n2022: POP! (IM NAYEON)\n2024: ABCD (NA)"}
+                            value={formatMilestonesToText(conn.metadata?.milestones)}
+                            onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'milestones', e.target.value)}
+                            className={styles.textareaField}
+                            rows={3} 
+                            style={{
+                              height: 'auto',
+                              minHeight: '65px',
+                              padding: '8px 12px',
+                              fontSize: '13px',
+                              lineHeight: '1.4',
+                              resize: 'vertical',
+                              backgroundColor: 'rgba(0,0,0,0.2)',
+                              color: '#fff',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '4px',
+                              width: '100%'
+                            }}
+                          />
+                        </div>
+
                       </div>
                     )}
                   </div>
@@ -694,10 +769,10 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         </div>
 
-        {/* Footer */}
-        <div className={styles.footerActions}>
+        {/* Footer Actions */}
+        <div className={styles.footerActions} style={{ marginTop: '30px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
-          <button type="button" onClick={(e) => void handleSubmit(e)} className={`${styles.btn} ${styles.btnPrimary}`}>Create & Save</button>
+          <button type="button" onClick={(e) => void handleSubmit(e)} className={`${styles.btn} ${styles.btnPrimary}`} style={{ padding: '12px 24px', fontSize: '16px' }}>Create & Save</button>
         </div>
       </div>
     </div>

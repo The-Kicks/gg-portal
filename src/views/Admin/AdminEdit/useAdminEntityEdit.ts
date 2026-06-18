@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import type { Theme, HydratedEntity } from '../../../types';
+import { useMemo, useEffect } from 'react';
+import type { Theme, HydratedEntity, HydratedEntityConnection } from '../../../types';
 
 import { useStandardEntityAttributes } from '../adminUtils/useStandardEntityAttributes';
 import { useDynamicAttributes, buildMetadataInputs, REQUIRED_L4_FIELDS } from '../adminUtils/useDynamicAttributes';
-import type { MetadataValue } from '../adminUtils/useDynamicAttributes'; 
+import type { MetadataValue } from '../adminUtils/useDynamicAttributes';
 import { useMediaCategories, buildImageInputs } from '../adminUtils/useMediaCategories';
 import { useTimelineBuilder } from '../adminUtils/useTimelineBuilder';
 
@@ -13,28 +13,148 @@ interface UseAdminEntityEditProps {
   onSave: (updatedEntity: HydratedEntity) => void | Promise<void>;
 }
 
+interface MilestoneStructure {
+  date: string;
+  title: string;
+}
+
 export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEditProps) => {
   const originalEntity = useMemo(() => {
     return (theme.entities || []).find(e => e.id === entityId);
   }, [theme.entities, entityId]);
-
-  const [prevEntityId, setPrevEntityId] = useState<string>(entityId);
 
   const standardAttrs = useStandardEntityAttributes(originalEntity);
   const dynamicAttrs = useDynamicAttributes(originalEntity, theme);
   const mediaCategories = useMediaCategories(originalEntity, theme, dynamicAttrs.layerConfig);
   const timelineBuilder = useTimelineBuilder(originalEntity, theme, entityId);
 
-  if (entityId !== prevEntityId) {
-    setPrevEntityId(entityId);
+  // Helper om milestones tekst om te zetten naar [{date, title}]
+  const parseAdminMilestones = (rawText: unknown): MilestoneStructure[] => {
+    if (Array.isArray(rawText)) {
+      return rawText as MilestoneStructure[];
+    }
+
+    if (typeof rawText !== 'string' || !rawText.trim()) return [];
+
+    const lines = rawText.split('\n');
+    return lines
+      .map(line => {
+        const cleanLine = line.trim();
+        if (!cleanLine) return null;
+
+        const match = cleanLine.match(/^([\d-]+)[\s:-]+(.*)$/);
+        if (match) {
+          return {
+            date: match[1].trim(),
+            title: match[2].trim()
+          };
+        }
+        return {
+          date: '',
+          title: cleanLine
+        };
+      })
+      .filter((m): m is MilestoneStructure => m !== null);
+  };
+
+  // Format functie om objecten weer terug te zetten naar platte tekst voor de textarea
+  const formatMilestonesToText = (milestones: unknown): string => {
+    if (!milestones) return '';
+    if (typeof milestones === 'string') return milestones;
+
+    if (Array.isArray(milestones)) {
+      return milestones
+        .map(m => {
+          if (m && typeof m === 'object') {
+            const typed = m as Partial<MilestoneStructure>;
+            const date = typed.date ? String(typed.date).trim() : '';
+            const title = typed.title ? String(typed.title).trim() : '';
+            if (date && title) return `${date}: ${title}`;
+            return title || date;
+          }
+          return String(m);
+        })
+        .filter(Boolean)
+        .join('\n');
+    }
+    return '';
+  };
+
+  const handleSyncMilestones = () => {
+    const rawL3Milestones = dynamicAttrs.metadataInputs['l3Milestones'] || '';
+    if (!rawL3Milestones.trim()) return;
+
+    const milestoneLines = rawL3Milestones
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    // Pak alle uitgaande relaties
+    const outgoingConnections = timelineBuilder.unifiedConnections.filter(conn => conn.direction === 'outgoing');
+
+    outgoingConnections.forEach(conn => {
+      const currentRelationText = formatMilestonesToText(conn.metadata?.milestones);
+
+      // CRUCIALE CHECK: Als er al handmatige milestones op deze relatie staan, 
+      // slaan we deze over om overschrijven te voorkomen.
+      if (currentRelationText.trim().length > 0) return;
+
+      const startYear = conn.startDate ? parseInt(conn.startDate, 10) : null;
+      if (!startYear || isNaN(startYear)) return;
+
+      // Indien er geen endDate is, of het bevat 'pres', dan is de relatie nu nog actief (2026)
+      const currentYear = 2026;
+      const endYear = conn.endDate && !conn.endDate.toLowerCase().includes('pres')
+        ? parseInt(conn.endDate, 10)
+        : currentYear;
+
+      // Filter milestones die vallen binnen de actieve periode van de relatie
+      const matchedMilestones = milestoneLines.filter(line => {
+        const yearMatch = line.match(/^(\d{4})/) || line.match(/\d{2}-\d{2}-(\d{4})/);
+        if (!yearMatch) return false;
+
+        const milestoneYear = parseInt(yearMatch[1], 10);
+        return milestoneYear >= startYear && milestoneYear <= endYear;
+      });
+
+      if (matchedMilestones.length > 0) {
+        // Omdat de check hierboven garandeert dat het leeg is, kunnen we direct de array vullen
+        const updatedText = matchedMilestones.join('\n');
+        timelineBuilder.handleConnectionMetadataChange(conn.id, conn.direction, 'milestones', updatedText);
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (!originalEntity) return;
+
     standardAttrs.resetStandardAttributes(originalEntity);
     mediaCategories.setAlbumInput('');
     mediaCategories.setUnassignedImages([]);
     mediaCategories.setImageInputs(buildImageInputs(originalEntity, theme));
-    dynamicAttrs.setMetadataInputs(buildMetadataInputs(originalEntity, theme));
-    timelineBuilder.setLocalConnections(originalEntity?.connections || []);
-    timelineBuilder.setLocalTargetConnections(originalEntity?.targetConnections || []);
-  }
+
+    const cleanInputs = buildMetadataInputs(originalEntity, theme);
+    const rawMetadata = originalEntity.metadata as Record<string, unknown> | undefined;
+
+    if (rawMetadata && rawMetadata['l3Milestones']) {
+      cleanInputs['l3Milestones'] = formatMilestonesToText(rawMetadata['l3Milestones']);
+    }
+
+    Object.keys(cleanInputs).forEach(key => {
+      if (key === 'customTracks' || key === 'l3Milestones') {
+        return;
+      }
+      if (rawMetadata && typeof rawMetadata[key] === 'object' && rawMetadata[key] !== null && !Array.isArray(rawMetadata[key])) {
+        delete cleanInputs[key];
+      }
+    });
+
+    dynamicAttrs.setMetadataInputs(cleanInputs);
+    timelineBuilder.setLocalConnections(originalEntity.connections || []);
+    timelineBuilder.setLocalTargetConnections(originalEntity.targetConnections || []);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId, theme]);
 
   const reconstructImageObject = (
     currentInputs: Record<string, string>,
@@ -67,6 +187,9 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     Object.keys(currentInputs).forEach(key => {
       const rawValue = currentInputs[key];
       if (!rawValue || !rawValue.trim()) return;
+
+      // Sluit l3Milestones uit van de standaard reconstructie
+      if (key === 'l3Milestones') return;
 
       if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
         result[key] = rawValue.trim();
@@ -112,14 +235,14 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       }
 
       const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
-      if (!dateRegex.test(dynamicAttrs.metadataInputs['Birthday'].trim())) {
+      if (!dateRegex.test(dynamicAttrs.metadataInputs['Birthday']?.trim() || '')) {
         alert("Format Error: Birthday must use the DD-MM-YYYY standard layout.");
         return;
       }
 
       const passingDateKey = Object.keys(dynamicAttrs.metadataInputs).find((k: string) => k.toLowerCase() === 'passingdate');
       const passingDate = passingDateKey ? dynamicAttrs.metadataInputs[passingDateKey]?.trim() : undefined;
-      
+
       if (passingDate && !dateRegex.test(passingDate)) {
         alert("Format Error: Passing Date must use the DD-MM-YYYY standard layout.");
         return;
@@ -135,8 +258,19 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       }
     }
 
-    const updatedMetadata = reconstructObject(dynamicAttrs.metadataInputs, originalEntity.metadata || {});
-    const updatedImage = reconstructImageObject(mediaCategories.imageInputs, originalEntity.image || {});
+    const rebuiltMetadata = reconstructObject(dynamicAttrs.metadataInputs, (originalEntity.metadata || {}) as Record<string, unknown>);
+
+    const updatedMetadata: Record<string, MetadataValue> = {
+      ...rebuiltMetadata,
+      customTracks: (originalEntity.metadata as Record<string, unknown> | undefined)?.customTracks as MetadataValue || []
+    };
+
+    // Parse en voeg l3Milestones gestructureerd toe aan de metadata
+    if (originalEntity.type.toLowerCase() === 'l3' && dynamicAttrs.metadataInputs['l3Milestones']) {
+      updatedMetadata['l3Milestones'] = parseAdminMilestones(dynamicAttrs.metadataInputs['l3Milestones']) as unknown as MetadataValue;
+    }
+
+    const updatedImage = reconstructImageObject(mediaCategories.imageInputs, (originalEntity.image || {}) as Record<string, unknown>);
 
     if (dynamicAttrs.dynamicTriggers[standardAttrs.status]) {
       const trigger = dynamicAttrs.dynamicTriggers[standardAttrs.status];
@@ -145,6 +279,24 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       }
     }
 
+    const finalConnections: HydratedEntityConnection[] = timelineBuilder.localConnections.map(c => ({
+      ...c,
+      metadata: {
+        ...c.metadata,
+        status: c.metadata?.status || 'active',
+        ...(c.metadata ? { milestones: parseAdminMilestones(c.metadata.milestones) } : {})
+      }
+    }));
+
+    const finalTargetConnections: HydratedEntityConnection[] = timelineBuilder.localTargetConnections.map(c => ({
+      ...c,
+      metadata: {
+        ...c.metadata,
+        status: c.metadata?.status || 'active',
+        ...(c.metadata ? { milestones: parseAdminMilestones(c.metadata.milestones) } : {})
+      }
+    }));
+
     const updatedEntity: HydratedEntity = {
       ...originalEntity,
       name: standardAttrs.name.trim(),
@@ -152,8 +304,8 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       isStandalone: standardAttrs.isStandalone,
       image: updatedImage as HydratedEntity['image'],
       metadata: updatedMetadata as HydratedEntity['metadata'],
-      connections: timelineBuilder.localConnections,
-      targetConnections: timelineBuilder.localTargetConnections
+      connections: finalConnections,
+      targetConnections: finalTargetConnections
     };
 
     try {
@@ -173,7 +325,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     setStatus: standardAttrs.setStatus,
     isStandalone: standardAttrs.isStandalone,
     setIsStandalone: standardAttrs.setIsStandalone,
-    
+
     albumInput: mediaCategories.albumInput,
     setAlbumInput: mediaCategories.setAlbumInput,
     unassignedImages: mediaCategories.unassignedImages,
@@ -181,7 +333,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     imageInputs: mediaCategories.imageInputs,
     newImageKey: mediaCategories.newImageKey,
     setNewImageKey: mediaCategories.setNewImageKey,
-    
+
     metadataInputs: dynamicAttrs.metadataInputs,
     newMetadataKey: dynamicAttrs.newMetadataKey,
     setNewMetadataKey: dynamicAttrs.setNewMetadataKey,
@@ -189,7 +341,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     dynamicTriggers: dynamicAttrs.dynamicTriggers,
     triggerFieldsMap: dynamicAttrs.triggerFieldsMap,
     partitionedMetadataKeys: dynamicAttrs.partitionedMetadataKeys,
-    
+
     expandedChildId: timelineBuilder.expandedChildId,
     setExpandedChildId: timelineBuilder.setExpandedChildId,
     connectionSearchTerm: timelineBuilder.connectionSearchTerm,
@@ -201,7 +353,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     unifiedConnections: timelineBuilder.unifiedConnections,
     setLocalConnections: timelineBuilder.setLocalConnections,
     setLocalTargetConnections: timelineBuilder.setLocalTargetConnections,
-    
+
     handleImageInputChange: mediaCategories.handleImageInputChange,
     handleMetadataInputChange: dynamicAttrs.handleMetadataInputChange,
     handleAddImageField: mediaCategories.handleAddImageField,
@@ -210,11 +362,14 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     handleRemoveMetadataField: dynamicAttrs.handleRemoveMetadataField,
     handleConnectionMetadataChange: timelineBuilder.handleConnectionMetadataChange,
     handleRemoveConnection: timelineBuilder.handleRemoveConnection,
-    handleCreateNonRelationalTrack: timelineBuilder.handleCreateNonRelationalTrack, // <-- Toegevoegd
+    handleCreateNonRelationalTrack: timelineBuilder.handleCreateNonRelationalTrack,
     handleAddConnection: timelineBuilder.handleAddConnection,
     handleParseAlbum: mediaCategories.handleParseAlbum,
     handleAssignImage: mediaCategories.handleAssignImage,
     handleUnassignImage: mediaCategories.handleUnassignImage,
+
+    formatMilestonesToText,
+    handleSyncMilestones,
     handleSubmit
   };
 };
