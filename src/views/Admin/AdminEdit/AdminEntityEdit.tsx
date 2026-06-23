@@ -505,6 +505,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
             unifiedConnections.map(conn => {
               const uniqueConnKey = `${conn.direction}-${conn.id}-${conn.relatedEntityId}`;
               const isNonRelational = conn.metadata?.isNonRelational || conn.relatedEntityId.startsWith('virtual-track:');
+              const isIncoming = conn.direction === 'incoming';
 
               const displayName = isNonRelational
                 ? (typeof conn.metadata?.customTargetName === 'object'
@@ -513,11 +514,37 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                 : (conn.relatedEntity?.name || conn.relatedEntityId);
 
               return (
-                <div key={uniqueConnKey} className={styles.connectionRow}>
-                  <div className={styles.connectionHeader}>
-                    <div className={styles.connectionRowLeft}>
-                      <span className={conn.direction === 'outgoing' ? styles.badgeOutbound : styles.badgeInbound}>
-                        {isNonRelational ? 'TRACK' : conn.direction === 'outgoing' ? 'OUTGOING' : 'INBOUND'}
+                <div 
+                  key={uniqueConnKey} 
+                  className={styles.connectionRow}
+                  style={isIncoming ? { opacity: 0.85, borderLeft: '3px solid #eab308', padding: '15px' } : undefined}
+                >
+                  {/* 1. De duidelijke waarschuwing prominent helemaal bovenaan over de volle breedte */}
+                  {isIncoming && (
+                    <div style={{ 
+                      backgroundColor: 'rgba(234, 179, 8, 0.1)', 
+                      border: '1px solid rgba(234, 179, 8, 0.2)',
+                      color: '#eab308', 
+                      padding: '8px 12px', 
+                      borderRadius: '4px',
+                      fontSize: '12px', 
+                      marginBottom: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      ⚠️ You can only edit outgoing relations. Edit incoming relations from the source node <strong>({displayName})</strong>.
+                    </div>
+                  )}
+
+                  {/* 2. De Header: Naam links, Datums rechts */}
+                  <div className={styles.connectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    
+                    {/* Linkerkant: Badges en Naam */}
+                    <div className={styles.connectionRowLeft} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className={isNonRelational ? styles.badgeOutbound : conn.direction === 'outgoing' ? styles.badgeOutbound : styles.badgeInbound}>
+                        {isNonRelational ? 'TRACK' : conn.direction === 'outgoing' ? 'OUTGOING' : 'INBOUND 🔒'}
                       </span>
                       <span className={styles.textBold}>{displayName}</span>
                       {!isNonRelational && (
@@ -527,13 +554,15 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                       )}
                     </div>
 
-                    <div className={styles.connectionDates}>
+                    {/* Rechterkant: Datumvelden en Disconnect */}
+                    <div className={styles.connectionDates} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div className={styles.dateFieldGroup}>
                         <select
                           value={conn.status || 'active'}
                           onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'status', e.target.value)}
                           className={styles.dateHeaderInput}
                           style={{ width: '110px' }}
+                          disabled={isIncoming}
                         >
                           <option value="active">Active</option>
                           <option value="past">Past</option>
@@ -550,6 +579,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                           onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'startDate', e.target.value)}
                           className={styles.dateHeaderInput}
                           style={{ width: '70px', padding: '6px 8px', textAlign: 'center' }}
+                          disabled={isIncoming}
                         />
                       </div>
 
@@ -562,6 +592,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                           onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'endDate', e.target.value)}
                           className={styles.dateHeaderInput}
                           style={{ width: '70px', padding: '6px 8px', textAlign: 'center' }}
+                          disabled={isIncoming}
                         />
                       </div>
 
@@ -569,13 +600,16 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                         type="button"
                         onClick={() => handleRemoveConnection(conn.id, conn.direction)}
                         className={styles.btnUnlink}
+                        disabled={isIncoming}
+                        style={isIncoming ? { opacity: 0.3, cursor: 'not-allowed' } : undefined}
                       >
                         Disconnect
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ marginTop: '10px', paddingLeft: '5px' }}>
+                  {/* 3. Milestones Textarea (Onderkant) */}
+                  <div style={{ marginTop: '12px', paddingLeft: '5px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
                         💡 Format per regel: <strong>YYYY: Milestone</strong> of <strong>DD-MM-YYYY: Milestone</strong>
@@ -587,15 +621,16 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                       onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'milestones', e.target.value)}
                       className={styles.textareaField}
                       rows={2}
+                      disabled={isIncoming}
                       style={{
                         height: 'auto',
                         minHeight: '55px',
                         padding: '8px 12px',
                         fontSize: '13px',
                         lineHeight: '1.4',
-                        resize: 'vertical',
+                        resize: isIncoming ? 'none' : 'vertical',
                         backgroundColor: 'rgba(0,0,0,0.2)',
-                        color: '#fff',
+                        color: isIncoming ? 'rgba(255,255,255,0.5)' : '#fff',
                         border: '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '4px'
                       }}

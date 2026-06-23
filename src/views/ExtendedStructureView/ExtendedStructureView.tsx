@@ -86,10 +86,33 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
   const hasMoreThanMax = targetMembersList.length > visibleMembersCount;
   const displayedMembers = isExpanded ? targetMembersList : targetMembersList.slice(0, visibleMembersCount);
 
+ // Genereer de jaren voor de grid kolommen zonder loze ruimte aan het einde
   const timelineYears = useMemo(() => {
-    if (!memberTimeline) return [];
+    if (!memberTimeline || !memberTimeline.rows.length) return [];
+    
+    // Check of er een actief lid tussen zit
+    const hasActiveMembers = memberTimeline.rows.some(r => {
+      const status = (r.status || '').toLowerCase().trim();
+      return !['former', 'left', 'past', 'inactive'].includes(status);
+    });
+
+    let maxYearBoundary;
+    
+    if (hasActiveMembers) {
+      // Als er actieve leden zijn, loopt de as door tot het huidige jaar (2026)
+      maxYearBoundary = new Date().getFullYear();
+    } else {
+      // Als iedereen 'Former' is, pakken we het hoogste endYear (afgerond naar beneden) uit de data
+      const endYears = memberTimeline.rows.map(r => Math.floor(r.endYear));
+      maxYearBoundary = Math.max(...endYears);
+    }
+
+    // Veiligheidscheck: zorg dat de max nooit lager is dan minYear
+    const startYear = memberTimeline.minYear;
+    const endYear = Math.max(startYear, maxYearBoundary);
+
     const years = [];
-    for (let y = memberTimeline.minYear; y <= memberTimeline.maxYear; y++) {
+    for (let y = startYear; y <= endYear; y++) {
       years.push(y);
     }
     return years;
@@ -167,12 +190,11 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
         </aside>
 
         <main className={styles.contentArea}>
-          
-          {/* 1. L3 SPECIALE TIJDLIJN VIEW (Eerst geplaatst indien activeLayer === 'l3') */}
+          {/* 1. L3 SPECIALE TIJDLIJN VIEW */}
           {activeLayer === 'l3' && memberTimeline && hasChildren && (
             <section className={styles.teammatesSection} style={{ marginBottom: '2.5rem' }}>
               <h2 className={styles.sectionHeading}>{'Roster Timeline'}</h2>
-              
+
               <div className={styles.timelineContainer}>
                 {/* Tijdlijn Jaren Header */}
                 <div className={styles.timelineHeaderRow}>
@@ -192,18 +214,39 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                     const rowData = memberTimeline.rows.find(r => r.memberId === member.id);
                     if (!rowData) return null;
 
-                    const totalYears = memberTimeline.maxYear - memberTimeline.minYear;
-                    const startOffset = ((rowData.startYear - memberTimeline.minYear) / totalYears) * 100;
-                    const barWidth = ((rowData.endYear - rowData.startYear) / totalYears) * 100;
-                    const safeBarWidth = barWidth <= 0 ? (1 / totalYears) * 100 : barWidth;
+                    const normalizedStatus = rowData.status.toLowerCase().trim();
+                    const isFormer = ['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
 
-                    const isFormer = rowData.status === 'former' || rowData.status === 'left';
+                    // CRUCIALE FIX 1: De totale schaal MOET exact gelijk zijn aan het aantal getekende kolommen
+                    // Elke kolom (year) representeert exact 100% / aantal_jaren aan breedte.
+                    const safeTotalYears = timelineYears.length <= 0 ? 1 : timelineYears.length;
+
+                    // CRUCIALE FIX 2: Bepaal de exacte decimale eindwaarde. 
+                    // Als de controller bij 'Present' het huidige jaar (bijv 2026.47) niet perfect meestuurt,
+                    // vangen we dat hier live op met de echte datum van vandaag.
+                    let exactEndYear = rowData.endYear;
+                    if (!isFormer) {
+                      const today = new Date();
+                      const currentYearNum = today.getFullYear();
+                      // Bereken het exacte decimale verloop van het huidige jaar (vandaag / 365)
+                      const startOfYear = new Date(currentYearNum, 0, 1);
+                      const daysPast = Math.floor((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+                      exactEndYear = currentYearNum + (daysPast / 365);
+                    }
+
+                    // Berekening op basis van de werkelijke schaal van de grid-balk
+                    const startOffset = ((rowData.startYear - memberTimeline.minYear) / safeTotalYears) * 100;
+                    const barWidth = ((exactEndYear - rowData.startYear) / safeTotalYears) * 100;
+
+                    // Minimale breedte fallback
+                    const safeBarWidth = barWidth <= 0 ? (1 / 365 / safeTotalYears) * 100 : barWidth;
 
                     return (
-                      <div 
-                        key={member.id} 
+                      <div
+                        key={member.id}
                         className={`${styles.timelineRow} ${isFormer ? styles.isFormerTeammate : ''}`}
                         onClick={() => onNavigate(member.id, 'l4')}
+                        style={{ cursor: 'pointer' }}
                       >
                         {/* Member Identiteit */}
                         <div className={styles.timelineMemberMeta}>
@@ -211,7 +254,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                           <div className={styles.timelineMemberInfo}>
                             <span className={styles.timelineMemberName}>{rowData.memberName}</span>
                             <span className={styles.timelineMemberDuration}>
-                              {rowData.startDate ? rowData.startYear : '???'} – {isFormer ? rowData.endYear : 'Present'}
+                              {rowData.startDate ? rowData.startDate : '???'} – {isFormer ? (rowData.endDate || 'Past') : 'Present'}
                             </span>
                           </div>
                         </div>
@@ -221,12 +264,13 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                           {timelineYears.map(year => (
                             <div key={year} className={styles.timelineGridLine} />
                           ))}
-                          
-                          <div 
-                            className={styles.timelineDataBar}
+
+                          <div
+                            className={`${styles.timelineDataBar} ${isFormer ? styles.timelineBarFormer : styles.timelineBarActive}`}
                             style={{
                               left: `${startOffset}%`,
-                              width: `${safeBarWidth}%`
+                              width: `${safeBarWidth}%`,
+                              position: 'absolute'
                             }}
                           >
                             <span className={styles.barInsideLabel}>
@@ -242,8 +286,8 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
 
               {hasMoreThanMax && (
                 <div className={styles.viewMoreContainer}>
-                  <button 
-                    className={styles.viewMoreBtn} 
+                  <button
+                    className={styles.viewMoreBtn}
                     onClick={() => setIsExpanded(!isExpanded)}
                   >
                     {isExpanded ? 'View Less' : `View More (+${targetMembersList.length - visibleMembersCount})`}
@@ -253,7 +297,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
             </section>
           )}
 
-          {/* 2. DYNAMISCHE ALBUMS LOOP (TETRIS GRID) (Nu na de tijdlijn geplaatst) */}
+          {/* 2. DYNAMISCHE ALBUMS LOOP (TETRIS GRID) */}
           {hasMedia && (
             <div className={styles.mediaContainerWrapper} style={{ marginBottom: '2.5rem' }}>
               {gallerySectionKeys.map(sectionKey => {
@@ -308,10 +352,9 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
             </div>
           )}
 
-          {/* 3. OVERIGE GRIDS (Voor L1 of L2 lagen die geen tijdlijn gebruiken) */}
+          {/* 3. OVERIGE GRIDS (Voor L1 of L2 lagen) */}
           {hasChildren ? (
             <>
-              {/* L3: Standaard Grid (Alleen als actieve laag GEEN L3 is) */}
               {relatedL3s.length > 0 && activeLayer !== 'l3' && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l3 ?? 'Organizations'}</h2>
@@ -343,7 +386,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                 </section>
               )}
 
-              {/* L4: Standaard Grid (Alleen als actieve laag GEEN L3 is) */}
               {relatedL4s.length > 0 && activeLayer !== 'l3' && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l4 ?? 'Endpoints'}</h2>
@@ -372,8 +414,8 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
 
                   {hasMoreThanMax && (
                     <div className={styles.viewMoreContainer}>
-                      <button 
-                        className={styles.viewMoreBtn} 
+                      <button
+                        className={styles.viewMoreBtn}
                         onClick={() => setIsExpanded(!isExpanded)}
                       >
                         {isExpanded ? 'View Less' : `View More (+${targetMembersList.length - visibleMembersCount})`}
@@ -383,7 +425,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                 </section>
               )}
 
-              {/* L2: Core Divisions Grid */}
               {relatedL2s.length > 0 && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l2 ?? 'Sub-layers'}</h2>

@@ -92,9 +92,23 @@ const fillRowGapsWithPlaceholders = (
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
-// Helper om een jaartal veilig uit een string te extraheren
-const extractYear = (dateStr?: string): number => {
+const extractYearDecimal = (dateStr?: string): number => {
   if (!dateStr) return new Date().getFullYear();
+  
+  const parts = dateStr.split('-');
+  
+  if (parts.length >= 2) {
+    const monthStr = parts.length === 3 ? parts[1] : parts[0];
+    const yearStr = parts.length === 3 ? parts[2] : parts[1];
+    
+    const month = parseInt(monthStr, 10);
+    const year = parseInt(yearStr, 10);
+    
+    if (!isNaN(month) && !isNaN(year)) {
+      return year + (Math.max(0, Math.min(11, month - 1)) / 12);
+    }
+  }
+
   const match = dateStr.match(/\d{4}/);
   return match ? parseInt(match[0], 10) : new Date().getFullYear();
 };
@@ -133,7 +147,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     const relatedL3sMap = new Map<string, BaseEntity>();
     const relatedL4sMap = new Map<string, BaseEntity>();
 
-    // Array om de ruwe connectie metadata te bewaren voor de l3 tijdlijn
     const rawMemberConnections: Array<{ memberId: string; startDate?: string; endDate?: string; status?: string }> = [];
 
     const getConnections = (ent: HydratedEntity) => [
@@ -150,27 +163,34 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         if (other.type === 'l1') l1ParentsMap.set(other.id, other);
 
         if (other.type === 'l4') {
-          const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
-
-          // Definieer lokaal de verwachte structuur van de connectie-metadata
           const connectionMeta = conn.metadata as {
+            status?: string;
+            membershipStatus?: string;
             startDate?: string;
             joinedDate?: string;
             endDate?: string;
             leftDate?: string;
           } | undefined;
 
+          const relStatus = String(connectionMeta?.status || connectionMeta?.membershipStatus || 'active').toLowerCase().trim();
+          const extractedStartDate = connectionMeta?.startDate || connectionMeta?.joinedDate || '';
+          const extractedEndDate = connectionMeta?.endDate || connectionMeta?.leftDate || '';
+
           rawMemberConnections.push({
             memberId: other.id,
-            startDate: connectionMeta?.startDate || connectionMeta?.joinedDate,
-            endDate: connectionMeta?.endDate || connectionMeta?.leftDate,
+            startDate: extractedStartDate,
+            endDate: extractedEndDate,
             status: relStatus
           });
+
+          const existingEntityMeta = (other.metadata || {}) as Record<string, unknown>;
 
           relatedL4sMap.set(other.id, {
             ...other,
             metadata: {
-              ...(other.metadata || {}),
+              ...existingEntityMeta,
+              startDate: extractedStartDate,
+              endDate: extractedEndDate,
               groupStatus: relStatus,
               status: relStatus,
             },
@@ -206,7 +226,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
             const other = conn.sourceEntity?.id === fullL3.id ? conn.targetEntity : conn.sourceEntity;
             if (other && other.type === 'l4') {
               const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
-              if (relStatus === 'former' || relStatus === 'left') return;
 
               relatedL4sMap.set(other.id, {
                 ...other,
@@ -247,7 +266,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
             const other = conn.sourceEntity?.id === fullL3.id ? conn.targetEntity : conn.sourceEntity;
             if (other && other.type === 'l4') {
               const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
-              if (relStatus === 'former' || relStatus === 'left') return;
 
               relatedL4sMap.set(other.id, {
                 ...other,
@@ -281,64 +299,71 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [id, theme.entities]);
 
-  // --- MEMBER TIMELINE DATA GENERATOR (Alleen voor L3) ---
-const memberTimelineData = useMemo(() => {
-  if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
-    return null;
-  }
+  // --- MEMBER TIMELINE DATA GENERATOR ---
+  const memberTimelineData = useMemo(() => {
+    if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
+      return null;
+    }
 
-  const currentYear = new Date().getFullYear(); // Dit is 2026
+    const currentYear = new Date().getFullYear(); 
+    const currentMonth = new Date().getMonth(); 
+    const currentYearDecimal = currentYear + (currentMonth / 12);
 
-  const rows: MemberTimelineRow[] = structureData.relatedL4s.map(member => {
-    const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
-    const entityImages = member.image as EntityImages | undefined;
-    const imgUrl = entityImages ? getEntityImage(entityImages, 'profileCard') : '';
+    const rows = structureData.relatedL4s.map(member => {
+      const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
+      const entityImages = member.image as EntityImages | undefined;
+      const imgUrl = entityImages ? getEntityImage(entityImages, 'profileCard') : '';
 
-    const extractedStart = extractYear(connectionMeta?.startDate);
-    // Als de startdatum onbekend of ongeldig is, pakken we het huidige jaar als fallback
-    const startYear = (extractedStart && !isNaN(extractedStart)) ? extractedStart : currentYear;
+      const startYearDecimal = extractYearDecimal(connectionMeta?.startDate);
+      
+      const normalizedStatus = String(connectionMeta?.status || 'active').toLowerCase().trim();
+      const isFormer = ['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
+      
+      const endYearDecimal = isFormer 
+        ? (connectionMeta?.endDate ? extractYearDecimal(connectionMeta.endDate) : startYearDecimal)
+        : currentYearDecimal;
 
-    const isFormer = connectionMeta?.status === 'former' || connectionMeta?.status === 'left';
-    const extractedEnd = connectionMeta?.endDate ? extractYear(connectionMeta.endDate) : null;
+      return {
+        memberId: member.id,
+        memberName: member.name,
+        memberImage: imgUrl || '/placeholder.png',
+        startDate: connectionMeta?.startDate || '',
+        endDate: connectionMeta?.endDate || '',
+        status: normalizedStatus,
+        startYear: Math.min(startYearDecimal, currentYearDecimal),
+        endYear: Math.min(endYearDecimal, currentYearDecimal)
+      };
+    });
+
+   // Haal de ruwe decimale start- en eindpunten op
+    const startYearsFloored = rows.map(r => Math.floor(r.startYear));
+    const rawEndYears = rows.map(r => r.endYear);
+
+    // Bepaal de minimale startkant (altijd naar beneden afgerond op hele jaren)
+    const minYear = startYearsFloored.length > 0 ? Math.min(...startYearsFloored) : currentYear;
     
-    // Als iemand weg is maar we hebben geen jaartal, fallback naar startYear of currentYear. 
-    // Als iemand nog actief is, stoppen we de balk strak op het huidige jaar (2026).
-    const endYear = isFormer 
-      ? ((extractedEnd && !isNaN(extractedEnd)) ? extractedEnd : currentYear)
-      : currentYear;
+    // Bepaal de maximale eindkant op basis van de hoogste waarde in de dataset
+    const maxRawYear = rawEndYears.length > 0 ? Math.max(...rawEndYears) : currentYear;
+    
+    // UPGRADE: Als de hoogste waarde vlak na de grens van een nieuw jaar ligt (bijv. januari = 2023.03),
+    // dan willen we het VORIGE jaar (2022) als maximale grens instellen. 
+    // De view maakt hier dan 2022 + 1 = 2023 van, waardoor de balk perfect aan het begin van 2023 stopt.
+    let maxYear = Math.floor(maxRawYear);
+    const decimalPart = maxRawYear - maxYear;
+
+    if (decimalPart > 0 && decimalPart < 0.09) { 
+      // Datum valt vroeg in januari, verlaag de grens met een jaar zodat het niet doorschiet
+      maxYear = maxYear - 1;
+    }
+
+    if (minYear > maxYear) maxYear = minYear;
 
     return {
-      memberId: member.id,
-      memberName: member.name,
-      memberImage: imgUrl || '/placeholder.png',
-      startDate: connectionMeta?.startDate || '',
-      endDate: connectionMeta?.endDate || '',
-      status: connectionMeta?.status || 'active',
-      startYear: Math.min(startYear, currentYear), // Voorkom dat start in de toekomst ligt
-      endYear: Math.min(endYear, currentYear)      // Harde cap: actieve leden gaan nooit voorbij 2026
+      rows,
+      minYear,
+      maxYear: Math.min(maxYear, currentYear)
     };
-  });
-
-  // Haal alle geldige jaartallen op
-  const startYears = rows.map(r => r.startYear);
-  const endYears = rows.map(r => r.endYear);
-
-  const minYear = startYears.length > 0 ? Math.min(...startYears) : currentYear;
-  let maxYear = endYears.length > 0 ? Math.max(...endYears) : currentYear;
-
-  // Als alles binnen hetzelfde jaar valt (bijv. alles gestart in 2026),
-  // dan zetten we min en max gelijk, zodat de CSS grid 100% van dat jaar vult 
-  // zonder loze margejaren ervoor of erna te creëren.
-  if (minYear > maxYear) {
-    maxYear = minYear;
-  }
-
-  return {
-    rows,
-    minYear,
-    maxYear: Math.min(maxYear, currentYear) // Extra veiligheidsgordel tegen spookjaren in de toekomst
-  };
-}, [structureData]);
+  }, [structureData]);
 
   // --- ROUTING CONTROL ---
   const handleNavigation = useCallback((targetId: string, layer: "l1" | "l2" | "l3" | "l4") => {
@@ -419,19 +444,16 @@ const memberTimelineData = useMemo(() => {
           : (theme.labels[activeLayer] ?? activeLayer);
   }, [structureData, theme.labels]);
 
-  // Gecorrigeerde Statsbox Filter: Alleen primitieve types (geen objecten of arrays met objecten) toelaten
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!structureData?.targetEntity?.metadata) return [];
     return Object.entries(structureData.targetEntity.metadata)
       .filter(([key, value]) => {
         if (key === 'description' || key === 'status' || key === 'membershipStatus' || !value) return false;
 
-        // Als het een array is, controleer of de elementen strings of nummers zijn (geen object-relaties)
         if (Array.isArray(value)) {
           return value.length > 0 && typeof value[0] !== 'object';
         }
 
-        // Mag absoluut geen object zijn
         return typeof value !== 'object';
       })
       .map(([key, value]) => ({
@@ -465,7 +487,7 @@ const memberTimelineData = useMemo(() => {
       setProfileImageError={setProfileImageError}
       setHeroImageError={setHeroImageError}
       onNavigate={handleNavigation}
-      memberTimeline={memberTimelineData} // Doorgeven aan de view component
+      memberTimeline={memberTimelineData}
     />
   );
 };
