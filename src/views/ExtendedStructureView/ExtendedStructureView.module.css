@@ -460,3 +460,196 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ==========================================================================
+   8. HORIZONTAL MEMBER TIMELINE COMPONENT (L3 Layer Specific)
+   ========================================================================== */
+.timelineContainer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: color-mix(in srgb, var(--text), transparent 98%);
+  border: 1px solid color-mix(in srgb, var(--text), transparent 93%);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  overflow-x: auto; /* Fallback safe voor hele kleine schermen */
+}
+
+.timelineHeaderRow {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  align-items: center;
+  border-bottom: 2px solid color-mix(in srgb, var(--text), transparent 90%);
+  padding-bottom: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.timelineMemberStickyLabel {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--secondary);
+  opacity: 0.5;
+}
+
+.timelineBarsArea {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+}
+
+.timelineYearScaleLabel {
+  flex: 1;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text);
+  opacity: 0.7;
+  padding-left: 4px;
+  position: relative;
+}
+
+.timelineRowsStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.timelineRow {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-radius: 0.75rem;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.timelineRow:hover {
+  background-color: color-mix(in srgb, var(--text), transparent 95%);
+}
+
+.timelineMemberMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding-right: 1rem;
+}
+
+.timelineMiniThumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--primary);
+  background: var(--navbarColor);
+}
+
+.timelineMemberInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.timelineMemberName {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.timelineMemberDuration {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--secondary);
+  opacity: 0.6;
+}
+
+/* Track container met hulplijnen achter de balken */
+.timelineRow .timelineBarsArea {
+  min-height: 32px;
+  align-items: center;
+}
+
+.timelineGridLine {
+  flex: 1;
+  height: 100%;
+  border-left: 1px dashed color-mix(in srgb, var(--text), transparent 94%);
+  pointer-events: none;
+}
+
+/* De visuele horizontale balk */
+.timelineDataBar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 18px;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary), #fff 15%));
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: filter 0.2s ease, height 0.2s ease;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  box-sizing: border-box;
+  min-width: 8px;
+}
+
+.timelineRow:hover .timelineDataBar {
+  filter: brightness(1.1);
+  height: 22px;
+}
+
+.barInsideLabel {
+  font-size: 0.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #fff;
+  letter-spacing: 0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+/* Modificatie voor voormalige leden binnen de tijdlijn track */
+.isFormerTeammate .timelineDataBar {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--secondary), transparent 40%), color-mix(in srgb, var(--secondary), transparent 60%));
+  box-shadow: none;
+}
+
+/* ==========================================================================
+   9. VIEW MORE BUTTON CONTROLS
+   ========================================================================== */
+.viewMoreContainer {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 2.5rem;
+}
+
+.viewMoreBtn {
+  background: transparent;
+  border: 2px solid var(--primary);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 0.8rem 2.2rem;
+  border-radius: 3rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.viewMoreBtn:hover {
+  background-color: var(--primary);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.viewMoreBtn:active {
+  transform: translateY(0);
+}

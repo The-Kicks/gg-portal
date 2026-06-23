@@ -55,8 +55,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   const [columnPaddings, setColumnPaddings] = useState<Record<string, number[]>>({});
   const colContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // NIEUW: State om bij te houden welke timeline tracks zijn opengeklapt
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
+  
+  // View Entire Timeline feature states
+  const [isTimelineTall, setIsTimelineTall] = useState(false);
+  const [forceShowEntireTimeline, setForceShowEntireTimeline] = useState(false);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const { themeName } = useParams();
@@ -89,10 +93,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   };
 
   const toggleMilestones = (itemId: string) => {
-    setExpandedMilestones(prev => ({
-      ...prev,
-      [itemId]: !prev[itemId]
-    }));
+    setExpandedMilestones(prev => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
   const formatTimelineDate = (dateStr?: string) => {
@@ -116,6 +117,21 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     return () => intersectionObserver.disconnect();
   }, [shouldShowHeroSection]);
 
+  // Dynamic monitoring for "View Entire Timeline" triggers (> 50vh)
+  useEffect(() => {
+    if (timelineItems.length === 0 || !timelineContainerRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!timelineContainerRef.current) return;
+      const contentHeight = timelineContainerRef.current.scrollHeight;
+      const maxHeightAllowed = window.innerHeight * 0.5; // 50% of screen height
+      setIsTimelineTall(contentHeight > maxHeightAllowed);
+    });
+
+    resizeObserver.observe(timelineContainerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [timelineItems]);
+
   useEffect(() => {
     if (!hasMedia) return;
 
@@ -130,11 +146,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
           const maxHeight = Math.max(h0, h1, h2);
           if (maxHeight > 0) {
-            newPaddings[sectionKey] = [
-              maxHeight - h0,
-              maxHeight - h1,
-              maxHeight - h2
-            ];
+            newPaddings[sectionKey] = [maxHeight - h0, maxHeight - h1, maxHeight - h2];
           }
         });
 
@@ -213,13 +225,13 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                     <div key={stat.key} className={styles.statBox}>
                       <label>{stat.label}</label>
                       {stat.key === 'Nationality' && Array.isArray(entity.metadata?.Nationality) ? (
-                        <div className={styles.metadata} style={{ display: 'flex', gap: '5px' }}>
+                        <div style={{ display: 'flex', gap: '5px' }}>
                           {entity.metadata.Nationality.map((flagcode: string) => (
                             <ReactCountryFlag
                               key={flagcode}
                               countryCode={flagcode}
                               svg
-                              style={{ width: '1.5em', height: '1.5em' }}
+                              style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }}
                               title={flagcode}
                             />
                           ))}
@@ -238,30 +250,34 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
           {timelineItems.length > 0 && (
             <section className={styles.timelineSection}>
               <h2 className={styles.sectionHeading}>Timeline</h2>
-              <div className={styles.timelineTrack}>
-                {timelineItems.map((item) => {
-                  const isExpanded = !!expandedMilestones[item.id];
-                  const totalMilestones = item.milestones?.length || 0;
+              
+              <div 
+                ref={timelineContainerRef} 
+                className={`${styles.timelineContainerDynamic} ${isTimelineTall && !forceShowEntireTimeline ? styles.isCapped : ''}`}
+              >
+                <div className={styles.timelineTrack}>
+                  {timelineItems.map((item) => {
+                    const isExpanded = !!expandedMilestones[item.id];
+                    const totalMilestones = item.milestones?.length || 0;
+                    const visibleMilestones = isExpanded ? item.milestones || [] : (item.milestones || []).slice(0, 3);
+                    const hasMoreThanLimit = totalMilestones > 3;
 
-                  // Bepaal welke milestones we renderen (max 3 als hij ingeklapt is)
-                  const visibleMilestones = isExpanded
-                    ? item.milestones || []
-                    : (item.milestones || []).slice(0, 3);
+                    const startStr = formatTimelineDate(item.startDate);
+                    const endStr = formatTimelineDate(item.endDate);
+                    const shouldShowEndDate = item.endDate && item.endDate !== item.startDate;
+                    
+                    const isPastItem = item.status?.toLowerCase() !== 'active';
 
-                  const hasMoreThanLimit = totalMilestones > 3;
-
-                  return (
-                    <div key={item.id} className={styles.timelineItem}>
-                      <div className={styles.timelineNode}>
-                        <div className={styles.timelineDot} />
-                      </div>
-                      <div className={styles.timelineCard}>
-                        <div className={styles.timelineMeta}>
+                    return (
+                      <div 
+                        key={item.id} 
+                        className={`${styles.timelineItem} ${isPastItem ? styles.isPastItem : ''}`}
+                      >
+                        <div className={styles.timelineSideInfo}>
                           <span className={styles.timelineDuration}>
-                            {formatTimelineDate(item.startDate)}
-                            {item.endDate
-                              ? ` - ${formatTimelineDate(item.endDate)}`
-                              : (item.status === 'active' ? ' - Present' : '')}
+                            {startStr}
+                            {shouldShowEndDate && ` — ${endStr}`}
+                            {!item.endDate && item.status === 'active' && ' — Present'}
                           </span>
                           {item.status && (
                             <span className={`${styles.timelineBadge} ${styles[String(item.status).toLowerCase()] || ''}`}>
@@ -269,57 +285,66 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                             </span>
                           )}
                         </div>
-                        <h3 className={styles.timelineGroupTitle}>{item.groupName}</h3>
 
-                        {/* Milestones rendering met limiet */}
-                        {item.milestones && totalMilestones > 0 && (
-                          <div className={styles.milestonesWrapper}>
-                            <div className={styles.milestoneDividerLine} />
-                            {visibleMilestones.map((milestone, mIdx) => (
-                              <div key={`${milestone.title}-${mIdx}`} className={styles.milestoneRow}>
-                                <span className={styles.milestoneDate}>
-                                  {formatTimelineDate(milestone.date)}
-                                </span>
-                                <div className={styles.milestoneBulletContainer}>
-                                  <div className={styles.milestoneMiniDot} />
+                        <div className={styles.timelineNode}>
+                          <div className={styles.timelineDot} />
+                        </div>
+
+                        <div className={styles.timelineCard}>
+                          <h4 className={styles.timelineGroupTitle}>{item.groupName}</h4>
+                          {item.milestones && totalMilestones > 0 && (
+                            <div className={styles.milestonesWrapper}>
+                              <div className={styles.milestonesTrackLine} />
+                              {visibleMilestones.map((milestone, mIdx) => (
+                                <div key={`${milestone.title}-${mIdx}`} className={styles.milestoneRow}>
+                                  <div className={styles.milestoneIndicator}>
+                                    <div className={styles.milestoneMiniDot} />
+                                  </div>
+                                  <div className={styles.milestoneContent}>
+                                    <span className={styles.milestoneDate}>{formatTimelineDate(milestone.date)}</span>
+                                    <span className={styles.milestoneTitle}>{milestone.title}</span>
+                                  </div>
                                 </div>
-                                <span className={styles.milestoneTitle}>
-                                  {milestone.title}
-                                </span>
-                              </div>
-                            ))}
+                              ))}
 
-                            {/* Toon de Expand/Collapse knop als er meer dan 3 milestones zijn */}
-                            {hasMoreThanLimit && (
-                              <button
-                                onClick={() => toggleMilestones(item.id)}
-                                className={styles.milestoneExpandButton}
-                              >
-                                {isExpanded ? (
-                                  <>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
-                                    Show less
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                                    Show {totalMilestones - 3} more milestones
-                                  </>
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        )}
-
+                              {hasMoreThanLimit && (
+                                <button onClick={() => toggleMilestones(item.id)} className={styles.milestoneExpandButton}>
+                                  {isExpanded ? (
+                                    <>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6"/></svg>
+                                      <span>Less</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+                                      <span>{totalMilestones - 3} more</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+
+                {isTimelineTall && !forceShowEntireTimeline && (
+                  <div className={styles.timelineFadeOverlay}>
+                    <button 
+                      className={styles.viewEntireTimelineButton}
+                      onClick={() => setForceShowEntireTimeline(true)}
+                    >
+                      <span>View Entire Timeline</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
           )}
 
-          {/* Media & Teammates secties */}
           {hasMedia ? (
             gallerySectionKeys.map(sectionKey => {
               const galleryItems = mediaSections[sectionKey];
@@ -369,11 +394,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                           {finalPlaceholderHeight > 10 && (
                             <div
                               className={`${styles.mediaItem} ${styles.decorativePlaceholder}`}
-                              style={{
-                                height: finalPlaceholderHeight,
-                                padding: finalPlaceholderHeight < 80 ? '0' : undefined,
-                                minHeight: 0
-                              }}
+                              style={{ height: finalPlaceholderHeight, padding: finalPlaceholderHeight < 80 ? '0' : undefined, minHeight: 0 }}
                             >
                               {finalPlaceholderHeight >= 80 && (
                                 <div className={styles.placeholderInner}>
@@ -394,7 +415,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <div className={styles.emptyMediaContainer}>
               <div className={styles.emptyMediaInner}>
                 <div className={styles.emptyMediaIconWrapper}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
                     <circle cx="9" cy="9" r="2" />
                     <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
@@ -410,7 +431,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <section className={styles.teammatesSection}>
               {groupKeys.map(groupId => {
                 const { groupName, members } = groupedTeammates[groupId];
-
                 return (
                   <div key={groupId} className={styles.groupSubSection}>
                     <h2 className={styles.sectionHeading}>{groupName} Members</h2>

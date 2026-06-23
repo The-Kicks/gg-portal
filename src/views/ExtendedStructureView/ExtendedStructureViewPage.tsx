@@ -21,6 +21,17 @@ export interface FormattedStatItem {
   displayValue: string;
 }
 
+export interface MemberTimelineRow {
+  memberId: string;
+  memberName: string;
+  memberImage: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  startYear: number;
+  endYear: number;
+}
+
 // ==========================================================================
 // PURE UTILITY FUNCTIONS (Data Translators)
 // ==========================================================================
@@ -81,6 +92,13 @@ const fillRowGapsWithPlaceholders = (
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
+// Helper om een jaartal veilig uit een string te extraheren
+const extractYear = (dateStr?: string): number => {
+  if (!dateStr) return new Date().getFullYear();
+  const match = dateStr.match(/\d{4}/);
+  return match ? parseInt(match[0], 10) : new Date().getFullYear();
+};
+
 // ==========================================================================
 // MAIN CONTROLLER COMPONENT
 // ==========================================================================
@@ -110,10 +128,13 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
 
     const l1ParentsMap = new Map<string, BaseEntity>();
     const l2ParentsMap = new Map<string, BaseEntity>();
-    
+
     const relatedL2sMap = new Map<string, BaseEntity>();
     const relatedL3sMap = new Map<string, BaseEntity>();
     const relatedL4sMap = new Map<string, BaseEntity>();
+
+    // Array om de ruwe connectie metadata te bewaren voor de l3 tijdlijn
+    const rawMemberConnections: Array<{ memberId: string; startDate?: string; endDate?: string; status?: string }> = [];
 
     const getConnections = (ent: HydratedEntity) => [
       ...(ent.connections || []),
@@ -127,9 +148,25 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
 
         if (other.type === 'l2') l2ParentsMap.set(other.id, other);
         if (other.type === 'l1') l1ParentsMap.set(other.id, other);
-        
+
         if (other.type === 'l4') {
           const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
+
+          // Definieer lokaal de verwachte structuur van de connectie-metadata
+          const connectionMeta = conn.metadata as {
+            startDate?: string;
+            joinedDate?: string;
+            endDate?: string;
+            leftDate?: string;
+          } | undefined;
+
+          rawMemberConnections.push({
+            memberId: other.id,
+            startDate: connectionMeta?.startDate || connectionMeta?.joinedDate,
+            endDate: connectionMeta?.endDate || connectionMeta?.leftDate,
+            status: relStatus
+          });
+
           relatedL4sMap.set(other.id, {
             ...other,
             metadata: {
@@ -152,7 +189,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
           }
         });
       }
-    } 
+    }
     else if (activeLayer === 'l2') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -183,7 +220,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
           });
         }
       });
-    } 
+    }
     else if (activeLayer === 'l1') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -229,7 +266,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     const parents: BaseEntity[] = [];
     const absoluteL1 = Array.from(l1ParentsMap.values())[0];
     const absoluteL2 = Array.from(l2ParentsMap.values())[0];
-    
+
     if (absoluteL1) parents.push(absoluteL1);
     if (absoluteL2 && absoluteL2.id !== absoluteL1?.id) parents.push(absoluteL2);
 
@@ -237,11 +274,71 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       targetEntity,
       activeLayer,
       parents,
+      rawMemberConnections,
       relatedL2s: Array.from(relatedL2sMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
       relatedL3s: Array.from(relatedL3sMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
       relatedL4s: Array.from(relatedL4sMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
     };
   }, [id, theme.entities]);
+
+  // --- MEMBER TIMELINE DATA GENERATOR (Alleen voor L3) ---
+const memberTimelineData = useMemo(() => {
+  if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
+    return null;
+  }
+
+  const currentYear = new Date().getFullYear(); // Dit is 2026
+
+  const rows: MemberTimelineRow[] = structureData.relatedL4s.map(member => {
+    const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
+    const entityImages = member.image as EntityImages | undefined;
+    const imgUrl = entityImages ? getEntityImage(entityImages, 'profileCard') : '';
+
+    const extractedStart = extractYear(connectionMeta?.startDate);
+    // Als de startdatum onbekend of ongeldig is, pakken we het huidige jaar als fallback
+    const startYear = (extractedStart && !isNaN(extractedStart)) ? extractedStart : currentYear;
+
+    const isFormer = connectionMeta?.status === 'former' || connectionMeta?.status === 'left';
+    const extractedEnd = connectionMeta?.endDate ? extractYear(connectionMeta.endDate) : null;
+    
+    // Als iemand weg is maar we hebben geen jaartal, fallback naar startYear of currentYear. 
+    // Als iemand nog actief is, stoppen we de balk strak op het huidige jaar (2026).
+    const endYear = isFormer 
+      ? ((extractedEnd && !isNaN(extractedEnd)) ? extractedEnd : currentYear)
+      : currentYear;
+
+    return {
+      memberId: member.id,
+      memberName: member.name,
+      memberImage: imgUrl || '/placeholder.png',
+      startDate: connectionMeta?.startDate || '',
+      endDate: connectionMeta?.endDate || '',
+      status: connectionMeta?.status || 'active',
+      startYear: Math.min(startYear, currentYear), // Voorkom dat start in de toekomst ligt
+      endYear: Math.min(endYear, currentYear)      // Harde cap: actieve leden gaan nooit voorbij 2026
+    };
+  });
+
+  // Haal alle geldige jaartallen op
+  const startYears = rows.map(r => r.startYear);
+  const endYears = rows.map(r => r.endYear);
+
+  const minYear = startYears.length > 0 ? Math.min(...startYears) : currentYear;
+  let maxYear = endYears.length > 0 ? Math.max(...endYears) : currentYear;
+
+  // Als alles binnen hetzelfde jaar valt (bijv. alles gestart in 2026),
+  // dan zetten we min en max gelijk, zodat de CSS grid 100% van dat jaar vult 
+  // zonder loze margejaren ervoor of erna te creëren.
+  if (minYear > maxYear) {
+    maxYear = minYear;
+  }
+
+  return {
+    rows,
+    minYear,
+    maxYear: Math.min(maxYear, currentYear) // Extra veiligheidsgordel tegen spookjaren in de toekomst
+  };
+}, [structureData]);
 
   // --- ROUTING CONTROL ---
   const handleNavigation = useCallback((targetId: string, layer: "l1" | "l2" | "l3" | "l4") => {
@@ -316,16 +413,27 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     return activeLayer === 'l1'
       ? `${theme.labels.l1 ?? 'Company'} Overview`
       : activeLayer === 'l2'
-      ? `${theme.labels.l2 ?? 'Label'} Structure`
-      : activeLayer === 'l3'
-      ? `${theme.labels.l3 ?? 'Group'} Roster`
-      : (theme.labels[activeLayer] ?? activeLayer);
+        ? `${theme.labels.l2 ?? 'Label'} Structure`
+        : activeLayer === 'l3'
+          ? `${theme.labels.l3 ?? 'Group'} Roster`
+          : (theme.labels[activeLayer] ?? activeLayer);
   }, [structureData, theme.labels]);
 
+  // Gecorrigeerde Statsbox Filter: Alleen primitieve types (geen objecten of arrays met objecten) toelaten
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!structureData?.targetEntity?.metadata) return [];
     return Object.entries(structureData.targetEntity.metadata)
-      .filter(([key, value]) => key !== 'description' && key !== 'status' && key !== 'membershipStatus' && !!value)
+      .filter(([key, value]) => {
+        if (key === 'description' || key === 'status' || key === 'membershipStatus' || !value) return false;
+
+        // Als het een array is, controleer of de elementen strings of nummers zijn (geen object-relaties)
+        if (Array.isArray(value)) {
+          return value.length > 0 && typeof value[0] !== 'object';
+        }
+
+        // Mag absoluut geen object zijn
+        return typeof value !== 'object';
+      })
       .map(([key, value]) => ({
         key,
         label: theme.labels[key] ?? key,
@@ -357,6 +465,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       setProfileImageError={setProfileImageError}
       setHeroImageError={setHeroImageError}
       onNavigate={handleNavigation}
+      memberTimeline={memberTimelineData} // Doorgeven aan de view component
     />
   );
 };

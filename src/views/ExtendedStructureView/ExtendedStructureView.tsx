@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
 import styles from './ExtendedStructureView.module.css';
 
 import type { BaseEntity, Theme } from '../../types';
-import type { FormattedStatItem, PreparedMediaItem } from './ExtendedStructureViewPage';
+import type { FormattedStatItem, PreparedMediaItem, MemberTimelineRow } from './ExtendedStructureViewPage';
 
 interface ExtendedStructureViewProps {
   entity: BaseEntity;
@@ -26,6 +26,11 @@ interface ExtendedStructureViewProps {
   setProfileImageError: (err: boolean) => void;
   setHeroImageError: (err: boolean) => void;
   onNavigate: (id: string, layer: "l1" | "l2" | "l3" | "l4") => void;
+  memberTimeline: {
+    rows: MemberTimelineRow[];
+    minYear: number;
+    maxYear: number;
+  } | null;
 }
 
 export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
@@ -49,10 +54,11 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
   setProfileImageError,
   setHeroImageError,
   onNavigate,
+  memberTimeline,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const hasChildren = relatedL2s.length > 0 || relatedL3s.length > 0 || relatedL4s.length > 0;
 
-  // Haal dynamisch alle gevulde media-albums op
   const gallerySectionKeys = useMemo(() => {
     return Object.keys(mediaSections).filter(key => mediaSections[key]?.length > 0);
   }, [mediaSections]);
@@ -74,6 +80,20 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
       setMediaDimensions(prev => ({ ...prev, [fileUrl]: isHorizontal }));
     }
   };
+
+  const visibleMembersCount = 9;
+  const targetMembersList = relatedL4s;
+  const hasMoreThanMax = targetMembersList.length > visibleMembersCount;
+  const displayedMembers = isExpanded ? targetMembersList : targetMembersList.slice(0, visibleMembersCount);
+
+  const timelineYears = useMemo(() => {
+    if (!memberTimeline) return [];
+    const years = [];
+    for (let y = memberTimeline.minYear; y <= memberTimeline.maxYear; y++) {
+      years.push(y);
+    }
+    return years;
+  }, [memberTimeline]);
 
   return (
     <div className={styles.pageWrapper}>
@@ -126,7 +146,6 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
 
       {/* --- SECTION: MAIN CONTENT SPLIT LAYOUT --- */}
       <div className={styles.mainLayout}>
-        {/* Sticky Info Sidebar */}
         <aside className={styles.sidebar}>
           <div className={`${styles.stickyContainer} ${styles.isSticky}`}>
             <div className={styles.infoCard}>
@@ -147,10 +166,94 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
           </div>
         </aside>
 
-        {/* Dynamic Media & Children Content Area */}
         <main className={styles.contentArea}>
           
-          {/* 1. DYNAMISCHE ALBUMS LOOP (TETRIS GRID) */}
+          {/* 1. L3 SPECIALE TIJDLIJN VIEW (Eerst geplaatst indien activeLayer === 'l3') */}
+          {activeLayer === 'l3' && memberTimeline && hasChildren && (
+            <section className={styles.teammatesSection} style={{ marginBottom: '2.5rem' }}>
+              <h2 className={styles.sectionHeading}>{'Roster Timeline'}</h2>
+              
+              <div className={styles.timelineContainer}>
+                {/* Tijdlijn Jaren Header */}
+                <div className={styles.timelineHeaderRow}>
+                  <div className={styles.timelineMemberStickyLabel} />
+                  <div className={styles.timelineBarsArea}>
+                    {timelineYears.map(year => (
+                      <div key={year} className={styles.timelineYearScaleLabel}>
+                        {year}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tijdlijn Rijen */}
+                <div className={styles.timelineRowsStack}>
+                  {displayedMembers.map((member) => {
+                    const rowData = memberTimeline.rows.find(r => r.memberId === member.id);
+                    if (!rowData) return null;
+
+                    const totalYears = memberTimeline.maxYear - memberTimeline.minYear;
+                    const startOffset = ((rowData.startYear - memberTimeline.minYear) / totalYears) * 100;
+                    const barWidth = ((rowData.endYear - rowData.startYear) / totalYears) * 100;
+                    const safeBarWidth = barWidth <= 0 ? (1 / totalYears) * 100 : barWidth;
+
+                    const isFormer = rowData.status === 'former' || rowData.status === 'left';
+
+                    return (
+                      <div 
+                        key={member.id} 
+                        className={`${styles.timelineRow} ${isFormer ? styles.isFormerTeammate : ''}`}
+                        onClick={() => onNavigate(member.id, 'l4')}
+                      >
+                        {/* Member Identiteit */}
+                        <div className={styles.timelineMemberMeta}>
+                          <img src={rowData.memberImage} alt="" className={styles.timelineMiniThumb} />
+                          <div className={styles.timelineMemberInfo}>
+                            <span className={styles.timelineMemberName}>{rowData.memberName}</span>
+                            <span className={styles.timelineMemberDuration}>
+                              {rowData.startDate ? rowData.startYear : '???'} – {isFormer ? rowData.endYear : 'Present'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Horizontale Balk Track */}
+                        <div className={styles.timelineBarsArea}>
+                          {timelineYears.map(year => (
+                            <div key={year} className={styles.timelineGridLine} />
+                          ))}
+                          
+                          <div 
+                            className={styles.timelineDataBar}
+                            style={{
+                              left: `${startOffset}%`,
+                              width: `${safeBarWidth}%`
+                            }}
+                          >
+                            <span className={styles.barInsideLabel}>
+                              {isFormer ? 'Former' : 'Active'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {hasMoreThanMax && (
+                <div className={styles.viewMoreContainer}>
+                  <button 
+                    className={styles.viewMoreBtn} 
+                    onClick={() => setIsExpanded(!isExpanded)}
+                  >
+                    {isExpanded ? 'View Less' : `View More (+${targetMembersList.length - visibleMembersCount})`}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* 2. DYNAMISCHE ALBUMS LOOP (TETRIS GRID) (Nu na de tijdlijn geplaatst) */}
           {hasMedia && (
             <div className={styles.mediaContainerWrapper} style={{ marginBottom: '2.5rem' }}>
               {gallerySectionKeys.map(sectionKey => {
@@ -205,11 +308,11 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
             </div>
           )}
 
-          {/* 2. KIND-ELEMENTEN EN SUB-LAYERS DISPLAY */}
+          {/* 3. OVERIGE GRIDS (Voor L1 of L2 lagen die geen tijdlijn gebruiken) */}
           {hasChildren ? (
             <>
-              {/* L3: Organizations / Groups Component Grid */}
-              {relatedL3s.length > 0 && (
+              {/* L3: Standaard Grid (Alleen als actieve laag GEEN L3 is) */}
+              {relatedL3s.length > 0 && activeLayer !== 'l3' && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l3 ?? 'Organizations'}</h2>
                   <div className={styles.teammatesGrid}>
@@ -240,12 +343,12 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                 </section>
               )}
 
-              {/* L4: Roster Members / Endpoints Component Grid */}
-              {relatedL4s.length > 0 && (
+              {/* L4: Standaard Grid (Alleen als actieve laag GEEN L3 is) */}
+              {relatedL4s.length > 0 && activeLayer !== 'l3' && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l4 ?? 'Endpoints'}</h2>
                   <div className={styles.teammatesGrid}>
-                    {relatedL4s.map((child) => {
+                    {displayedMembers.map((child) => {
                       const isFormer = child.metadata?.groupStatus === 'former' || child.metadata?.status === 'former';
                       return (
                         <div
@@ -266,10 +369,21 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                       );
                     })}
                   </div>
+
+                  {hasMoreThanMax && (
+                    <div className={styles.viewMoreContainer}>
+                      <button 
+                        className={styles.viewMoreBtn} 
+                        onClick={() => setIsExpanded(!isExpanded)}
+                      >
+                        {isExpanded ? 'View Less' : `View More (+${targetMembersList.length - visibleMembersCount})`}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
 
-              {/* L2: Core Divisions / Sub-layers Component Grid */}
+              {/* L2: Core Divisions Grid */}
               {relatedL2s.length > 0 && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l2 ?? 'Sub-layers'}</h2>

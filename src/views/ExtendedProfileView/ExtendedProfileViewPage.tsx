@@ -77,6 +77,16 @@ const mapMediaItemToMasonry = (
   };
 };
 
+const safeGetTime = (dateStr?: string): number => {
+  if (!dateStr) return 0;
+  const trimmed = dateStr.trim();
+  if (/^\d{4}$/.test(trimmed)) {
+    return new Date(`${trimmed}-01-01`).getTime();
+  }
+  const parsed = new Date(trimmed).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 const useProfileAssetValidator = (targetEntity: BaseEntity | undefined) => {
   const [profileImageError, setProfileImageError] = useState(false);
   const [heroImageError, setHeroImageError] = useState(false);
@@ -224,7 +234,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
     const safeStringCast = (val: unknown): string | undefined => {
       if (val === null || val === undefined) return undefined;
-      if (typeof val === 'object' && Object.keys(val).length === 0) return undefined;
       if (typeof val === 'object') return undefined;
       const str = String(val).trim();
       return str !== '' ? str : undefined;
@@ -245,7 +254,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
         .filter((m): m is TimelineMilestone => m !== null);
     };
 
-    // 1. Database Connecties
     allConns.forEach(conn => {
       const connectedEntity = conn.sourceEntity?.id !== id ? conn.sourceEntity : conn.targetEntity;
 
@@ -254,7 +262,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
         let endDate = safeStringCast(conn.metadata?.endDate || conn.metadata?.enddate);
         const status = safeStringCast(conn.metadata?.status);
 
-        // FIX: Als start en einddatum hetzelfde zijn (bijv. 2015-2015), zet endDate op undefined
         if (startDate && endDate && startDate === endDate) {
           endDate = undefined;
         }
@@ -278,7 +285,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       }
     });
 
-    // 2. Custom Tracks
     if (Array.isArray(targetEntity.metadata?.customTracks)) {
       (targetEntity.metadata.customTracks as unknown[]).forEach((item, index) => {
         if (item && typeof item === 'object') {
@@ -288,7 +294,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
             const startDate = safeStringCast(track.startDate || track.startdate);
             let endDate = safeStringCast(track.endDate || track.enddate);
 
-            // FIX: Voorkom duplicatie binnen custom tracks (bijv. 2015-2015)
             if (startDate && endDate && startDate === endDate) {
               endDate = undefined;
             }
@@ -306,11 +311,9 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       });
     }
 
-    // 3. Standalone/Solo Logica
     const standaloneStartDate = safeStringCast(targetEntity.metadata?.standaloneStartDate || targetEntity.metadata?.startDate || targetEntity.metadata?.startdate);
     let standaloneEndDate = safeStringCast(targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate);
 
-    // FIX: Voorkom duplicatie binnen standalone track
     if (standaloneStartDate && standaloneEndDate && standaloneStartDate === standaloneEndDate) {
       standaloneEndDate = undefined;
     }
@@ -346,28 +349,18 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
         });
       }
     }
-
-    // Tracks sorteren op jouw specifieke voorwaarden
     return extractedEvents.sort((a, b) => {
-      // FIX: Kijk nu puur en alleen naar de expliciete status uit de database/metadata
       const isAActive = a.status?.toLowerCase() === 'active';
       const isBActive = b.status?.toLowerCase() === 'active';
 
-      // 1. Als de status verschilt, gaan Active tracks áltijd boven Past tracks
       if (isAActive && !isBActive) return -1;
       if (!isAActive && isBActive) return 1;
 
-      // 2. Ze zijn allebei ACTIVE -> Oudste startDate bovenaan (Chronologisch)
-      if (isAActive && isBActive) {
-        const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
-        const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
-        return dateA - dateB;
-      }
+      const timeA = safeGetTime(a.startDate);
+      const timeB = safeGetTime(b.startDate);
 
-      // 3. Ze zijn allebei PAST / LOAN -> Nieuwste startDate bovenaan (Omgekeerd chronologisch)
-      const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
-      const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
-      return dateB - dateA;
+      // Zowel voor Active als Past items: de nieuwste startDate komt nu bovenaan
+      return timeB - timeA;
     });
   }, [profileDetails, id]);
 
