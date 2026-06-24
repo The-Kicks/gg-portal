@@ -583,21 +583,22 @@
   pointer-events: none;
 }
 
-/* De visuele horizontale balk gebruikt nu de inline styles van de controller */
 .timelineDataBar {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   height: 18px;
-  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary), #fff 15%));
+  /* VERANDERD: Gebruik background-color zodat inline gradients eroverheen kunnen vloeien */
+  background-color: var(--primary); 
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: filter 0.2s ease, height 0.2s ease;
+  transition: filter 0.2s ease, height 0.2s ease, background 0.1s ease;
   display: flex;
   align-items: center;
   padding: 0 8px;
   box-sizing: border-box;
-  z-index: 2; /* Zorgt dat balken over de stippellijnen liggen */
+  z-index: 2;
+  overflow: visible;
 }
 
 .timelineRow:hover .timelineDataBar {
@@ -619,7 +620,8 @@
 
 /* Modificatie voor voormalige leden */
 .isFormerTeammate .timelineDataBar {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--secondary), transparent 40%), color-mix(in srgb, var(--secondary), transparent 60%));
+
+  background-color: color-mix(in srgb, var(--secondary), transparent 40%);
   box-shadow: none;
 }
 
@@ -658,6 +660,69 @@
   border-style: solid;
   border-color: #ff4757 transparent;
   z-index: 11;
+}
+
+/* Container badge voor de afwijkende periode binnen de hoofdbalk */
+.timelineExcludedBadge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  z-index: 10;
+  overflow: visible; /* Zorg dat de tekst buiten de badge mag treden bij hover */
+  cursor: help;      /* Verander cursor in een vraagteken-pointer */
+  
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(20, 20, 20, 0.85),
+    rgba(20, 20, 20, 0.85) 5px,
+    rgba(35, 35, 35, 0.95) 5px,
+    rgba(35, 35, 35, 0.95) 10px
+  );
+  border-left: 2px solid #000;
+  border-right: 2px solid #000;
+  transition: background-color 0.2s ease;
+}
+
+/* Subtiele oplichting van het vlak bij hover */
+.timelineExcludedBadge:hover {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(30, 30, 30, 0.9),
+    rgba(30, 30, 30, 0.9) 5px,
+    rgba(45, 45, 45, 0.95) 5px,
+    rgba(45, 45, 45, 0.95) 10px
+  );
+}
+
+/* De tekst binnen de badge (Standaard verborgen) */
+.excludedReasonText {
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff !important;
+  text-shadow: 0px 2px 4px rgba(0, 0, 0, 1), 0px 0px 8px var(--primary); /* Voegt een subtiele glow toe in je themakleur */
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  padding: 2px 8px;
+  background-color: rgba(15, 15, 15, 0.95); /* Tooltip-achtige achtergrond zodat het altijd leesbaar is buiten de balk */
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  
+  /* --- ANIMATIE ENGINE --- */
+  opacity: 0;
+  transform: translateY(0) scale(0.9);
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Activeer de animatie zodra de gebruiker over de badge hovert */
+.timelineExcludedBadge:hover .excludedReasonText {
+  opacity: 1;
+  transform: translateY(-28px) scale(1); /* Zweeft nu prachtig net bóven de balk bij hover */
 }
 
 /* ==========================================================================

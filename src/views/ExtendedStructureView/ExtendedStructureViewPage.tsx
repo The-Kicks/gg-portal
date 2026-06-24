@@ -21,6 +21,12 @@ export interface FormattedStatItem {
   displayValue: string;
 }
 
+export interface RenderedExcludedPeriod {
+  left: string;
+  width: string;
+  reason?: string;
+}
+
 export interface MemberTimelineRow {
   memberId: string;
   memberName: string;
@@ -30,6 +36,21 @@ export interface MemberTimelineRow {
   status: string;
   isFormer: boolean;
   barStyle: React.CSSProperties;
+  excludedPeriods: RenderedExcludedPeriod[];
+}
+
+interface ExcludedPeriod {
+  start: string;
+  end: string;
+  reason?: string; // Nieuw: optionele reden meegegeven uit de backend/admin
+}
+
+interface TimelineConnectionMeta {
+  memberId: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  excludedPeriods?: ExcludedPeriod[];
 }
 
 // ==========================================================================
@@ -92,32 +113,29 @@ const fillRowGapsWithPlaceholders = (
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
-// VEILIGE DATE-PARSER VOOR ELK FORMAAT (Inclusief YYYY-MM-DD)
 const extractYearDecimal = (dateStr?: string): number => {
   if (!dateStr) return new Date().getFullYear();
+
+  // Gecorrigeerd: [-\/] is veranderd naar [-/] (geen escape meer nodig)
+  const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const day = parseInt(ddmmyyyyMatch[1], 10);
+    const month = parseInt(ddmmyyyyMatch[2], 10) - 1; // JS maanden zijn 0-indexed
+    const year = parseInt(ddmmyyyyMatch[3], 10);
+    
+    const totalDaysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
+    const dateObj = new Date(year, month, day);
+    const startOfYear = new Date(year, 0, 1);
+    const dayOfYear = Math.floor((dateObj.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return year + (dayOfYear / totalDaysInYear);
+  }
 
   const parsedDate = new Date(dateStr);
   if (!isNaN(parsedDate.getTime())) {
     const year = parsedDate.getFullYear();
     const month = parsedDate.getMonth();
     return year + (month / 12);
-  }
-
-  const parts = dateStr.split('-');
-  if (parts.length === 3) {
-    if (parts[0].length === 4) {
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10);
-      if (!isNaN(year) && !isNaN(month)) {
-        return year + (Math.max(0, Math.min(11, month - 1)) / 12);
-      }
-    } else if (parts[2].length === 4) {
-      const year = parseInt(parts[2], 10);
-      const month = parseInt(parts[1], 10);
-      if (!isNaN(year) && !isNaN(month)) {
-        return year + (Math.max(0, Math.min(11, month - 1)) / 12);
-      }
-    }
   }
 
   const match = dateStr.match(/\d{4}/);
@@ -142,7 +160,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     setHeroImageError(false);
   }
 
-  // --- TRAVERSAL CONTROLLER ---
   const structureData = useMemo(() => {
     if (!id || !theme.entities) return null;
 
@@ -158,7 +175,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     const relatedL3sMap = new Map<string, BaseEntity>();
     const relatedL4sMap = new Map<string, BaseEntity>();
 
-    const rawMemberConnections: Array<{ memberId: string; startDate?: string; endDate?: string; status?: string }> = [];
+    const rawMemberConnections: TimelineConnectionMeta[] = [];
 
     const getConnections = (ent: HydratedEntity) => [
       ...(ent.connections || []),
@@ -174,24 +191,19 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         if (other.type === 'l1') l1ParentsMap.set(other.id, other);
 
         if (other.type === 'l4') {
-          const connectionMeta = conn.metadata as {
-            status?: string;
-            membershipStatus?: string;
-            startDate?: string;
-            joinedDate?: string;
-            endDate?: string;
-            leftDate?: string;
-          } | undefined;
+          const connectionMeta = conn.metadata as Record<string, unknown> | undefined;
 
           const relStatus = String(connectionMeta?.status || connectionMeta?.membershipStatus || 'active').toLowerCase().trim();
-          const extractedStartDate = connectionMeta?.startDate || connectionMeta?.joinedDate || '';
-          const extractedEndDate = connectionMeta?.endDate || connectionMeta?.leftDate || '';
+          const extractedStartDate = String(connectionMeta?.startDate || connectionMeta?.joinedDate || '');
+          const extractedEndDate = String(connectionMeta?.endDate || connectionMeta?.leftDate || '');
+          const excludedPeriods = connectionMeta?.excludedPeriods as ExcludedPeriod[] | undefined;
 
           rawMemberConnections.push({
             memberId: other.id,
             startDate: extractedStartDate,
             endDate: extractedEndDate,
-            status: relStatus
+            status: relStatus,
+            excludedPeriods
           });
 
           const existingEntityMeta = (other.metadata || {}) as Record<string, unknown>;
@@ -310,7 +322,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [id, theme.entities]);
 
-  // --- MEMBER TIMELINE DATA GENERATOR (VLOEIENDE START & EXACTE EINDGRENS) ---
+  // --- MEMBER TIMELINE DATA GENERATOR ---
   const memberTimelineData = useMemo(() => {
     if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
       return null;
@@ -350,17 +362,74 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       };
     });
 
-    // Bepaal de absolute start- en eindpunten van de grafiek
     const minTimelineStart = parsedRows.length > 0 ? Math.min(...parsedRows.map(r => r.startDec)) : currentYear;
     const highestHistoricalYear = parsedRows.length > 0 ? Math.max(...parsedRows.map(r => r.endDec)) : currentYear;
     
-    // CRUCIAL: De as stopt exact bij Nu (als er actieve leden zijn), geen afronding naar de toekomst!
     const maxTimelineEnd = hasActiveMembers ? currentYearDecimal : highestHistoricalYear;
     const totalTimeRange = maxTimelineEnd - minTimelineStart;
 
     const rows: MemberTimelineRow[] = parsedRows.map(({ member, imgUrl, connectionMeta, normalizedStatus, isFormer, startDec, endDec }) => {
       const leftPercent = totalTimeRange > 0 ? ((startDec - minTimelineStart) / totalTimeRange) * 100 : 0;
-      const widthPercent = totalTimeRange > 0 ? ((endDec - startDec) / totalTimeRange) * 100 : 100;
+      const individualDuration = endDec - startDec;
+      const widthPercent = totalTimeRange > 0 ? (individualDuration / totalTimeRange) * 100 : 100;
+
+      let backgroundStyle = '';
+      const uiExcludedPeriods: RenderedExcludedPeriod[] = [];
+      const excludedPeriods = connectionMeta?.excludedPeriods;
+
+      if (Array.isArray(excludedPeriods) && excludedPeriods.length > 0 && individualDuration > 0) {
+        const gradientParts: string[] = [];
+        let lastStopPercent = 0;
+
+        // Kleuren voor actieve stukken en de break stukken (Gearceerd/Gedimd grijs)
+        const activeChunkColor = isFormer ? 'color-mix(in srgb, var(--secondary), transparent 50%)' : 'var(--primary)';
+        const breakChunkColor = 'rgba(100, 116, 139, 0.25)'; // Subtiel gedimd grijs, ideaal voor CSS stripes erachter
+
+        const sortedPeriods = [...excludedPeriods]
+          .map(p => ({
+            start: extractYearDecimal(p.start),
+            end: extractYearDecimal(p.end),
+            reason: p.reason
+          }))
+          .sort((a, b) => a.start - b.start);
+
+        sortedPeriods.forEach(p => {
+          const breakStartPercent = ((p.start - startDec) / individualDuration) * 100;
+          const breakEndPercent = ((p.end - startDec) / individualDuration) * 100;
+
+          if (breakStartPercent < 100 && breakEndPercent > 0) {
+            const cleanStart = Math.max(0, breakStartPercent);
+            const cleanEnd = Math.min(100, breakEndPercent);
+
+            // 1. Normaal actief stuk tot aan de break
+            gradientParts.push(`${activeChunkColor} ${lastStopPercent}%`);
+            gradientParts.push(`${activeChunkColor} ${cleanStart}%`);
+
+            // 2. Ingekleurd break-stuk (In plaats van transparent)
+            gradientParts.push(`${breakChunkColor} ${cleanStart}%`);
+            gradientParts.push(`${breakChunkColor} ${cleanEnd}%`);
+
+            // Sla de posities op voor de HTML-tekst overlay
+            uiExcludedPeriods.push({
+              left: `${cleanStart}%`,
+              width: `${cleanEnd - cleanStart}%`,
+              reason: p.reason
+            });
+
+            lastStopPercent = cleanEnd;
+          }
+        });
+
+        // 3. Laatste actieve chunk
+        if (lastStopPercent < 100) {
+          gradientParts.push(`${activeChunkColor} ${lastStopPercent}%`);
+          gradientParts.push(`${activeChunkColor} ${100}%`);
+        }
+
+        if (gradientParts.length > 0) {
+          backgroundStyle = `linear-gradient(to right, ${gradientParts.join(', ')})`;
+        }
+      }
 
       return {
         memberId: member.id,
@@ -370,18 +439,18 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         endDate: connectionMeta?.endDate || '',
         status: normalizedStatus,
         isFormer,
+        excludedPeriods: uiExcludedPeriods, // Geef de berekende posities + redenen mee aan de render component
         barStyle: {
           left: `${Math.max(0, Math.min(100, leftPercent))}%`,
-          width: `${Math.max(0.5, Math.min(100 - leftPercent, widthPercent))}%`
+          width: `${Math.max(0.5, Math.min(100 - leftPercent, widthPercent))}%`,
+          ...(backgroundStyle ? { background: backgroundStyle, boxShadow: 'none' } : {})
         }
       };
     });
 
     const todayOffsetPercentage = totalTimeRange > 0 ? ((currentYearDecimal - minTimelineStart) / totalTimeRange) * 100 : 100;
 
-    // Genereer kalenderjaren die binnen het bereik vallen
     const startYearCal = Math.floor(minTimelineStart);
-    // Veranderd: We stoppen bij het huidige kalenderjaar, zodat er geen loze ruimte naar 2027 ontstaat
     const endYearCal = Math.floor(maxTimelineEnd);
     
     const yearsScale: number[] = [];
@@ -402,7 +471,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [structureData]);
 
-  // --- ROUTING CONTROL ---
   const handleNavigation = useCallback((targetId: string, layer: "l1" | "l2" | "l3" | "l4") => {
     const isL4 = layer === 'l4';
     const isL3AsProfile = (layer === 'l3' && structureData?.relatedL4s.length === 0 && structureData?.activeLayer === 'l2');
@@ -410,7 +478,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     navigate(`/${themeName}/${targetView}/${targetId}`);
   }, [navigate, themeName, structureData]);
 
-  // --- TETRIS-STYLE MEDIA GENERATOR ---
   const preparedMediaSections = useMemo(() => {
     const entityImages = structureData?.targetEntity.image as EntityImages | undefined;
     if (!structureData?.targetEntity || !entityImages) return {};

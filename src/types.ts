@@ -28,6 +28,7 @@ export interface ConnectionMetadata {
   status: "active" | "former" | "inactive" | string;
   startDate?: string;        // e.g., "2008" or "2023-04-12"
   endDate?: string;          // null/undefined means ongoing active connection
+  excludedPeriods?: string;
   hideFromGrid?: boolean;    // Manual override to hide an entry from group layouts
   [key: string]: unknown;
 }

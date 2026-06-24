@@ -35,7 +35,7 @@ export const useTimelineBuilder = (
   const [connectionSearchTerm, setConnectionSearchTerm] = useState<string>('');
   const [isConnectionDropdownOpen, setIsConnectionDropdownOpen] = useState<boolean>(false);
   const [expandedChildId, setExpandedChildId] = useState<string | null>(null);
-  
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const entitiesPool = useMemo(() => {
@@ -77,6 +77,7 @@ export const useTimelineBuilder = (
       status: String(c.metadata?.status || 'active'),
       startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
       endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined,
+      excludedPeriods: c.metadata?.excludedPeriods ? String(c.metadata.excludedPeriods) : undefined,
       metadata: c.metadata
     }));
 
@@ -88,6 +89,7 @@ export const useTimelineBuilder = (
       status: String(c.metadata?.status || 'active'),
       startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
       endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined,
+      excludedPeriods: c.metadata?.excludedPeriods ? String(c.metadata.excludedPeriods) : undefined,
       metadata: c.metadata
     }));
 
@@ -99,9 +101,9 @@ export const useTimelineBuilder = (
   }, [localConnections, localTargetConnections]);
 
   const handleConnectionMetadataChange = useCallback((
-    connId: number, 
-    direction: 'outgoing' | 'incoming', 
-    key: string, 
+    connId: number,
+    direction: 'outgoing' | 'incoming',
+    key: string,
     value: string
   ) => {
     const updateTargetList = (prev: HydratedEntityConnection[]) =>
@@ -145,7 +147,7 @@ export const useTimelineBuilder = (
     }
 
     const connectionId = -1 - Math.floor(Math.random() * 1000000);
-    
+
     const newCustomOutgoing: HydratedEntityConnection = {
       id: connectionId,
       themeId: theme.id,
@@ -155,6 +157,7 @@ export const useTimelineBuilder = (
         status: 'active',
         startDate: '',
         endDate: '',
+        excludedPeriods: '', // <-- TOEGEVOEGD
         isNonRelational: true,
         customTargetName: trackName,
         milestones: ''
@@ -181,7 +184,8 @@ export const useTimelineBuilder = (
     const selectedLayerLevel = LAYER_ORDER[selectedNode.type.toLowerCase()] || 99;
 
     const connectionId = -1 - Math.floor(Math.random() * 1000000);
-    const baseMeta = { status: 'active', startDate: '', endDate: '' };
+    // Voeg hier excludedPeriods toe aan de basis metadata van een nieuwe connectie
+    const baseMeta = { status: 'active', startDate: '', endDate: '', excludedPeriods: '' }; // <-- AANGEPAST
 
     if (currentLayerLevel <= selectedLayerLevel) {
       const newOutgoingConn: HydratedEntityConnection = {

@@ -190,7 +190,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                           style={{
                             position: 'absolute',
                             left: `${offsetPercent}%`,
-                            transform: 'translateX(-50%)', /* Dit zorgt dat het midden van het cijfer exact op de as valt */
+                            transform: 'translateX(-50%)',
                             whiteSpace: 'nowrap'
                           }}
                         >
@@ -231,7 +231,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                           <div className={styles.timelineMemberInfo}>
                             <span className={styles.timelineMemberName}>{rowData.memberName}</span>
                             <span className={styles.timelineMemberDuration}>
-                              {rowData.startDate ? rowData.startDate.split('-')[0] : '???'} – {rowData.isFormer ? (rowData.endDate ? rowData.endDate.split('-')[0] : 'Past') : 'Present'}
+                              {rowData.startDate ? (rowData.startDate.match(/\d{4}/)?.[0] || '???') : '???'} – {rowData.isFormer ? (rowData.endDate ? (rowData.endDate.match(/\d{4}/)?.[0] || 'Past') : 'Past') : 'Present'}
                             </span>
                           </div>
                         </div>
@@ -269,6 +269,30 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                             <span className={styles.barInsideLabel}>
                               {rowData.isFormer ? 'Former' : 'Active'}
                             </span>
+
+                            {/*  Hier mappen we de afwezigheids-badges over de balk heen */}
+                            {rowData.excludedPeriods && rowData.excludedPeriods.map((period, pIdx) => {
+                              return (
+                                <div
+                                  key={pIdx}
+                                  className={styles.timelineExcludedBadge}
+                                  style={{
+                                    position: 'absolute',
+                                    left: period.left,
+                                    width: period.width,
+                                    top: 0,
+                                    bottom: 0
+                                  }}
+                                  title={period.reason || "Hiatus / Inactive"}
+                                >
+                                  {period.reason && (
+                                    <span className={styles.excludedReasonText}>
+                                      {period.reason}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
