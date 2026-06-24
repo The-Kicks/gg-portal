@@ -238,6 +238,10 @@
 /* ==========================================================================
    4. MEDIA CONTENT & TETRIS GRID LAYOUT
    ========================================================================== */
+.mediaContainerWrapper {
+  width: 100%;
+}
+
 .mediaSection { 
   margin-bottom: 8vh; 
 }
@@ -465,6 +469,7 @@
    8. HORIZONTAL MEMBER TIMELINE COMPONENT (L3 Layer Specific)
    ========================================================================== */
 .timelineContainer {
+  position: relative; /* Cruciaal voor absolute positionering van de globale lijn */
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -473,7 +478,6 @@
   border-radius: 1.5rem;
   padding: 1.5rem;
   box-sizing: border-box;
-  overflow-x: auto; /* Fallback safe voor hele kleine schermen */
 }
 
 .timelineHeaderRow {
@@ -493,29 +497,29 @@
   opacity: 0.5;
 }
 
+/* GECORRIGEERD: Geen display flex of justify-content meer. 
+   Dit is nu een pure absolute-container anker! */
 .timelineBarsArea {
   position: relative;
-  display: flex;
-  justify-content: space-between;
   width: 100%;
   height: 100%;
 }
 
 .timelineYearScaleLabel {
-  flex: 1;
-  text-align: left;
   font-size: 0.8rem;
   font-weight: 800;
   color: var(--text);
   opacity: 0.7;
-  padding-left: 4px;
-  position: relative;
+  text-align: center; /* Zorgt voor perfecte centrering */
+  box-sizing: border-box;
+  height: 100%;
 }
 
 .timelineRowsStack {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  position: relative; /* Cruciaal voor de Today-lijn */
 }
 
 .timelineRow {
@@ -570,17 +574,16 @@
 /* Track container met hulplijnen achter de balken */
 .timelineRow .timelineBarsArea {
   min-height: 32px;
-  align-items: center;
 }
 
+/* GECORRIGEERD: flex eruit gehaald, zodat het inline percentage exact wordt overgenomen */
 .timelineGridLine {
-  flex: 1;
   height: 100%;
-  border-left: 1px dashed color-mix(in srgb, var(--text), transparent 94%);
+  border-left: 1px dashed color-mix(in srgb, var(--text), transparent 92%);
   pointer-events: none;
 }
 
-/* De visuele horizontale balk */
+/* De visuele horizontale balk gebruikt nu de inline styles van de controller */
 .timelineDataBar {
   position: absolute;
   top: 50%;
@@ -594,7 +597,7 @@
   align-items: center;
   padding: 0 8px;
   box-sizing: border-box;
-  min-width: 8px;
+  z-index: 2; /* Zorgt dat balken over de stippellijnen liggen */
 }
 
 .timelineRow:hover .timelineDataBar {
@@ -614,10 +617,47 @@
   opacity: 0.9;
 }
 
-/* Modificatie voor voormalige leden binnen de tijdlijn track */
+/* Modificatie voor voormalige leden */
 .isFormerTeammate .timelineDataBar {
   background: linear-gradient(90deg, color-mix(in srgb, var(--secondary), transparent 40%), color-mix(in srgb, var(--secondary), transparent 60%));
   box-shadow: none;
+}
+
+/* De rode verticale Today lijn */
+.timelineGlobalTodayLine {
+  width: 2px;
+  background: #ff4a7d;
+  box-shadow: 0 0 8px #ff4a7d;
+  position: absolute;
+  top: -10px; /* Trekt de lijn iets omhoog richting de jaartallen */
+  bottom: 0;
+  z-index: 10;
+  pointer-events: none; /* Zorgt dat je nog op de rijen kunt klikken */
+}
+
+.todayMarkerLabel {
+  position: absolute;
+  top: -22px;
+  transform: translateX(-50%);
+  background: #ff4a7d;
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+/* Het driehoekje onder de 'Today' tekst */
+.timelineGlobalTodayLine::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  border-width: 4px 4px 0;
+  border-style: solid;
+  border-color: #ff4757 transparent;
+  z-index: 11;
 }
 
 /* ==========================================================================

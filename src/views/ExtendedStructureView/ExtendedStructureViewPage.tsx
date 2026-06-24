@@ -28,8 +28,8 @@ export interface MemberTimelineRow {
   startDate: string;
   endDate: string;
   status: string;
-  startYear: number;
-  endYear: number;
+  isFormer: boolean;
+  barStyle: React.CSSProperties;
 }
 
 // ==========================================================================
@@ -92,20 +92,31 @@ const fillRowGapsWithPlaceholders = (
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
+// VEILIGE DATE-PARSER VOOR ELK FORMAAT (Inclusief YYYY-MM-DD)
 const extractYearDecimal = (dateStr?: string): number => {
   if (!dateStr) return new Date().getFullYear();
-  
+
+  const parsedDate = new Date(dateStr);
+  if (!isNaN(parsedDate.getTime())) {
+    const year = parsedDate.getFullYear();
+    const month = parsedDate.getMonth();
+    return year + (month / 12);
+  }
+
   const parts = dateStr.split('-');
-  
-  if (parts.length >= 2) {
-    const monthStr = parts.length === 3 ? parts[1] : parts[0];
-    const yearStr = parts.length === 3 ? parts[2] : parts[1];
-    
-    const month = parseInt(monthStr, 10);
-    const year = parseInt(yearStr, 10);
-    
-    if (!isNaN(month) && !isNaN(year)) {
-      return year + (Math.max(0, Math.min(11, month - 1)) / 12);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      if (!isNaN(year) && !isNaN(month)) {
+        return year + (Math.max(0, Math.min(11, month - 1)) / 12);
+      }
+    } else if (parts[2].length === 4) {
+      const year = parseInt(parts[2], 10);
+      const month = parseInt(parts[1], 10);
+      if (!isNaN(year) && !isNaN(month)) {
+        return year + (Math.max(0, Math.min(11, month - 1)) / 12);
+      }
     }
   }
 
@@ -299,29 +310,57 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [id, theme.entities]);
 
-  // --- MEMBER TIMELINE DATA GENERATOR ---
+  // --- MEMBER TIMELINE DATA GENERATOR (VLOEIENDE START & EXACTE EINDGRENS) ---
   const memberTimelineData = useMemo(() => {
     if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
       return null;
     }
 
-    const currentYear = new Date().getFullYear(); 
-    const currentMonth = new Date().getMonth(); 
-    const currentYearDecimal = currentYear + (currentMonth / 12);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentYearDecimal = currentYear + (now.getMonth() / 12) + (now.getDate() / 365);
 
-    const rows = structureData.relatedL4s.map(member => {
+    const hasActiveMembers = structureData.relatedL4s.some(member => {
+      const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
+      const normalizedStatus = String(connectionMeta?.status || 'active').toLowerCase().trim();
+      return !['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
+    });
+
+    const parsedRows = structureData.relatedL4s.map(member => {
       const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
       const entityImages = member.image as EntityImages | undefined;
       const imgUrl = entityImages ? getEntityImage(entityImages, 'profileCard') : '';
 
       const startYearDecimal = extractYearDecimal(connectionMeta?.startDate);
-      
       const normalizedStatus = String(connectionMeta?.status || 'active').toLowerCase().trim();
       const isFormer = ['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
-      
-      const endYearDecimal = isFormer 
+
+      const endYearDecimal = isFormer
         ? (connectionMeta?.endDate ? extractYearDecimal(connectionMeta.endDate) : startYearDecimal)
         : currentYearDecimal;
+
+      return {
+        member,
+        imgUrl,
+        connectionMeta,
+        normalizedStatus,
+        isFormer,
+        startDec: startYearDecimal,
+        endDec: Math.max(startYearDecimal, endYearDecimal)
+      };
+    });
+
+    // Bepaal de absolute start- en eindpunten van de grafiek
+    const minTimelineStart = parsedRows.length > 0 ? Math.min(...parsedRows.map(r => r.startDec)) : currentYear;
+    const highestHistoricalYear = parsedRows.length > 0 ? Math.max(...parsedRows.map(r => r.endDec)) : currentYear;
+    
+    // CRUCIAL: De as stopt exact bij Nu (als er actieve leden zijn), geen afronding naar de toekomst!
+    const maxTimelineEnd = hasActiveMembers ? currentYearDecimal : highestHistoricalYear;
+    const totalTimeRange = maxTimelineEnd - minTimelineStart;
+
+    const rows: MemberTimelineRow[] = parsedRows.map(({ member, imgUrl, connectionMeta, normalizedStatus, isFormer, startDec, endDec }) => {
+      const leftPercent = totalTimeRange > 0 ? ((startDec - minTimelineStart) / totalTimeRange) * 100 : 0;
+      const widthPercent = totalTimeRange > 0 ? ((endDec - startDec) / totalTimeRange) * 100 : 100;
 
       return {
         memberId: member.id,
@@ -330,38 +369,36 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         startDate: connectionMeta?.startDate || '',
         endDate: connectionMeta?.endDate || '',
         status: normalizedStatus,
-        startYear: Math.min(startYearDecimal, currentYearDecimal),
-        endYear: Math.min(endYearDecimal, currentYearDecimal)
+        isFormer,
+        barStyle: {
+          left: `${Math.max(0, Math.min(100, leftPercent))}%`,
+          width: `${Math.max(0.5, Math.min(100 - leftPercent, widthPercent))}%`
+        }
       };
     });
 
-   // Haal de ruwe decimale start- en eindpunten op
-    const startYearsFloored = rows.map(r => Math.floor(r.startYear));
-    const rawEndYears = rows.map(r => r.endYear);
+    const todayOffsetPercentage = totalTimeRange > 0 ? ((currentYearDecimal - minTimelineStart) / totalTimeRange) * 100 : 100;
 
-    // Bepaal de minimale startkant (altijd naar beneden afgerond op hele jaren)
-    const minYear = startYearsFloored.length > 0 ? Math.min(...startYearsFloored) : currentYear;
+    // Genereer kalenderjaren die binnen het bereik vallen
+    const startYearCal = Math.floor(minTimelineStart);
+    // Veranderd: We stoppen bij het huidige kalenderjaar, zodat er geen loze ruimte naar 2027 ontstaat
+    const endYearCal = Math.floor(maxTimelineEnd);
     
-    // Bepaal de maximale eindkant op basis van de hoogste waarde in de dataset
-    const maxRawYear = rawEndYears.length > 0 ? Math.max(...rawEndYears) : currentYear;
-    
-    // UPGRADE: Als de hoogste waarde vlak na de grens van een nieuw jaar ligt (bijv. januari = 2023.03),
-    // dan willen we het VORIGE jaar (2022) als maximale grens instellen. 
-    // De view maakt hier dan 2022 + 1 = 2023 van, waardoor de balk perfect aan het begin van 2023 stopt.
-    let maxYear = Math.floor(maxRawYear);
-    const decimalPart = maxRawYear - maxYear;
-
-    if (decimalPart > 0 && decimalPart < 0.09) { 
-      // Datum valt vroeg in januari, verlaag de grens met een jaar zodat het niet doorschiet
-      maxYear = maxYear - 1;
+    const yearsScale: number[] = [];
+    for (let y = startYearCal; y <= endYearCal; y++) {
+      yearsScale.push(y);
     }
-
-    if (minYear > maxYear) maxYear = minYear;
 
     return {
       rows,
-      minYear,
-      maxYear: Math.min(maxYear, currentYear)
+      yearsScale,
+      minTimelineStart,
+      maxTimelineEnd,
+      totalTimeRange,
+      globalTodayMarker: {
+        show: currentYearDecimal >= minTimelineStart && currentYearDecimal <= maxTimelineEnd,
+        offset: Math.max(0, Math.min(100, todayOffsetPercentage))
+      }
     };
   }, [structureData]);
 
@@ -417,7 +454,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     });
 
     return organizedSections;
-  }, [structureData, mediaDimensions]);
+  }, [mediaDimensions, structureData]);
 
   const assets = useMemo(() => {
     if (!structureData?.targetEntity) return null;

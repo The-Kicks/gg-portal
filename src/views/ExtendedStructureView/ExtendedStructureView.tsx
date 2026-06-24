@@ -28,8 +28,14 @@ interface ExtendedStructureViewProps {
   onNavigate: (id: string, layer: "l1" | "l2" | "l3" | "l4") => void;
   memberTimeline: {
     rows: MemberTimelineRow[];
-    minYear: number;
-    maxYear: number;
+    yearsScale: number[];
+    minTimelineStart: number;
+    maxTimelineEnd: number;
+    totalTimeRange: number;
+    globalTodayMarker: {
+      show: boolean;
+      offset: number;
+    };
   } | null;
 }
 
@@ -86,37 +92,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
   const hasMoreThanMax = targetMembersList.length > visibleMembersCount;
   const displayedMembers = isExpanded ? targetMembersList : targetMembersList.slice(0, visibleMembersCount);
 
- // Genereer de jaren voor de grid kolommen zonder loze ruimte aan het einde
-  const timelineYears = useMemo(() => {
-    if (!memberTimeline || !memberTimeline.rows.length) return [];
-    
-    // Check of er een actief lid tussen zit
-    const hasActiveMembers = memberTimeline.rows.some(r => {
-      const status = (r.status || '').toLowerCase().trim();
-      return !['former', 'left', 'past', 'inactive'].includes(status);
-    });
-
-    let maxYearBoundary;
-    
-    if (hasActiveMembers) {
-      // Als er actieve leden zijn, loopt de as door tot het huidige jaar (2026)
-      maxYearBoundary = new Date().getFullYear();
-    } else {
-      // Als iedereen 'Former' is, pakken we het hoogste endYear (afgerond naar beneden) uit de data
-      const endYears = memberTimeline.rows.map(r => Math.floor(r.endYear));
-      maxYearBoundary = Math.max(...endYears);
-    }
-
-    // Veiligheidscheck: zorg dat de max nooit lager is dan minYear
-    const startYear = memberTimeline.minYear;
-    const endYear = Math.max(startYear, maxYearBoundary);
-
-    const years = [];
-    for (let y = startYear; y <= endYear; y++) {
-      years.push(y);
-    }
-    return years;
-  }, [memberTimeline]);
+  const globalTodayMarker = memberTimeline?.globalTodayMarker ?? null;
 
   return (
     <div className={styles.pageWrapper}>
@@ -199,82 +175,99 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                 {/* Tijdlijn Jaren Header */}
                 <div className={styles.timelineHeaderRow}>
                   <div className={styles.timelineMemberStickyLabel} />
-                  <div className={styles.timelineBarsArea}>
-                    {timelineYears.map(year => (
-                      <div key={year} className={styles.timelineYearScaleLabel}>
-                        {year}
-                      </div>
-                    ))}
+                  <div className={styles.timelineBarsArea} style={{ height: '24px' }}>
+                    {memberTimeline.yearsScale.map(year => {
+                      const offsetPercent = memberTimeline.totalTimeRange > 0
+                        ? ((year - memberTimeline.minTimelineStart) / memberTimeline.totalTimeRange) * 100
+                        : 0;
+
+                      if (offsetPercent < -1 || offsetPercent > 101) return null;
+
+                      return (
+                        <div
+                          key={year}
+                          className={styles.timelineYearScaleLabel}
+                          style={{
+                            position: 'absolute',
+                            left: `${offsetPercent}%`,
+                            transform: 'translateX(-50%)', /* Dit zorgt dat het midden van het cijfer exact op de as valt */
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {year}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Tijdlijn Rijen */}
                 <div className={styles.timelineRowsStack}>
+                  {/* DE GLOBALE DOORLOPENDE TODAY LIJN */}
+                  {globalTodayMarker?.show && (
+                    <div
+                      className={styles.timelineGlobalTodayLine}
+                      style={{
+                        left: `calc(240px + (100% - 240px) * (${globalTodayMarker.offset} / 100))`
+                      }}
+                    >
+                      <span className={styles.todayMarkerLabel}>Today</span>
+                    </div>
+                  )}
+
                   {displayedMembers.map((member) => {
                     const rowData = memberTimeline.rows.find(r => r.memberId === member.id);
                     if (!rowData) return null;
 
-                    const normalizedStatus = rowData.status.toLowerCase().trim();
-                    const isFormer = ['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
-
-                    // CRUCIALE FIX 1: De totale schaal MOET exact gelijk zijn aan het aantal getekende kolommen
-                    // Elke kolom (year) representeert exact 100% / aantal_jaren aan breedte.
-                    const safeTotalYears = timelineYears.length <= 0 ? 1 : timelineYears.length;
-
-                    // CRUCIALE FIX 2: Bepaal de exacte decimale eindwaarde. 
-                    // Als de controller bij 'Present' het huidige jaar (bijv 2026.47) niet perfect meestuurt,
-                    // vangen we dat hier live op met de echte datum van vandaag.
-                    let exactEndYear = rowData.endYear;
-                    if (!isFormer) {
-                      const today = new Date();
-                      const currentYearNum = today.getFullYear();
-                      // Bereken het exacte decimale verloop van het huidige jaar (vandaag / 365)
-                      const startOfYear = new Date(currentYearNum, 0, 1);
-                      const daysPast = Math.floor((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
-                      exactEndYear = currentYearNum + (daysPast / 365);
-                    }
-
-                    // Berekening op basis van de werkelijke schaal van de grid-balk
-                    const startOffset = ((rowData.startYear - memberTimeline.minYear) / safeTotalYears) * 100;
-                    const barWidth = ((exactEndYear - rowData.startYear) / safeTotalYears) * 100;
-
-                    // Minimale breedte fallback
-                    const safeBarWidth = barWidth <= 0 ? (1 / 365 / safeTotalYears) * 100 : barWidth;
-
                     return (
                       <div
                         key={member.id}
-                        className={`${styles.timelineRow} ${isFormer ? styles.isFormerTeammate : ''}`}
+                        className={`${styles.timelineRow} ${rowData.isFormer ? styles.isFormerTeammate : ''}`}
                         onClick={() => onNavigate(member.id, 'l4')}
                         style={{ cursor: 'pointer' }}
                       >
-                        {/* Member Identiteit */}
                         <div className={styles.timelineMemberMeta}>
                           <img src={rowData.memberImage} alt="" className={styles.timelineMiniThumb} />
                           <div className={styles.timelineMemberInfo}>
                             <span className={styles.timelineMemberName}>{rowData.memberName}</span>
                             <span className={styles.timelineMemberDuration}>
-                              {rowData.startDate ? rowData.startDate : '???'} – {isFormer ? (rowData.endDate || 'Past') : 'Present'}
+                              {rowData.startDate ? rowData.startDate.split('-')[0] : '???'} – {rowData.isFormer ? (rowData.endDate ? rowData.endDate.split('-')[0] : 'Past') : 'Present'}
                             </span>
                           </div>
                         </div>
 
-                        {/* Horizontale Balk Track */}
                         <div className={styles.timelineBarsArea}>
-                          {timelineYears.map(year => (
-                            <div key={year} className={styles.timelineGridLine} />
-                          ))}
+                          {/* Verticale achtergrond-stippellijnen op exacte jaargrenzen */}
+                          {memberTimeline.yearsScale.map(year => {
+                            const lineOffsetPercent = memberTimeline.totalTimeRange > 0
+                              ? ((year - memberTimeline.minTimelineStart) / memberTimeline.totalTimeRange) * 100
+                              : 0;
 
+                            if (lineOffsetPercent < 0 || lineOffsetPercent > 100) return null;
+
+                            return (
+                              <div
+                                key={year}
+                                className={styles.timelineGridLine}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${lineOffsetPercent}%`,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: '1px',
+                                  pointerEvents: 'none'
+                                }}
+                              />
+                            );
+                          })}
+
+                          {/* De gekleurde actieve balk */}
                           <div
-                            className={`${styles.timelineDataBar} ${isFormer ? styles.timelineBarFormer : styles.timelineBarActive}`}
-                            style={{
-                              left: `${startOffset}%`,
-                              width: `${safeBarWidth}%`,
-                              position: 'absolute'
-                            }}
+                            className={`${styles.timelineDataBar} ${rowData.isFormer ? styles.timelineBarFormer : styles.timelineBarActive}`}
+                            style={rowData.barStyle}
                           >
                             <span className={styles.barInsideLabel}>
-                              {isFormer ? 'Former' : 'Active'}
+                              {rowData.isFormer ? 'Former' : 'Active'}
                             </span>
                           </div>
                         </div>
@@ -297,7 +290,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
             </section>
           )}
 
-          {/* 2. DYNAMISCHE ALBUMS LOOP (TETRIS GRID) */}
+          {/* 2. DYNAMISCHE ALBUMS LOOP */}
           {hasMedia && (
             <div className={styles.mediaContainerWrapper} style={{ marginBottom: '2.5rem' }}>
               {gallerySectionKeys.map(sectionKey => {
@@ -352,7 +345,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
             </div>
           )}
 
-          {/* 3. OVERIGE GRIDS (Voor L1 of L2 lagen) */}
+          {/* 3. OVERIGE GRIDS */}
           {hasChildren ? (
             <>
               {relatedL3s.length > 0 && activeLayer !== 'l3' && (
