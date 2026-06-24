@@ -106,7 +106,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
   };
 
   const isL3Entity = originalEntity.type.toLowerCase() === 'l3';
-  
+
   // Filter l3Milestones én de interne object-metadata uit de dynamic attributes lijst
   const visibleDynamicKeys = partitionedMetadataKeys.dynamicKeys.filter(
     key => key !== 'l3Milestones' && key !== 'customTracks' && key !== 'customRelationsMetadata'
@@ -477,7 +477,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               </button>
             )}
           </div>
-
           {/* Dropdown voor bestaande nodes */}
           {isConnectionDropdownOpen && filteredAvailableTargets.length > 0 && (
             <div className={styles.dropdownMenu}>
@@ -491,7 +490,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   }}
                   className={styles.dropdownItem}
                 >
-                  <strong>{target.name}</strong> <small>({target.type.toUpperCase()} • ID: {target.id})</small>
+                  <strong>{target.name}</strong> <small style={{ marginLeft: '4px', opacity: 0.6 }}>({target.id})</small>
                 </div>
               ))}
             </div>
@@ -540,7 +539,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
 
                   {/* Header Layout: Info links, Datums rechts */}
                   <div className={styles.connectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-                    
+
                     {/* Linkerkant */}
                     <div className={styles.connectionRowLeft} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className={isNonRelational ? styles.badgeOutbound : conn.direction === 'outgoing' ? styles.badgeOutbound : styles.badgeInbound}>
@@ -615,7 +614,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     </div>
 
                     {(() => {
-                      const periods: Array<{ start: string; end: string; reason: string }> = 
+                      const periods: Array<{ start: string; end: string; reason: string }> =
                         Array.isArray(conn.metadata?.excludedPeriods) ? conn.metadata.excludedPeriods : [];
 
                       return (
@@ -635,7 +634,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                                   handleConnectionMetadataChange(conn.id, conn.direction, 'excludedPeriods', updated);
                                 }}
                               />
-                              <span className={styles.textMuted} style={{ fontSize: '12px' }}>tot</span>
+                              <span className={styles.textMuted} style={{ fontSize: '12px' }}>to</span>
                               <input
                                 type="text"
                                 placeholder="Eind (DD-MM-YYYY)"
