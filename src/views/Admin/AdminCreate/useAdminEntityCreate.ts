@@ -25,8 +25,8 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
   // Haal de metadata-standaard op voor de huidige geselecteerde laag uit het Theme
   const currentLayerMetadata = theme.layerMetadata[type];
 
-const standardAttrs = useStandardEntityAttributes(undefined);
-  const dynamicAttrs = useDynamicAttributes(undefined, theme, type); // Zorg dat deze hook de triggers berekent
+  const standardAttrs = useStandardEntityAttributes(undefined);
+  const dynamicAttrs = useDynamicAttributes(undefined, theme, type);
   const mediaCategories = useMediaCategories(undefined, theme, currentLayerMetadata, type);
 
   // Handmatige type switch via de dropdown
@@ -239,12 +239,10 @@ const standardAttrs = useStandardEntityAttributes(undefined);
     };
 
     try {
-      // Sla puur en alleen de entiteit op
       const savedEntity = await entityService.create(theme.id, newEntitySkeleton);
       window.dispatchEvent(new Event('refresh-database'));
 
       if (onSave) {
-        // Lever een HydratedEntity structuur op met lege connectie-arrays
         await onSave({
           ...savedEntity,
           connections: [],
@@ -256,7 +254,19 @@ const standardAttrs = useStandardEntityAttributes(undefined);
     }
   };
 
-return {
+  // 🔥 ALLEEN 'status' opruimen, 'Real Name' blijft 100% onaangetast
+  const cleanTriggerFieldsMap = { ...dynamicAttrs.triggerFieldsMap };
+  delete cleanTriggerFieldsMap['status'];
+  delete cleanTriggerFieldsMap['Status'];
+
+  const cleanPartitionedMetadataKeys = {
+    ...dynamicAttrs.partitionedMetadataKeys,
+    dynamicKeys: (dynamicAttrs.partitionedMetadataKeys.dynamicKeys || []).filter(key => {
+      return key.toLowerCase() !== 'status';
+    })
+  };
+
+  return {
     type,
     handleTypeChange,
     customSuffix,
@@ -280,16 +290,15 @@ return {
     newImageKey: mediaCategories.newImageKey,
     setNewImageKey: mediaCategories.setNewImageKey,
 
-    // Dynamic Attributes (Zorg dat deze variabelen correct zijn doorgegeven)
+    // Dynamic Attributes
     metadataInputs: dynamicAttrs.metadataInputs,
     newMetadataKey: dynamicAttrs.newMetadataKey,
     setNewMetadataKey: dynamicAttrs.setNewMetadataKey,
     
-    // HIER: De triggers die de dropdown in de UI aansturen
     dynamicTriggers: dynamicAttrs.dynamicTriggers,
-    triggerFieldsMap: dynamicAttrs.triggerFieldsMap,
+    triggerFieldsMap: cleanTriggerFieldsMap,
     
-    partitionedMetadataKeys: dynamicAttrs.partitionedMetadataKeys,
+    partitionedMetadataKeys: cleanPartitionedMetadataKeys,
     handleMetadataInputChange: dynamicAttrs.handleMetadataInputChange,
 
     // Handlers

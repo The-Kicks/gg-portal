@@ -620,7 +620,6 @@
 
 /* Modificatie voor voormalige leden */
 .isFormerTeammate .timelineDataBar {
-
   background-color: color-mix(in srgb, var(--secondary), transparent 40%);
   box-shadow: none;
 }
@@ -723,6 +722,22 @@
 .timelineExcludedBadge:hover .excludedReasonText {
   opacity: 1;
   transform: translateY(-28px) scale(1); /* Zweeft nu prachtig net bóven de balk bij hover */
+}
+
+.isFormerTeammate {
+  opacity: 0.45;          
+  filter: grayscale(100%);  
+  transform: scale(0.98);   
+  transition: 
+    transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), 
+    filter 0.3s ease, 
+    opacity 0.3s ease;
+}
+
+.isFormerTeammate:hover {
+  opacity: 1;
+  filter: grayscale(0%) brightness(1.05);
+  transform: translateY(-6px) scale(1); 
 }
 
 /* ==========================================================================

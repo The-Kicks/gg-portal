@@ -12,10 +12,6 @@ interface AdminEntityEditProps {
   onCancel: () => void | Promise<void>;
 }
 
-interface DynamicTriggerConfig {
-  value: string;
-}
-
 export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityId, onSave, onCancel }) => {
 
   const handleLocalSave = async (updatedEntity: HydratedEntity) => {
@@ -47,8 +43,8 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     isConnectionDropdownOpen,
     setIsConnectionDropdownOpen,
     dropdownRef,
-    dynamicTriggers,
     triggerFieldsMap,
+    getTriggersForTargetType,
     partitionedMetadataKeys,
     filteredAvailableTargets,
     unifiedConnections,
@@ -61,7 +57,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     handleConnectionMetadataChange,
     handleRemoveConnection,
     handleCreateNonRelationalTrack,
-    handleAddConnection,
+    handleApplyConnection,
     handleAssignImage,
     handleUnassignImage,
     formatMilestonesToText,
@@ -107,7 +103,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
 
   const isL3Entity = originalEntity.type.toLowerCase() === 'l3';
 
-  // Filter l3Milestones én de interne object-metadata uit de dynamic attributes lijst
   const visibleDynamicKeys = partitionedMetadataKeys.dynamicKeys.filter(
     key => key !== 'l3Milestones' && key !== 'customTracks' && key !== 'customRelationsMetadata'
   );
@@ -132,14 +127,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
             <option value="disbanded">Disbanded</option>
             <option value="inactive">Inactive</option>
             <option value="retired">Retired</option>
-            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => {
-              const config = triggerConfig as DynamicTriggerConfig;
-              return (
-                <option key={triggerKey} value={triggerKey}>
-                  {config.value.charAt(0).toUpperCase() + config.value.slice(1)} (Schema Trigger)
-                </option>
-              );
-            })}
           </select>
         </div>
 
@@ -477,14 +464,13 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               </button>
             )}
           </div>
-          {/* Dropdown voor bestaande nodes */}
           {isConnectionDropdownOpen && filteredAvailableTargets.length > 0 && (
             <div className={styles.dropdownMenu}>
               {filteredAvailableTargets.map(target => (
                 <div
                   key={target.id}
                   onClick={() => {
-                    handleAddConnection(target.id);
+                    handleApplyConnection(target.id);
                     setConnectionSearchTerm('');
                     setIsConnectionDropdownOpen(false);
                   }}
@@ -512,13 +498,19 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   : conn.metadata?.customTargetName || 'Custom Shared Track')
                 : (conn.relatedEntity?.name || conn.relatedEntityId);
 
+              // Dynamisch de triggers ophalen op basis van het DOELWIT-type (bv. 'l4')
+              const targetType = conn.direction === 'outgoing'
+                ? conn.relatedEntity?.type
+                : originalEntity.type;
+
+              const activeTriggers = getTriggersForTargetType(targetType);
+
               return (
                 <div
                   key={uniqueConnKey}
                   className={styles.connectionRow}
                   style={isIncoming ? { opacity: 0.85, borderLeft: '3px solid #eab308', padding: '15px' } : undefined}
                 >
-                  {/* Waarschuwing bovenaan bij inkomende relaties */}
                   {isIncoming && (
                     <div style={{
                       backgroundColor: 'rgba(234, 179, 8, 0.1)',
@@ -537,7 +529,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     </div>
                   )}
 
-                  {/* Header Layout: Info links, Datums rechts */}
+                  {/* Header Layout */}
                   <div className={styles.connectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
 
                     {/* Linkerkant */}
@@ -553,19 +545,37 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                       )}
                     </div>
 
-                    {/* Rechterkant: Datum selectors & Disconnect knop */}
+                    {/* Rechterkant: Selectors & Disconnect knop */}
                     <div className={styles.connectionDates} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div className={styles.dateFieldGroup}>
                         <select
-                          value={conn.status || 'active'}
+                          value={String(conn.status || 'active').toLowerCase()}
                           onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'status', e.target.value)}
                           className={styles.dateHeaderInput}
-                          style={{ width: '110px' }}
+                          style={{ width: '140px' }}
                           disabled={isIncoming}
                         >
-                          <option value="active">Active</option>
-                          <option value="past">Past</option>
-                          <option value="loan">Loan</option>
+                          <optgroup label="Core Status">
+                            <option value="active">Active</option>
+                          </optgroup>
+
+                          {activeTriggers && activeTriggers.length > 0 && (
+                            <optgroup label="Theme Tags">
+                              {activeTriggers.map((valueStr: string) => {
+                                const lowerVal = valueStr.toLowerCase();
+                                return (
+                                  <option key={valueStr} value={lowerVal}>
+                                    {valueStr}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          )}
+                          <optgroup label="Generic Status">
+                            <option value="past">Past</option>
+                            <option value="loan">Loan</option>
+                          </optgroup>
+
                         </select>
                       </div>
 
@@ -607,7 +617,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     </div>
                   </div>
 
-                  {/* Excluded Periods (Gestructureerd i.p.v. Textarea) */}
+                  {/* Excluded Periods */}
                   <div style={{ marginTop: '15px' }}>
                     <div className={styles.fieldLabel} style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '500' }}>
                       🤕 Excluded Periods (Injuries / Hiatus / Breaks)

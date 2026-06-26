@@ -1,9 +1,9 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, } from 'react';
 import type { Theme, HydratedEntity, HydratedEntityConnection } from '../../../types';
 
 import { useStandardEntityAttributes } from '../adminUtils/useStandardEntityAttributes';
 import { useDynamicAttributes, buildMetadataInputs, REQUIRED_L4_FIELDS } from '../adminUtils/useDynamicAttributes';
-import type { MetadataValue } from '../adminUtils/useDynamicAttributes';
+import type { MetadataValue, LayerMetadataMap } from '../adminUtils/useDynamicAttributes';
 import { useMediaCategories, buildImageInputs } from '../adminUtils/useMediaCategories';
 import { useTimelineBuilder } from '../adminUtils/useTimelineBuilder';
 
@@ -27,6 +27,30 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   const dynamicAttrs = useDynamicAttributes(originalEntity, theme);
   const mediaCategories = useMediaCategories(originalEntity, theme, dynamicAttrs.layerConfig);
   const timelineBuilder = useTimelineBuilder(originalEntity, theme, entityId);
+
+  // Parse de complete layermetadata map één keer centraal
+  const parsedLayerMetadata = useMemo<LayerMetadataMap>(() => {
+    if (!theme.layerMetadata) return {};
+    try {
+      return typeof theme.layerMetadata === 'string'
+        ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
+        : (theme.layerMetadata as unknown as LayerMetadataMap);
+    } catch (error) {
+      console.error("Fout bij het parsen van layerMetadata:", error);
+      return {};
+    }
+  }, [theme.layerMetadata]);
+
+  // Dynamische helper om de triggers op te halen op basis van het type van het doelwit (bijv. 'l4')
+  const getTriggersForTargetType = (targetType: string | undefined): string[] => {
+    const typeKey = (targetType || 'l4').toLowerCase();
+    const config = parsedLayerMetadata[typeKey];
+    if (!config || !config.statusTriggers) return [];
+
+    return Object.values(config.statusTriggers)
+      .map((t) => t?.value)
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+  };
 
   // Helper om milestones tekst om te zetten naar [{date, title}]
   const parseAdminMilestones = (rawText: unknown): MilestoneStructure[] => {
@@ -57,7 +81,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .filter((m): m is MilestoneStructure => m !== null);
   };
 
-  // Format functie om objecten weer terug te zetten naar platte tekst voor de textarea
   const formatMilestonesToText = (milestones: unknown): string => {
     if (!milestones) return '';
     if (typeof milestones === 'string') return milestones;
@@ -89,26 +112,20 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .map(line => line.trim())
       .filter(Boolean);
 
-    // Pak alle uitgaande relaties
     const outgoingConnections = timelineBuilder.unifiedConnections.filter(conn => conn.direction === 'outgoing');
 
     outgoingConnections.forEach(conn => {
       const currentRelationText = formatMilestonesToText(conn.metadata?.milestones);
-
-      // CRUCIALE CHECK: Als er al handmatige milestones op deze relatie staan, 
-      // slaan we deze over om overschrijven te voorkomen.
       if (currentRelationText.trim().length > 0) return;
 
       const startYear = conn.startDate ? parseInt(conn.startDate, 10) : null;
       if (!startYear || isNaN(startYear)) return;
 
-      // Indien er geen endDate is, of het bevat 'pres', dan is de relatie nu nog actief (2026)
       const currentYear = 2026;
       const endYear = conn.endDate && !conn.endDate.toLowerCase().includes('pres')
         ? parseInt(conn.endDate, 10)
         : currentYear;
 
-      // Filter milestones die vallen binnen de actieve periode van de relatie
       const matchedMilestones = milestoneLines.filter(line => {
         const yearMatch = line.match(/^(\d{4})/) || line.match(/\d{2}-\d{2}-(\d{4})/);
         if (!yearMatch) return false;
@@ -118,14 +135,12 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       });
 
       if (matchedMilestones.length > 0) {
-        // Omdat de check hierboven garandeert dat het leeg is, kunnen we direct de array vullen
         const updatedText = matchedMilestones.join('\n');
-        
-        // Verholpen type mismatch: we casten naar de parameter-verwachting van de timelineBuilder
+
         timelineBuilder.handleConnectionMetadataChange(
-          conn.id, 
-          conn.direction, 
-          'milestones', 
+          conn.id,
+          conn.direction,
+          'milestones',
           updatedText as unknown as Parameters<typeof timelineBuilder.handleConnectionMetadataChange>[3]
         );
       }
@@ -195,7 +210,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       const rawValue = currentInputs[key];
       if (!rawValue || !rawValue.trim()) return;
 
-      // Sluit l3Milestones uit van de standaard reconstructie
       if (key === 'l3Milestones') return;
 
       if (key.toLowerCase() === 'passingdate' || key.toLowerCase() === 'birthday') {
@@ -230,32 +244,22 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       return;
     }
 
-    // --- SCHONE EN COMPACTE CONVERTER ---
     const fixDate = (str: string | undefined): string => {
       if (!str) return '';
       const clean = str.trim();
-      
-      // 1. Al DD-MM-YYYY? Niks doen
       if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) return clean;
-      
-      // 2. HTML picker (YYYY-MM-DD) -> DD-MM-YYYY
       const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (match) return `${match[3]}-${match[2]}-${match[1]}`;
-      
-      // 3. Alleen een jaartal (YYYY) -> 01-01-YYYY
       if (/^\d{4}$/.test(clean)) return `01-01-${clean}`;
-      
       return clean;
     };
 
     const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
 
-    // --- UITGAANDE CONNECTIONS VERWERKEN & VALIDEREN ---
     const finalConnections: HydratedEntityConnection[] = timelineBuilder.localConnections.map(c => {
       const start = fixDate(c.metadata?.startDate);
       const end = c.metadata?.endDate && !c.metadata.endDate.toLowerCase().includes('pres') ? fixDate(c.metadata.endDate) : c.metadata?.endDate || '';
 
-      // Omdat dit de 'localConnections' array is, weten we dat dit ALTIJD outgoing is. Geen 'direction' check nodig!
       if (start && !dateRegex.test(start)) alert("Startdatum kon niet worden omgezet naar DD-MM-YYYY.");
       if (end && !end.toLowerCase().includes('pres') && !dateRegex.test(end)) alert("Einddatum moet DD-MM-YYYY of 'Pres.' zijn.");
 
@@ -271,7 +275,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       };
     });
 
-    // --- INKOMENDE CONNECTIONS VERWERKEN (VALIDATIE GEBLOKKEERD IN DEZE VIEW) ---
     const finalTargetConnections: HydratedEntityConnection[] = timelineBuilder.localTargetConnections.map(c => {
       const start = fixDate(c.metadata?.startDate);
       const end = c.metadata?.endDate && !c.metadata.endDate.toLowerCase().includes('pres') ? fixDate(c.metadata.endDate) : c.metadata?.endDate || '';
@@ -288,7 +291,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       };
     });
 
-    // --- METADATA INPUTS (L4 METRICS) VERWERKEN ---
     const metadataInputsCopy = { ...dynamicAttrs.metadataInputs };
 
     if (originalEntity.type.toLowerCase() === 'l4') {
@@ -303,7 +305,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       }
 
       if (metadataInputsCopy['Birthday']) metadataInputsCopy['Birthday'] = fixDate(metadataInputsCopy['Birthday']);
-      
+
       const passingDateKey = Object.keys(metadataInputsCopy).find(k => k.toLowerCase() === 'passingdate');
       if (passingDateKey && metadataInputsCopy[passingDateKey]) {
         metadataInputsCopy[passingDateKey] = fixDate(metadataInputsCopy[passingDateKey]);
@@ -393,6 +395,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     layerConfig: dynamicAttrs.layerConfig,
     dynamicTriggers: dynamicAttrs.dynamicTriggers,
     triggerFieldsMap: dynamicAttrs.triggerFieldsMap,
+    getTriggersForTargetType,
     partitionedMetadataKeys: dynamicAttrs.partitionedMetadataKeys,
 
     expandedChildId: timelineBuilder.expandedChildId,
@@ -413,7 +416,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     handleAddMetadataField: dynamicAttrs.handleAddMetadataField,
     handleRemoveImageField: mediaCategories.handleRemoveImageField,
     handleRemoveMetadataField: dynamicAttrs.handleRemoveMetadataField,
-    // Wij maken gebruik van de veilige type inferentie van Parameters<>
     handleConnectionMetadataChange: timelineBuilder.handleConnectionMetadataChange as (
       id: number,
       direction: 'outgoing' | 'incoming',
@@ -422,8 +424,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     ) => void,
     handleRemoveConnection: timelineBuilder.handleRemoveConnection,
     handleCreateNonRelationalTrack: timelineBuilder.handleCreateNonRelationalTrack,
-    handleAddConnection: timelineBuilder.handleAddConnection,
-    handleParseAlbum: mediaCategories.handleParseAlbum,
+    handleApplyConnection: timelineBuilder.handleAddConnection,
     handleAssignImage: mediaCategories.handleAssignImage,
     handleUnassignImage: mediaCategories.handleUnassignImage,
 

@@ -222,7 +222,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                     return (
                       <div
                         key={member.id}
-                        className={`${styles.timelineRow} ${rowData.isFormer ? styles.isFormerTeammate : ''}`}
+                        className={`${styles.timelineRow} ${rowData.isFormer ? styles.timelineRowFormer : ''}`}
                         onClick={() => onNavigate(member.id, 'l4')}
                         style={{ cursor: 'pointer' }}
                       >

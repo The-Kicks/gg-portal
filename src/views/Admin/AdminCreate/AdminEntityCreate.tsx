@@ -12,10 +12,6 @@ interface Props {
   onCancel: () => void;
 }
 
-interface DynamicTriggerConfig {
-  value: string;
-}
-
 export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
   const {
     name,
@@ -29,7 +25,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     imageInputs,
     metadataInputs,
     newImageKey,
-    dynamicTriggers,
     triggerFieldsMap,
     setNewImageKey,
     newMetadataKey,
@@ -49,7 +44,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     handleAssignImage,
     handleUnassignImage,
     handleSubmit
-    // Alle connectie-gerelateerde variabelen zijn hier weggesneden
   } = useAdminEntityCreate({ theme, onSave });
 
   const getInputValidationClass = (): string => {
@@ -220,22 +214,14 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
             </select>
           </div>
           <div>
-          <div className={styles.fieldLabel}>Status</div>
-          <select value={status} onChange={e => setStatus(e.target.value)} className={styles.inputField}>
-            <option value="active">Active</option>
-            <option value="disbanded">Disbanded</option>
-            <option value="inactive">Inactive</option>
-            <option value="retired">Retired</option>
-            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => {
-              const config = triggerConfig as DynamicTriggerConfig;
-              return (
-                <option key={triggerKey} value={triggerKey}>
-                  {config.value.charAt(0).toUpperCase() + config.value.slice(1)} (Schema Trigger)
-                </option>
-              );
-            })}
-          </select>
-        </div>
+            <div className={styles.fieldLabel}>Status</div>
+            <select value={status} onChange={e => setStatus(e.target.value)} className={styles.inputField}>
+              <option value="active">Active</option>
+              <option value="disbanded">Disbanded</option>
+              <option value="inactive">Inactive</option>
+              <option value="retired">Retired</option>
+            </select>
+          </div>
 
           <div>
             <div className={styles.fieldLabel}>Passing Date</div>
@@ -263,18 +249,20 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
             <div className={styles.twoColumnGrid}>
               {partitionedMetadataKeys.dynamicKeys.map(key => {
                 const triggerValues = triggerFieldsMap[key];
+                const isStatusKey = key.toLowerCase() === 'status';
+
                 return (
                   <div key={key}>
                     <div className={styles.labelActionRow}>
                       <span>
                         {key}
-                        {triggerValues && <span className={styles.textWarning}> (Required by theme 🔒)</span>}
+                        {triggerValues && !isStatusKey && <span className={styles.textWarning}> (Required by theme 🔒)</span>}
                       </span>
                       <button type="button" onClick={() => handleRemoveMetadataField(key)} className={styles.btnRemove}>Remove</button>
                     </div>
 
-                    {/* HIER IS DE DROPDOWN LOGICA WEER VOLLEDIG HERSTELD */}
-                    {triggerValues ? (
+                    {/* 🔥 HIER AANGEPAST: Alleen een dropdown tonen als er triggerValues zijn EN het géén 'status' veld betreft */}
+                    {triggerValues && !isStatusKey ? (
                       <select
                         id={`dynamic-select-${key}`}
                         name={key}
@@ -297,6 +285,7 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                         value={metadataInputs[key] || ''}
                         onChange={e => handleMetadataInputChange(key, e.target.value)}
                         className={styles.inputField}
+                        placeholder={`Enter value for ${key}`}
                       />
                     )}
                   </div>

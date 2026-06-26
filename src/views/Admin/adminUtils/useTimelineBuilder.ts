@@ -69,15 +69,16 @@ export const useTimelineBuilder = (
   }, []);
 
   const unifiedConnections = useMemo<UnifiedConnection[]>(() => {
+    // Wijzig dit in useTimelineBuilder.ts in de unifiedConnections useMemo:
+
     const outgoing = localConnections.map(c => ({
       id: c.id,
       direction: 'outgoing' as const,
       relatedEntity: c.targetEntity,
       relatedEntityId: c.targetEntityId,
-      status: String(c.metadata?.status || 'active'),
+      status: String(c.metadata?.status || 'active').toLowerCase(), // <-- Alleen metadata check + toLowerCase
       startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
       endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined,
-      excludedPeriods: c.metadata?.excludedPeriods ? String(c.metadata.excludedPeriods) : undefined,
       metadata: c.metadata
     }));
 
@@ -86,10 +87,9 @@ export const useTimelineBuilder = (
       direction: 'incoming' as const,
       relatedEntity: c.sourceEntity,
       relatedEntityId: c.sourceEntityId,
-      status: String(c.metadata?.status || 'active'),
+      status: String(c.metadata?.status || 'active').toLowerCase(), // <-- Alleen metadata check + toLowerCase
       startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
       endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined,
-      excludedPeriods: c.metadata?.excludedPeriods ? String(c.metadata.excludedPeriods) : undefined,
       metadata: c.metadata
     }));
 
