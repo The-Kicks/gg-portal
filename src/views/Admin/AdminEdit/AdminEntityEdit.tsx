@@ -464,6 +464,7 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               </button>
             )}
           </div>
+          {/* Dropdown voor bestaande nodes */}
           {isConnectionDropdownOpen && filteredAvailableTargets.length > 0 && (
             <div className={styles.dropdownMenu}>
               {filteredAvailableTargets.map(target => (

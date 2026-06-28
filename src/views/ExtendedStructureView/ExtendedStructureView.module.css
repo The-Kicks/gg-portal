@@ -464,12 +464,11 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 /* ==========================================================================
    8. HORIZONTAL MEMBER TIMELINE COMPONENT (L3 Layer Specific)
    ========================================================================== */
 .timelineContainer {
-  position: relative; /* Cruciaal voor absolute positionering van de globale lijn */
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -497,8 +496,6 @@
   opacity: 0.5;
 }
 
-/* GECORRIGEERD: Geen display flex of justify-content meer. 
-   Dit is nu een pure absolute-container anker! */
 .timelineBarsArea {
   position: relative;
   width: 100%;
@@ -510,7 +507,7 @@
   font-weight: 800;
   color: var(--text);
   opacity: 0.7;
-  text-align: center; /* Zorgt voor perfecte centrering */
+  text-align: center;
   box-sizing: border-box;
   height: 100%;
 }
@@ -519,7 +516,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  position: relative; /* Cruciaal voor de Today-lijn */
+  position: relative;
 }
 
 .timelineRow {
@@ -571,12 +568,10 @@
   opacity: 0.6;
 }
 
-/* Track container met hulplijnen achter de balken */
 .timelineRow .timelineBarsArea {
   min-height: 32px;
 }
 
-/* GECORRIGEERD: flex eruit gehaald, zodat het inline percentage exact wordt overgenomen */
 .timelineGridLine {
   height: 100%;
   border-left: 1px dashed color-mix(in srgb, var(--text), transparent 92%);
@@ -588,7 +583,6 @@
   top: 50%;
   transform: translateY(-50%);
   height: 18px;
-  /* VERANDERD: Gebruik background-color zodat inline gradients eroverheen kunnen vloeien */
   background-color: var(--primary); 
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -599,6 +593,12 @@
   box-sizing: border-box;
   z-index: 2;
   overflow: visible;
+}
+
+.timelineBarActive,
+.timelineBarFormer {
+  background-color: var(--primary) !important;
+  background-image: none !important;
 }
 
 .timelineRow:hover .timelineDataBar {
@@ -618,22 +618,15 @@
   opacity: 0.9;
 }
 
-/* Modificatie voor voormalige leden */
-.isFormerTeammate .timelineDataBar {
-  background-color: color-mix(in srgb, var(--secondary), transparent 40%);
-  box-shadow: none;
-}
-
-/* De rode verticale Today lijn */
 .timelineGlobalTodayLine {
   width: 2px;
   background: #ff4a7d;
   box-shadow: 0 0 8px #ff4a7d;
   position: absolute;
-  top: -10px; /* Trekt de lijn iets omhoog richting de jaartallen */
+  top: -10px;
   bottom: 0;
   z-index: 10;
-  pointer-events: none; /* Zorgt dat je nog op de rijen kunt klikken */
+  pointer-events: none;
 }
 
 .todayMarkerLabel {
@@ -649,7 +642,6 @@
   text-transform: uppercase;
 }
 
-/* Het driehoekje onder de 'Today' tekst */
 .timelineGlobalTodayLine::after {
   content: '';
   position: absolute;
@@ -661,7 +653,6 @@
   z-index: 11;
 }
 
-/* Container badge voor de afwijkende periode binnen de hoofdbalk */
 .timelineExcludedBadge {
   position: absolute;
   top: 0;
@@ -671,8 +662,8 @@
   justify-content: center;
   box-sizing: border-box;
   z-index: 10;
-  overflow: visible; /* Zorg dat de tekst buiten de badge mag treden bij hover */
-  cursor: help;      /* Verander cursor in een vraagteken-pointer */
+  overflow: visible;
+  cursor: help;
   
   background: repeating-linear-gradient(
     45deg,
@@ -680,13 +671,12 @@
     rgba(20, 20, 20, 0.85) 5px,
     rgba(35, 35, 35, 0.95) 5px,
     rgba(35, 35, 35, 0.95) 10px
-  );
+  ) !important;
   border-left: 2px solid #000;
   border-right: 2px solid #000;
   transition: background-color 0.2s ease;
 }
 
-/* Subtiele oplichting van het vlak bij hover */
 .timelineExcludedBadge:hover {
   background: repeating-linear-gradient(
     45deg,
@@ -694,34 +684,31 @@
     rgba(30, 30, 30, 0.9) 5px,
     rgba(45, 45, 45, 0.95) 5px,
     rgba(45, 45, 45, 0.95) 10px
-  );
+  ) !important;
 }
 
-/* De tekst binnen de badge (Standaard verborgen) */
 .excludedReasonText {
   font-size: 10px;
   font-weight: 800;
   color: #ffffff !important;
-  text-shadow: 0px 2px 4px rgba(0, 0, 0, 1), 0px 0px 8px var(--primary); /* Voegt een subtiele glow toe in je themakleur */
+  text-shadow: 0px 2px 4px rgba(0, 0, 0, 1), 0px 0px 8px var(--primary);
   text-transform: uppercase;
   white-space: nowrap;
   pointer-events: none;
   padding: 2px 8px;
-  background-color: rgba(15, 15, 15, 0.95); /* Tooltip-achtige achtergrond zodat het altijd leesbaar is buiten de balk */
+  background-color: rgba(15, 15, 15, 0.95);
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   
-  /* --- ANIMATIE ENGINE --- */
   opacity: 0;
   transform: translateY(0) scale(0.9);
   transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
               transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Activeer de animatie zodra de gebruiker over de badge hovert */
 .timelineExcludedBadge:hover .excludedReasonText {
   opacity: 1;
-  transform: translateY(-28px) scale(1); /* Zweeft nu prachtig net bóven de balk bij hover */
+  transform: translateY(-28px) scale(1);
 }
 
 .isFormerTeammate {

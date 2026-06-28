@@ -56,7 +56,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   const colContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
-  
+
   // View Entire Timeline feature states
   const [isTimelineTall, setIsTimelineTall] = useState(false);
   const [forceShowEntireTimeline, setForceShowEntireTimeline] = useState(false);
@@ -98,11 +98,27 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
   const formatTimelineDate = (dateStr?: string) => {
     if (!dateStr) return '';
-    if (/^\d{4}$/.test(dateStr.trim())) {
-      return dateStr.trim();
+    const trimmed = dateStr.trim();
+
+    // 1. Puur een jaartal (bv. "2017")
+    if (/^\d{4}$/.test(trimmed)) {
+      return trimmed;
     }
-    const dateObj = new Date(dateStr);
-    if (isNaN(dateObj.getTime())) return dateStr;
+
+    // 2. DD-MM-YYYY (bv. "31-05-2024")
+    const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (ddmmyyyyMatch) {
+      const [, day, month, year] = ddmmyyyyMatch; // Eerste element overgeslagen om '_' waarschuwing te voorkomen
+      const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(dateObj.getTime())) {
+        return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      }
+    }
+
+    // 3. Tekstuele datums (bv. "Jul 2017")
+    const dateObj = new Date(trimmed);
+    if (isNaN(dateObj.getTime())) return trimmed;
+
     return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
   };
 
@@ -250,9 +266,9 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
           {timelineItems.length > 0 && (
             <section className={styles.timelineSection}>
               <h2 className={styles.sectionHeading}>Timeline</h2>
-              
-              <div 
-                ref={timelineContainerRef} 
+
+              <div
+                ref={timelineContainerRef}
                 className={`${styles.timelineContainerDynamic} ${isTimelineTall && !forceShowEntireTimeline ? styles.isCapped : ''}`}
               >
                 <div className={styles.timelineTrack}>
@@ -265,12 +281,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                     const startStr = formatTimelineDate(item.startDate);
                     const endStr = formatTimelineDate(item.endDate);
                     const shouldShowEndDate = item.endDate && item.endDate !== item.startDate;
-                    
+
                     const isPastItem = item.status?.toLowerCase() !== 'active';
 
                     return (
-                      <div 
-                        key={item.id} 
+                      <div
+                        key={item.id}
                         className={`${styles.timelineItem} ${isPastItem ? styles.isPastItem : ''}`}
                       >
                         <div className={styles.timelineSideInfo}>
@@ -311,12 +327,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                                 <button onClick={() => toggleMilestones(item.id)} className={styles.milestoneExpandButton}>
                                   {isExpanded ? (
                                     <>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6"/></svg>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6" /></svg>
                                       <span>Less</span>
                                     </>
                                   ) : (
                                     <>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
                                       <span>{totalMilestones - 3} more</span>
                                     </>
                                   )}
@@ -332,12 +348,12 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
                 {isTimelineTall && !forceShowEntireTimeline && (
                   <div className={styles.timelineFadeOverlay}>
-                    <button 
+                    <button
                       className={styles.viewEntireTimelineButton}
                       onClick={() => setForceShowEntireTimeline(true)}
                     >
                       <span>View Entire Timeline</span>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
                     </button>
                   </div>
                 )}
@@ -353,7 +369,8 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                   <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
                   <div className={styles.mediaGrid}>
                     {[0, 1, 2].map((colIndex) => {
-                      const itemsInColumn = galleryItems.filter((_, index) => index % 3 === colIndex);
+                      // Veranderd van '_' naar '_item' om Vite/TypeScript fouten te voorkomen
+                      const itemsInColumn = galleryItems.filter((_item, index) => index % 3 === colIndex);
                       const rawPadding = columnPaddings[sectionKey]?.[colIndex] || 0;
                       const finalPlaceholderHeight = rawPadding - 24;
 
@@ -379,7 +396,11 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                                   ) : item.type === 'video-file' ? (
                                     <video
                                       src={mediaSourcePath}
-                                      controls
+                                      autoPlay={true}
+                                      loop={true}
+                                      muted={true}
+                                      playsInline={true}
+                                      controls={true}
                                       preload="metadata"
                                       onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
                                     />

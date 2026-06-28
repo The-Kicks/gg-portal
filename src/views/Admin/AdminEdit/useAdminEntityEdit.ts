@@ -103,7 +103,7 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     return '';
   };
 
-  const handleSyncMilestones = () => {
+ const handleSyncMilestones = () => {
     const rawL3Milestones = dynamicAttrs.metadataInputs['l3Milestones'] || '';
     if (!rawL3Milestones.trim()) return;
 
@@ -112,20 +112,38 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .map(line => line.trim())
       .filter(Boolean);
 
-    const outgoingConnections = timelineBuilder.unifiedConnections.filter(conn => conn.direction === 'outgoing');
+    // Helper om veilig het jaartal uit een DD-MM-YYYY of YYYY string te vissen
+    const extractYear = (dateStr: string | undefined): number | null => {
+      if (!dateStr) return null;
+      const clean = dateStr.trim();
+      // Check eerst of het eindigt op een 4-cijferig jaar (DD-MM-YYYY)
+      const ddmmyyyyMatch = clean.match(/\d{2}-\d{2}-(\d{4})/);
+      if (ddmmyyyyMatch) return parseInt(ddmmyyyyMatch[1], 10);
+      // Check of het begint met een 4-cijferig jaar (YYYY)
+      const yyyyMatch = clean.match(/^(\d{4})/);
+      if (yyyyMatch) return parseInt(yyyyMatch[1], 10);
+      return null;
+    };
 
-    outgoingConnections.forEach(conn => {
+    // We mappen direct over de localConnections state om de wijzigingen synchroon toe te passen
+    const updatedLocalConnections = timelineBuilder.localConnections.map(conn => {
       const currentRelationText = formatMilestonesToText(conn.metadata?.milestones);
-      if (currentRelationText.trim().length > 0) return;
+      
+      // Safe-Sync: Sla relaties over waar al handmatig milestones zijn ingevuld
+      if (currentRelationText.trim().length > 0) return conn;
 
-      const startYear = conn.startDate ? parseInt(conn.startDate, 10) : null;
-      if (!startYear || isNaN(startYear)) return;
+      // Pak de datums via onze nieuwe extractYear helper
+      const startYear = extractYear(conn.metadata?.startDate);
+      if (!startYear || isNaN(startYear)) return conn;
 
       const currentYear = 2026;
-      const endYear = conn.endDate && !conn.endDate.toLowerCase().includes('pres')
-        ? parseInt(conn.endDate, 10)
+      const endYear = conn.metadata?.endDate && !conn.metadata.endDate.toLowerCase().includes('pres')
+        ? extractYear(conn.metadata.endDate)
         : currentYear;
 
+      if (!endYear || isNaN(endYear)) return conn;
+
+      // Filter milestones die chronologisch binnen de actieve periode vallen
       const matchedMilestones = milestoneLines.filter(line => {
         const yearMatch = line.match(/^(\d{4})/) || line.match(/\d{2}-\d{2}-(\d{4})/);
         if (!yearMatch) return false;
@@ -136,15 +154,24 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
 
       if (matchedMilestones.length > 0) {
         const updatedText = matchedMilestones.join('\n');
+        
+        // Converteer de platte tekst direct naar de vereiste [{date, title}] object-structuur
+        const parsedMilestones = parseAdminMilestones(updatedText);
 
-        timelineBuilder.handleConnectionMetadataChange(
-          conn.id,
-          conn.direction,
-          'milestones',
-          updatedText as unknown as Parameters<typeof timelineBuilder.handleConnectionMetadataChange>[3]
-        );
+        return {
+          ...conn,
+          metadata: {
+            ...conn.metadata,
+            milestones: parsedMilestones
+          }
+        };
       }
+
+      return conn;
     });
+
+    // Update de state in één klap! React merkt de nieuwe array-referentie op en vult direct de velden
+    timelineBuilder.setLocalConnections(updatedLocalConnections);
   };
 
   useEffect(() => {
