@@ -172,29 +172,21 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
               <h2 className={styles.sectionHeading}>{'Roster Timeline'}</h2>
 
               <div className={styles.timelineContainer}>
-                {/* Tijdlijn Jaren Header */}
+                {/* Tijdlijn Jaren Header met Ticks en Labels */}
                 <div className={styles.timelineHeaderRow}>
                   <div className={styles.timelineMemberStickyLabel} />
-                  <div className={styles.timelineBarsArea} style={{ height: '24px' }}>
-                    {memberTimeline.yearsScale.map(year => {
+                  <div className={styles.timelineBarsArea} style={{ height: '30px' }}>
+                    {memberTimeline.yearsScale.map((year, index) => {
                       const offsetPercent = memberTimeline.totalTimeRange > 0
                         ? ((year - memberTimeline.minTimelineStart) / memberTimeline.totalTimeRange) * 100
                         : 0;
 
-                      if (offsetPercent < -1 || offsetPercent > 101) return null;
+                      const showLabel = index % 5 === 0 || index === 0 || index === memberTimeline.yearsScale.length - 1;
 
                       return (
-                        <div
-                          key={year}
-                          className={styles.timelineYearScaleLabel}
-                          style={{
-                            position: 'absolute',
-                            left: `${offsetPercent}%`,
-                            transform: 'translateX(-50%)',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {year}
+                        <div key={year} style={{ position: 'absolute', left: `${offsetPercent}%`, transform: 'translateX(-50%)' }}>
+                          <div className={styles.timelineTick} />
+                          {showLabel && <div className={styles.timelineYearLabel}>{year}</div>}
                         </div>
                       );
                     })}
@@ -203,13 +195,10 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
 
                 {/* Tijdlijn Rijen */}
                 <div className={styles.timelineRowsStack}>
-                  {/* DE GLOBALE DOORLOPENDE TODAY LIJN */}
                   {globalTodayMarker?.show && (
                     <div
                       className={styles.timelineGlobalTodayLine}
-                      style={{
-                        left: `calc(240px + (100% - 240px) * (${globalTodayMarker.offset} / 100))`
-                      }}
+                      style={{ left: `calc(240px + (100% - 240px) * (${globalTodayMarker.offset} / 100))` }}
                     >
                       <span className={styles.todayMarkerLabel}>Today</span>
                     </div>
@@ -237,62 +226,21 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                         </div>
 
                         <div className={styles.timelineBarsArea}>
-                          {/* Verticale achtergrond-stippellijnen op exacte jaargrenzen */}
                           {memberTimeline.yearsScale.map(year => {
                             const lineOffsetPercent = memberTimeline.totalTimeRange > 0
                               ? ((year - memberTimeline.minTimelineStart) / memberTimeline.totalTimeRange) * 100
                               : 0;
-
                             if (lineOffsetPercent < 0 || lineOffsetPercent > 100) return null;
-
-                            return (
-                              <div
-                                key={year}
-                                className={styles.timelineGridLine}
-                                style={{
-                                  position: 'absolute',
-                                  left: `${lineOffsetPercent}%`,
-                                  top: 0,
-                                  bottom: 0,
-                                  width: '1px',
-                                  pointerEvents: 'none'
-                                }}
-                              />
-                            );
+                            return <div key={year} className={styles.timelineGridLine} style={{ position: 'absolute', left: `${lineOffsetPercent}%`, top: 0, bottom: 0, width: '1px', pointerEvents: 'none' }} />;
                           })}
 
-                          {/* De gekleurde actieve balk */}
-                          <div
-                            className={`${styles.timelineDataBar} ${rowData.isFormer ? styles.timelineBarFormer : styles.timelineBarActive}`}
-                            style={rowData.barStyle}
-                          >
-                            <span className={styles.barInsideLabel}>
-                              {rowData.isFormer ? 'Former' : 'Active'}
-                            </span>
-
-                            {/*  Hier mappen we de afwezigheids-badges over de balk heen */}
-                            {rowData.excludedPeriods && rowData.excludedPeriods.map((period, pIdx) => {
-                              return (
-                                <div
-                                  key={pIdx}
-                                  className={styles.timelineExcludedBadge}
-                                  style={{
-                                    position: 'absolute',
-                                    left: period.left,
-                                    width: period.width,
-                                    top: 0,
-                                    bottom: 0
-                                  }}
-                                  title={period.reason || "Hiatus / Inactive"}
-                                >
-                                  {period.reason && (
-                                    <span className={styles.excludedReasonText}>
-                                      {period.reason}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
+                          <div className={`${styles.timelineDataBar} ${rowData.isFormer ? styles.timelineBarFormer : styles.timelineBarActive}`} style={rowData.barStyle}>
+                            <span className={styles.barInsideLabel}>{rowData.isFormer ? 'Former' : 'Active'}</span>
+                            {rowData.excludedPeriods && rowData.excludedPeriods.map((period, pIdx) => (
+                              <div key={pIdx} className={styles.timelineExcludedBadge} style={{ position: 'absolute', left: period.left, width: period.width, top: 0, bottom: 0 }} title={period.reason || "Hiatus / Inactive"}>
+                                {period.reason && <span className={styles.excludedReasonText}>{period.reason}</span>}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -303,10 +251,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
 
               {hasMoreThanMax && (
                 <div className={styles.viewMoreContainer}>
-                  <button
-                    className={styles.viewMoreBtn}
-                    onClick={() => setIsExpanded(!isExpanded)}
-                  >
+                  <button className={styles.viewMoreBtn} onClick={() => setIsExpanded(!isExpanded)}>
                     {isExpanded ? 'View Less' : `View More (+${targetMembersList.length - visibleMembersCount})`}
                   </button>
                 </div>
@@ -325,37 +270,25 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                     <div className={styles.mediaGrid}>
                       {galleryItems.map((item) => {
                         if (item.isPlaceholder) {
-                          const placeholderSizeClass = item.itemClassKey === 'horizontalImageItem'
-                            ? styles.horizontalImageItem
-                            : styles.imageItem;
-
+                          const placeholderSizeClass = item.itemClassKey === 'horizontalImageItem' ? styles.horizontalImageItem : styles.imageItem;
                           return (
                             <div key={item.file} className={`${styles.decorativePlaceholder} ${placeholderSizeClass}`}>
                               <div className={styles.placeholderInner}>
                                 <span className={styles.placeholderLabel}>{entity.name}</span>
-                                <span className={styles.placeholderSub}>
-                                  {theme.labels[sectionKey] ?? sectionKey}
-                                </span>
+                                <span className={styles.placeholderSub}>{theme.labels[sectionKey] ?? sectionKey}</span>
                               </div>
                             </div>
                           );
                         }
-
                         const isHorizontal = item.itemClassKey !== 'imageItem';
                         const itemLayoutClass = isHorizontal ? styles.horizontalImageItem : styles.imageItem;
                         const mediaSourcePath = item.file.startsWith('http') ? item.file : `/${item.file}`;
-
                         return (
                           <div key={item.file} className={`${styles.mediaItem} ${itemLayoutClass}`}>
                             {item.type === 'image' ? (
                               <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
                             ) : item.type === 'video-file' ? (
-                              <video
-                                src={mediaSourcePath}
-                                controls
-                                preload="metadata"
-                                onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
-                              />
+                              <video src={mediaSourcePath} controls preload="metadata" onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)} />
                             ) : (
                               <iframe src={mediaSourcePath} title={`${sectionKey}-${item.file}`} allowFullScreen />
                             )}
@@ -377,32 +310,16 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                   <h2 className={styles.sectionHeading}>{theme.labels.l3 ?? 'Organizations'}</h2>
                   <div className={styles.teammatesGrid}>
                     {relatedL3s.map((child) => {
-                      const isDisbanded = ['disbanded', 'inactive', 'retired', 'historical'].includes(
-                        (child.status || '').toLowerCase().trim()
-                      ) || child.metadata?.groupStatus === 'disbanded' || child.metadata?.status === 'disbanded';
-
+                      const isDisbanded = ['disbanded', 'inactive', 'retired', 'historical'].includes((child.status || '').toLowerCase().trim()) || child.metadata?.groupStatus === 'disbanded' || child.metadata?.status === 'disbanded';
                       return (
-                        <div
-                          key={child.id}
-                          className={`${styles.teammateCardWrapper} ${isDisbanded ? styles.isFormerTeammate : ''}`}
-                          onClick={() => onNavigate(child.id, 'l3')}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <EntityCard
-                            entity={child}
-                            activeKey="l3"
-                            theme={theme}
-                            labels={theme.labels as Record<string, string>}
-                            organization={entity}
-                            customLabel={theme.labels.l2 ?? 'Label'}
-                          />
+                        <div key={child.id} className={`${styles.teammateCardWrapper} ${isDisbanded ? styles.isFormerTeammate : ''}`} onClick={() => onNavigate(child.id, 'l3')} style={{ cursor: 'pointer' }}>
+                          <EntityCard entity={child} activeKey="l3" theme={theme} labels={theme.labels as Record<string, string>} organization={entity} customLabel={theme.labels.l2 ?? 'Label'} />
                         </div>
                       );
                     })}
                   </div>
                 </section>
               )}
-
               {relatedL4s.length > 0 && activeLayer !== 'l3' && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l4 ?? 'Endpoints'}</h2>
@@ -410,57 +327,28 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                     {displayedMembers.map((child) => {
                       const isFormer = child.metadata?.groupStatus === 'former' || child.metadata?.status === 'former';
                       return (
-                        <div
-                          key={child.id}
-                          className={`${styles.teammateCardWrapper} ${isFormer ? styles.isFormerTeammate : ''}`}
-                          onClick={() => onNavigate(child.id, 'l4')}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <EntityCard
-                            entity={child}
-                            activeKey="l4"
-                            theme={theme}
-                            labels={theme.labels as Record<string, string>}
-                            organization={entity}
-                            customLabel={theme.labels.l3 ?? 'Group'}
-                          />
+                        <div key={child.id} className={`${styles.teammateCardWrapper} ${isFormer ? styles.isFormerTeammate : ''}`} onClick={() => onNavigate(child.id, 'l4')} style={{ cursor: 'pointer' }}>
+                          <EntityCard entity={child} activeKey="l4" theme={theme} labels={theme.labels as Record<string, string>} organization={entity} customLabel={theme.labels.l3 ?? 'Group'} />
                         </div>
                       );
                     })}
                   </div>
-
                   {hasMoreThanMax && (
                     <div className={styles.viewMoreContainer}>
-                      <button
-                        className={styles.viewMoreBtn}
-                        onClick={() => setIsExpanded(!isExpanded)}
-                      >
+                      <button className={styles.viewMoreBtn} onClick={() => setIsExpanded(!isExpanded)}>
                         {isExpanded ? 'View Less' : `View More (+${targetMembersList.length - visibleMembersCount})`}
                       </button>
                     </div>
                   )}
                 </section>
               )}
-
               {relatedL2s.length > 0 && (
                 <section className={styles.teammatesSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels.l2 ?? 'Sub-layers'}</h2>
                   <div className={styles.teammatesGrid}>
                     {relatedL2s.map((child) => (
-                      <div
-                        key={child.id}
-                        className={styles.teammateCardWrapper}
-                        onClick={() => onNavigate(child.id, 'l2')}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <EntityCard
-                          entity={child}
-                          activeKey="l2"
-                          theme={theme}
-                          labels={theme.labels as Record<string, string>}
-                          organization={entity}
-                          customLabel={theme.labels.l1 ?? 'Company'}
-                        />
+                      <div key={child.id} className={styles.teammateCardWrapper} onClick={() => onNavigate(child.id, 'l2')} style={{ cursor: 'pointer' }}>
+                        <EntityCard entity={child} activeKey="l2" theme={theme} labels={theme.labels as Record<string, string>} organization={entity} customLabel={theme.labels.l1 ?? 'Company'} />
                       </div>
                     ))}
                   </div>
@@ -468,11 +356,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
               )}
             </>
           ) : (
-            !hasMedia && (
-              <div className={styles.emptyMediaContainer}>
-                <h3>No data available</h3>
-              </div>
-            )
+            !hasMedia && <div className={styles.emptyMediaContainer}><h3>No data available</h3></div>
           )}
         </main>
       </div>

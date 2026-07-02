@@ -42,7 +42,7 @@ export interface MemberTimelineRow {
 interface ExcludedPeriod {
   start: string;
   end: string;
-  reason?: string; // Nieuw: optionele reden meegegeven uit de backend/admin
+  reason?: string; 
 }
 
 interface TimelineConnectionMeta {
@@ -53,9 +53,9 @@ interface TimelineConnectionMeta {
   excludedPeriods?: ExcludedPeriod[];
 }
 
-// ==========================================================================
-// PURE UTILITY FUNCTIONS (Data Translators)
-// ==========================================================================
+/**
+ * Resolves the structural media classification key based on resource URI suffix or platform signature.
+ */
 const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   const lowerCaseFile = file.toLowerCase();
   if (lowerCaseFile.includes('youtube.com') || lowerCaseFile.includes('youtu.be')) return 'video-embed';
@@ -63,11 +63,17 @@ const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   return 'image';
 };
 
+/**
+ * Checks whether an asset string pointer contains a valid path structure.
+ */
 const isStringValid = (url: string): boolean => {
   const cleaned = url.trim().toLowerCase();
   return cleaned !== "" && cleaned !== "/placeholder.png" && cleaned !== "placeholder.png";
 };
 
+/**
+ * Calculates responsive media dimension metadata offsets used to define grid container allocation blocks.
+ */
 const mapMediaItemToGridSpace = (
   file: string,
   mediaDimensions: Record<string, boolean>
@@ -94,6 +100,9 @@ const mapMediaItemToGridSpace = (
   return { file, type: mediaType, itemClassKey, spanSpaces: gridSpanSpaces };
 };
 
+/**
+ * Injects placeholder item records to preserve layout alignment and fill spatial gaps in the flex grid.
+ */
 const fillRowGapsWithPlaceholders = (
   structuredRowItems: PreparedMediaItem[],
   totalAssignedSpaces: number,
@@ -113,14 +122,16 @@ const fillRowGapsWithPlaceholders = (
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
+/**
+ * Converts dynamic date string fragments safely into decimal representations for linear alignment.
+ */
 const extractYearDecimal = (dateStr?: string): number => {
   if (!dateStr) return new Date().getFullYear();
 
-  // Gecorrigeerd: [-\/] is veranderd naar [-/] (geen escape meer nodig)
   const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (ddmmyyyyMatch) {
     const day = parseInt(ddmmyyyyMatch[1], 10);
-    const month = parseInt(ddmmyyyyMatch[2], 10) - 1; // JS maanden zijn 0-indexed
+    const month = parseInt(ddmmyyyyMatch[2], 10) - 1; 
     const year = parseInt(ddmmyyyyMatch[3], 10);
     
     const totalDaysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
@@ -142,9 +153,10 @@ const extractYearDecimal = (dateStr?: string): number => {
   return match ? parseInt(match[0], 10) : new Date().getFullYear();
 };
 
-// ==========================================================================
-// MAIN CONTROLLER COMPONENT
-// ==========================================================================
+/**
+ * High-level orchestration component that normalizes cross-tier group hierarchies, 
+ * renders media grids, and builds absolute chronological team tracking grids.
+ */
 export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
   const { id, themeName } = useParams<{ id: string; themeName: string }>();
   const navigate = useNavigate();
@@ -322,7 +334,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [id, theme.entities]);
 
-  // --- MEMBER TIMELINE DATA GENERATOR ---
   const memberTimelineData = useMemo(() => {
     if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
       return null;
@@ -381,9 +392,8 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         const gradientParts: string[] = [];
         let lastStopPercent = 0;
 
-        // Kleuren voor actieve stukken en de break stukken (Gearceerd/Gedimd grijs)
         const activeChunkColor = isFormer ? 'color-mix(in srgb, var(--secondary), transparent 50%)' : 'var(--primary)';
-        const breakChunkColor = 'rgba(100, 116, 139, 0.25)'; // Subtiel gedimd grijs, ideaal voor CSS stripes erachter
+        const breakChunkColor = 'rgba(100, 116, 139, 0.25)'; 
 
         const sortedPeriods = [...excludedPeriods]
           .map(p => ({
@@ -401,15 +411,12 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
             const cleanStart = Math.max(0, breakStartPercent);
             const cleanEnd = Math.min(100, breakEndPercent);
 
-            // 1. Normaal actief stuk tot aan de break
             gradientParts.push(`${activeChunkColor} ${lastStopPercent}%`);
             gradientParts.push(`${activeChunkColor} ${cleanStart}%`);
 
-            // 2. Ingekleurd break-stuk (In plaats van transparent)
             gradientParts.push(`${breakChunkColor} ${cleanStart}%`);
             gradientParts.push(`${breakChunkColor} ${cleanEnd}%`);
 
-            // Sla de posities op voor de HTML-tekst overlay
             uiExcludedPeriods.push({
               left: `${cleanStart}%`,
               width: `${cleanEnd - cleanStart}%`,
@@ -420,7 +427,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
           }
         });
 
-        // 3. Laatste actieve chunk
         if (lastStopPercent < 100) {
           gradientParts.push(`${activeChunkColor} ${lastStopPercent}%`);
           gradientParts.push(`${activeChunkColor} ${100}%`);
@@ -439,7 +445,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
         endDate: connectionMeta?.endDate || '',
         status: normalizedStatus,
         isFormer,
-        excludedPeriods: uiExcludedPeriods, // Geef de berekende posities + redenen mee aan de render component
+        excludedPeriods: uiExcludedPeriods, 
         barStyle: {
           left: `${Math.max(0, Math.min(100, leftPercent))}%`,
           width: `${Math.max(0.5, Math.min(100 - leftPercent, widthPercent))}%`,
@@ -471,6 +477,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     };
   }, [structureData]);
 
+  /**
+   * Evaluates system configurations and directs routing to specific detail lists or summary cards.
+   */
   const handleNavigation = useCallback((targetId: string, layer: "l1" | "l2" | "l3" | "l4") => {
     const isL4 = layer === 'l4';
     const isL3AsProfile = (layer === 'l3' && structureData?.relatedL4s.length === 0 && structureData?.activeLayer === 'l2');
@@ -478,6 +487,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     navigate(`/${themeName}/${targetView}/${targetId}`);
   }, [navigate, themeName, structureData]);
 
+  /**
+   * Sorts and packs associated string image pathways into multi-span asset presentation categories.
+   */
   const preparedMediaSections = useMemo(() => {
     const entityImages = structureData?.targetEntity.image as EntityImages | undefined;
     if (!structureData?.targetEntity || !entityImages) return {};
@@ -523,6 +535,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     return organizedSections;
   }, [mediaDimensions, structureData]);
 
+  /**
+   * Fallback evaluation layer verifying asset path parameters before committing image layouts to viewports.
+   */
   const assets = useMemo(() => {
     if (!structureData?.targetEntity) return null;
     const entityImages = structureData.targetEntity.image as EntityImages | undefined;
@@ -536,6 +551,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     return { profileCardImageUrl, heroBannerImageUrl, hasProfileCard, hasHeroBanner, shouldShowHeroSection };
   }, [structureData, profileImageError, heroImageError]);
 
+  /**
+   * Selects explicit header text structures based on localization schemas configuration flags.
+   */
   const sidebarSubLabel = useMemo(() => {
     if (!structureData) return '';
     const { activeLayer } = structureData;
@@ -548,6 +566,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
           : (theme.labels[activeLayer] ?? activeLayer);
   }, [structureData, theme.labels]);
 
+  /**
+   * Groups primitives inside the object payload, dropping non-renderable nested parameters.
+   */
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!structureData?.targetEntity?.metadata) return [];
     return Object.entries(structureData.targetEntity.metadata)

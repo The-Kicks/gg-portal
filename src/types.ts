@@ -1,40 +1,34 @@
 import type { ThemeGameSettings } from './core/gamesConfig';
-/**
- * Identifiers for the available games within the portal.
- */
+
 export type GameID = "guesswho" | "sorter" | "blindranking";
 
-
-/**
- * Core identifiers for the organizational layers.
- * Fully dynamic to support 2, 3, 4, 5 or more layers seamlessly.
- */
 export type LayerKey = "l1" | "l2" | "l3" | "l4" | "l5" | string;
 
 /**
- * Structural images for any entity card or profile banner.
+ * Defines the structured image assets required for entity visualization,
+ * supporting both standard overview grids and wide profile banners.
  */
 export interface EntityImages {
-  profileCard: string;    // Square/vertical image for overview grids
-  heroBanner: string;     // Wide layout background banner for profiles
+  profileCard: string;
+  heroBanner: string;
   [themeKey: string]: string | string[] | undefined;
 }
 
 /**
- * Connection Metadata represents the timeline relationship between two entities.
+ * Represents the historical and relational timeline metadata linking two distinct entities.
  */
 export interface ConnectionMetadata {
-  role?: string;             // e.g., "driver", "soloist", "main-vocalist", "midfielder"
+  role?: string;
   status: "active" | "former" | "inactive" | string;
-  startDate?: string;        // e.g., "2008" or "2023-04-12"
-  endDate?: string;          // null/undefined means ongoing active connection
+  startDate?: string;
+  endDate?: string;
   excludedPeriods?: string;
-  hideFromGrid?: boolean;    // Manual override to hide an entry from group layouts
+  hideFromGrid?: boolean;
   [key: string]: unknown;
 }
 
 /**
- * The fundamental data unit for any entity in the system.
+ * The foundational data structure representing a core node within the relational graph database.
  */
 export interface BaseEntity {
   id: string;
@@ -48,15 +42,15 @@ export interface BaseEntity {
 }
 
 /**
- * Extended entity interface including hydrated relational graph data from Prisma.
+ * An extended entity model that encapsulates fully populated incoming and outgoing graph relationships.
  */
 export interface HydratedEntity extends BaseEntity {
-  connections?: HydratedEntityConnection[];       // Outgoing connections (e.g., Driver -> Team)
-  targetConnections?: HydratedEntityConnection[]; // Incoming connections (e.g., Team -> Drivers)
+  connections?: HydratedEntityConnection[];
+  targetConnections?: HydratedEntityConnection[];
 }
 
 /**
- * Connection data populated with populated entity references.
+ * Represents a fully resolved structural bridge between a source entity and a target entity.
  */
 export interface HydratedEntityConnection {
   id: number;
@@ -65,17 +59,17 @@ export interface HydratedEntityConnection {
   targetEntityId: string;
   metadata: ConnectionMetadata;
   sourceEntity?: BaseEntity;
-  targetEntity?: BaseEntity; // Heavily used to track what group/label this link connects to
+  targetEntity?: BaseEntity;
 }
 
 /**
- * Configuration for how metadata is mapped to the UI components.
+ * Configuration schema dictating how dynamic entity metadata properties map to UI components and alert statuses.
  */
 export interface MetaDataStandard {
-  badgeKey: string;      // Metadata key to show as a badge (e.g., "Position")
-  subtitleKey: string;   // Metadata key to show as a subtitle (e.g., "Nationality")
-  gridKeys: string[];    // List of metadata keys to display in the data grid 
-  mediaKeys: string[];   // List of media keys that an entity could have defined per theme
+  badgeKey: string;
+  subtitleKey: string;
+  gridKeys: string[];
+  mediaKeys: string[];
 
   statusTriggers?: {
     former?: { key: string; value: string };
@@ -86,7 +80,8 @@ export interface MetaDataStandard {
 }
 
 /**
- * The master configuration for a Portal Theme.
+ * The master configuration schema encompassing visual branding configurations, 
+ * layer setups, game settings, and associated graph datasets for a portal theme.
  */
 export interface Theme {
   id: string;
@@ -99,14 +94,12 @@ export interface Theme {
   orgLayer: LayerKey;
   miniViewLayers: LayerKey[];
 
-  /* --- Visual Branding (Light Mode) --- */
   primaryColor: string;
   secondaryColor: string;
   backgroundColor: string;
   navbarColor: string;
   textColor: string;
 
-  /* --- Visual Branding (Dark Mode) --- */
   darkPrimaryColor?: string;
   darkSecondaryColor?: string;
   darkBackgroundColor?: string;
@@ -117,6 +110,5 @@ export interface Theme {
   gameSettings?: ThemeGameSettings;
   navbarItems: string[];
 
-  /** The complete dataset containing all hydrated nodes for this theme graph */
   entities?: HydratedEntity[];
 }

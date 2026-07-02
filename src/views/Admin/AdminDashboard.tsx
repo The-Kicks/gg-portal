@@ -26,11 +26,19 @@ interface TableRow {
   rowId: string;
 }
 
+/**
+ * Main administration control panel dashboard component that exposes administrative utility links,
+ * dynamic grid filtering systems, and structural schema overview visualizations for existing graph nodes.
+ */
 export const AdminDashboard: React.FC<Props> = ({ theme }) => {
   const { themeName } = useParams<{ themeName: string }>();
   const navigate = useNavigate();
   const [filterType, setFilterType] = useState<string>('all');
 
+  /**
+   * Recurses through the incoming and outgoing relational graph edge data models to resolve, 
+   * identify, and extract the immediate parent context metadata bindings for a given entity.
+   */
   const resolveParentAssignments = (entity: ThemeEntity, allEntities: ThemeEntity[]): Array<{ name: string; id: string }> => {
     const currentLayer = entity.type.toLowerCase();
 
@@ -55,10 +63,8 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
     const foundParents: Array<{ name: string; id: string }> = [];
 
-    // We lopen door de hiërarchie heen (eerst zoeken naar l3, dan l2, etc.)
     for (const targetLayer of targetLayers) {
       for (const conn of allConnections) {
-        // Check directe parent info in de connectie
         if (conn.sourceEntity?.type.toLowerCase() === targetLayer && conn.sourceEntity.id) {
           if (!foundParents.some(p => p.id === conn.sourceEntity?.id)) {
             foundParents.push({ name: conn.sourceEntity.name, id: conn.sourceEntity.id });
@@ -70,7 +76,6 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
           }
         }
 
-        // Check via ID's in de database-entiteitenlijst
         const possibleIds = [conn.entityId, conn.sourceEntityId, conn.targetEntityId, conn.id].filter(Boolean);
         for (const id of possibleIds) {
           const linkedEntity = allEntities.find(e => e.id === id);
@@ -82,14 +87,16 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
         }
       }
 
-      // Belangrijk: als we op het hoogst mogelijke niveau (bijv. L3 voor een L4) al 
-      // ouders hebben gevonden, stoppen we, zodat we geen L2-labels als directe ouders tonen.
       if (foundParents.length > 0) break;
     }
 
     return foundParents.length > 0 ? foundParents : [{ name: '-', id: '-' }];
   };
 
+  /**
+   * Memoized preprocessing pipeline that filters raw graph nodes based on active user constraints, 
+   * flat-maps multiple parent assignments into discrete rows, and multi-sorts them by structural tier, parent, and name.
+   */
   const sortedAndFilteredRows = useMemo(() => {
     const allEntities = theme?.entities || [];
 
@@ -97,7 +104,6 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
       filterType === 'all' || e.type.toLowerCase() === filterType.toLowerCase()
     );
 
-    // Gebruik flatMap om entiteiten met meerdere relaties op te splitsen in unieke rijen
     const rows: TableRow[] = baseEntities.flatMap(entity => {
       const parents = resolveParentAssignments(entity, allEntities);
 
@@ -105,7 +111,6 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
         entity,
         displayParent: parent.name,
         displayParentId: parent.id,
-        // Genereer een gegarandeerd unieke rowId voor React's key rendering
         rowId: `${entity.id}-${parent.id}`
       }));
     });
@@ -122,15 +127,12 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
       const parentA = a.displayParent;
       const parentB = b.displayParent;
 
-      // Zorg dat entiteiten zonder parent netjes onderaan hun tier-sectie bungelen
       if (parentA === '-' && parentB !== '-') return 1;
       if (parentB === '-' && parentA !== '-') return -1;
 
-      // Sorteer alfabetisch op groepsnaam (Parent)
       const parentCompare = parentA.localeCompare(parentB);
       if (parentCompare !== 0) return parentCompare;
 
-      // Als de groep hetzelfde is, sorteer alfabetisch op idol/entiteit naam
       return a.entity.name.localeCompare(b.entity.name);
     });
   }, [theme?.entities, filterType]);

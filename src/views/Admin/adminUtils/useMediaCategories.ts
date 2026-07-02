@@ -11,7 +11,6 @@ export const buildImageInputs = (
 ): Record<string, string> => {
   const imgInputs: Record<string, string> = {};
   
-  // Garandeer dat verplichte velden altijd een lege string hebben als fallback
   CORE_IMAGE_FIELDS.forEach(f => { imgInputs[f] = ''; });
 
   if (entity?.image) {

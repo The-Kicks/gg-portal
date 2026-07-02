@@ -54,7 +54,6 @@ export function AdminThemeManager({ loadedThemes, onRefresh }: AdminThemeManager
         blindRankingCustomInput, setBlindRankingCustomInput, blindRankingDisabled, handleBlindRankingDisabledToggle
     } = useAdminTheme(onRefresh, themeName);
 
-    // Als we niet aan het editen zijn, render de tabel direct
     if (!editingTheme) {
         return (
             <div className={styles.container}>

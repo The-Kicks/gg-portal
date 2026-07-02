@@ -23,7 +23,7 @@ interface Props {
  * Checks if a target entity ID is a parent or ancestor of a given entity
  * by searching top-down through the connections defined on the parent entities.
  *
- * @param currentEntityId The ID of the entity we want to trace upwards (e.g. an L4 idol ID)
+ * @param currentEntityId The ID of the entity we want to trace upwards (e.g. an L4 ID)
  * @param targetL1Id The ID of the L1 category we want to match against
  * @param allEntities The entire hydrated graph from the theme dataset
  * @param depth Safety guard to prevent infinite traversal loops
@@ -96,7 +96,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
     return allEntities.filter(e => e.type.toLowerCase() === 'l1');
   }, [allEntities]);
 
-  // --- States ---
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [shuffledEntities, setShuffledEntities] = useState<HydratedEntity[]>([]);
@@ -107,7 +106,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
   const maxSlots = shuffledEntities.length;
   const currentEntity = shuffledEntities[currentIndex] as HydratedEntity | undefined;
 
-  // Handle scroll lock style injection when game status changes
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
     if (isPlaying && appContainerEl) {
@@ -262,7 +260,6 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
     const firstEntity = randomized[0];
     const startingMediaIndex = getInitialMediaIndex(firstEntity, categoryName);
 
-    // Force window back to absolute top before applying 100vh lock container layout
     window.scrollTo({ top: 0, behavior: 'instant' });
 
     setShuffledEntities(randomized);

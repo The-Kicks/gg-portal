@@ -7,66 +7,48 @@ export interface GuessRow {
   entity: HydratedEntity;
   checks: {
     name: 'correct' | 'incorrect';
-    org: 'correct' | 'incorrect';
+    org: 'correct' | 'partial' | 'incorrect';
     nationality: 'correct' | 'partial' | 'incorrect';
     role: 'correct' | 'partial' | 'incorrect';
     debut: 'correct' | 'incorrect' | 'higher' | 'lower';
     age: 'correct' | 'incorrect' | 'higher' | 'lower';
     height: 'correct' | 'incorrect' | 'higher' | 'lower';
   };
-  arrows: {
-    debut: string;
-    age: string;
-    height: string;
-  };
+  arrows: { debut: string; age: string; height: string; };
   displayOrg: string;
 }
 
-interface Props {
-  theme: GuessWhoTheme;
+interface OrgMetadata {
+  startDate?: string;
+  endDate?: string;
 }
 
-// ============================================================================
-// STANDALONE PURE UTILITY FUNCTIONS 
-// ============================================================================
-
 /**
- * Split strings of arrays op basis van zowel slashes (/) als komma's (,) zonder regex literals
+ * Normalizes multi-value metadata string parameters or nested array references into uniform string lists.
  */
 const parseMetaToCleanArray = (value: unknown): string[] => {
   if (!value) return [];
-  
   const rawString = Array.isArray(value) ? value.join('/') : String(value);
-  
-  return rawString
-    .split(',')
-    .flatMap(v => v.split('/'))
-    .map(v => v.trim().toLowerCase())
-    .filter(Boolean);
+  return rawString.split(',').flatMap(v => v.split('/')).map(v => v.trim().toLowerCase()).filter(Boolean);
 };
 
 /**
- * Evalueert arrays (posities, nationaliteiten) op exact, partial of incorrect
+ * Validates set relationships between input tags to determine structural overlap or identities.
  */
 const evaluateArrayMatch = (guessArr: string[], secretArr: string[]): 'correct' | 'partial' | 'incorrect' => {
   if (guessArr.length === 0 || secretArr.length === 0) {
     return guessArr.length === secretArr.length ? 'correct' : 'incorrect';
   }
-
   const isExact = guessArr.length === secretArr.length && guessArr.every(item => secretArr.includes(item));
   if (isExact) return 'correct';
-
-  const hasMatch = guessArr.some(item => secretArr.includes(item));
-  if (hasMatch) return 'partial';
-
-  return 'incorrect';
+  return guessArr.some(item => secretArr.includes(item)) ? 'partial' : 'incorrect';
 };
 
+/**
+ * Calculates differences across scalar boundaries to produce direction markers and structural check tags.
+ */
 const evaluateNumericMetric = (guessNum: number, secretNum: number, invertLogic = false) => {
-  if (!guessNum || !secretNum || guessNum === secretNum) {
-    return { check: 'correct' as const, arrow: '' };
-  }
-
+  if (!guessNum || !secretNum || guessNum === secretNum) return { check: 'correct' as const, arrow: '' };
   const isLessThanSecret = guessNum < secretNum;
   return {
     check: (isLessThanSecret ? (invertLogic ? 'lower' : 'higher') : (invertLogic ? 'higher' : 'lower')) as 'higher' | 'lower',
@@ -74,11 +56,10 @@ const evaluateNumericMetric = (guessNum: number, secretNum: number, invertLogic 
   };
 };
 
-// ============================================================================
-// REACT COMPONENTS
-// ============================================================================
-
-export const GuessWhoViewPage: React.FC<Props> = ({ theme }) => {
+/**
+ * Main organizational context wrapper that filters down eligible playable entries for the logic matrix.
+ */
+export const GuessWhoViewPage: React.FC<{ theme: GuessWhoTheme }> = ({ theme }) => {
   const playableEntities = useMemo<HydratedEntity[]>(() => {
     if (!theme.entities) return [];
     return theme.entities.filter(e => e.type.toLowerCase() === 'l4');
@@ -87,143 +68,124 @@ export const GuessWhoViewPage: React.FC<Props> = ({ theme }) => {
   return <GuessWhoGameEngine key={theme.id} theme={theme} availableEntities={playableEntities} />;
 };
 
-interface EngineProps {
-  theme: GuessWhoTheme;
-  availableEntities: HydratedEntity[];
-}
+/**
+ * Core runtime execution component managing target parameters, guess matrices, and delta states.
+ */
+const GuessWhoGameEngine: React.FC<{ theme: GuessWhoTheme; availableEntities: HydratedEntity[] }> = ({ theme, availableEntities }) => {
+  const [secretEntity, setSecretEntity] = useState<HydratedEntity | null>(() => 
+    availableEntities.length > 0 ? availableEntities[Math.floor(Math.random() * availableEntities.length)] : null
+  );
 
-const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities }) => {
-  const [secretEntity, setSecretEntity] = useState<HydratedEntity | null>(() => {
-    if (availableEntities.length === 0) return null;
-    return availableEntities[Math.floor(Math.random() * availableEntities.length)];
-  });
-
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [guesses, setGuesses] = useState<GuessRow[]>([]);
-  const [gameOver, setGameOver] = useState<boolean>(false);
-  const [showDropdown, setShowDropdown] = useState<boolean>(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  const startNewGame = useCallback<() => void>(() => {
-    if (availableEntities.length === 0) {
-      setSecretEntity(null);
-      return;
-    }
+  /**
+   * Generates a new random target entity pointer and flushes form history loops.
+   */
+  const startNewGame = useCallback(() => {
     setSecretEntity(availableEntities[Math.floor(Math.random() * availableEntities.length)]);
     setGuesses([]);
     setGameOver(false);
     setSearchQuery('');
   }, [availableEntities]);
 
-  const getOrganizationName = useCallback((entity: HydratedEntity): string => {
+  /**
+   * Builds an indexed timeline of source entity layers sorted cleanly by entry dates.
+   */
+  const getOrganizationDetails = useCallback((entity: HydratedEntity): { names: string[], hasEndDate: boolean[] } => {
     const orgLayerKey = theme.orgLayer || 'l3';
-    const connection = entity.targetConnections?.find(
+    
+    const connections = entity.targetConnections?.filter(
       c => c.sourceEntity?.type.toLowerCase() === orgLayerKey.toLowerCase()
-    );
-    return connection?.sourceEntity?.name || '';
+    ) || [];
+
+    const parseDate = (dateStr?: string): Date => {
+      if (!dateStr || typeof dateStr !== 'string') return new Date(8640000000000000); 
+      const [d, m, y] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
+
+    const sortedConnections = [...connections].sort((a, b) => {
+      const metaA = (a.metadata as OrgMetadata) || {};
+      const metaB = (b.metadata as OrgMetadata) || {};
+      return parseDate(metaA.startDate).getTime() - parseDate(metaB.startDate).getTime();
+    });
+
+    return { 
+      names: sortedConnections.map(c => c.sourceEntity?.name || ''),
+      hasEndDate: sortedConnections.map(c => !!(c.metadata as OrgMetadata)?.endDate)
+    };
   }, [theme.orgLayer]);
 
+  /**
+   * Resolves total lifespan years or target age calculations from structured string inputs.
+   */
   const getAgeFromDateString = useCallback((birthDateStr?: unknown, passingDateStr?: unknown): number => {
     if (typeof birthDateStr !== 'string') return 0;
-
-    const birthParts = birthDateStr.split('-');
-    if (birthParts.length !== 3) return 0;
-
-    const birthDay = parseInt(birthParts[0], 10);
-    const birthMonth = parseInt(birthParts[1], 10) - 1;
-    const birthYear = parseInt(birthParts[2], 10);
-
-    if (isNaN(birthDay) || isNaN(birthMonth) || isNaN(birthYear)) return 0;
-
-    const birthDate = new Date(birthYear, birthMonth, birthDay);
-    
+    const [d, m, y] = birthDateStr.split('-').map(Number);
+    if (!y) return 0;
+    const birthDate = new Date(y, m - 1, d);
     let endDate = new Date();
     if (typeof passingDateStr === 'string') {
-      const passingParts = passingDateStr.split('-');
-      if (passingParts.length === 3) {
-        const pDay = parseInt(passingParts[0], 10);
-        const pMonth = parseInt(passingParts[1], 10) - 1;
-        const pYear = parseInt(passingParts[2], 10);
-        if (!isNaN(pDay) && !isNaN(pMonth) && !isNaN(pYear)) {
-          endDate = new Date(pYear, pMonth, pDay);
-        }
-      }
+      const [pd, pm, py] = passingDateStr.split('-').map(Number);
+      if (py) endDate = new Date(py, pm - 1, pd);
     }
-
     let age = endDate.getFullYear() - birthDate.getFullYear();
-    const monthDiff = endDate.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && endDate.getDate() < birthDate.getDate())) {
-      age--;
-    }
-
+    if (endDate < new Date(endDate.getFullYear(), birthDate.getMonth(), birthDate.getDate())) age--;
     return age;
   }, []);
 
-  const filteredDropdownOptions = useMemo<HydratedEntity[]>(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-
-    const matches: HydratedEntity[] = [];
-    for (const e of availableEntities) {
-      if (matches.length >= 8) break;
-      const isAlreadyGuessed = guesses.some(g => g.entity.id === e.id);
-      if (e.name.toLowerCase().includes(query) && !isAlreadyGuessed) {
-        matches.push(e);
-      }
-    }
-    return matches;
-  }, [searchQuery, availableEntities, guesses]);
-
+  /**
+   * Compares the selected entry record against the target entity parameters to insert a new tracking row.
+   */
   const handleSelectGuess = useCallback((guessedEntity: HydratedEntity): void => {
     if (!secretEntity || gameOver) return;
 
-    const secretOrg = getOrganizationName(secretEntity);
-    const guessOrg = getOrganizationName(guessedEntity);
+    const secretOrgData = getOrganizationDetails(secretEntity);
+    const guessOrgData = getOrganizationDetails(guessedEntity);
+
+    const isExactMatch = secretOrgData.names.length === guessOrgData.names.length && 
+                         secretOrgData.names.every((val, index) => val === guessOrgData.names[index]);
+    const hasPartialMatch = guessOrgData.names.some(name => secretOrgData.names.includes(name));
+    const orgStatus = isExactMatch ? 'correct' : (hasPartialMatch ? 'partial' : 'incorrect');
+
+    const displayOrg = guessOrgData.names.reduce((acc, name, i) => {
+      if (i === 0) return name;
+      const separator = guessOrgData.hasEndDate[i - 1] ? ' → ' : ' - ';
+      return acc + separator + name;
+    }, '');
 
     const sMeta = (secretEntity.metadata || {}) as Record<string, unknown>;
     const gMeta = (guessedEntity.metadata || {}) as Record<string, unknown>;
 
-    const nationalityStatus = evaluateArrayMatch(parseMetaToCleanArray(gMeta.Nationality), parseMetaToCleanArray(sMeta.Nationality));
-    const roleStatus = evaluateArrayMatch(parseMetaToCleanArray(gMeta.Role), parseMetaToCleanArray(sMeta.Role));
-
-    const debutMetric = evaluateNumericMetric(Number(gMeta.DebutYear || 0), Number(sMeta.DebutYear || 0));
-    const ageMetric = evaluateNumericMetric(
-      getAgeFromDateString(gMeta.Birthday, gMeta.PassingDate),
-      getAgeFromDateString(sMeta.Birthday, sMeta.PassingDate)
-    );
-    const heightMetric = evaluateNumericMetric(Number(gMeta.Height || 0), Number(sMeta.Height || 0), true);
-
     const newRow: GuessRow = {
       entity: guessedEntity,
-      displayOrg: guessOrg || 'Independent',
+      displayOrg: displayOrg || 'Independent',
       checks: {
         name: guessedEntity.id === secretEntity.id ? 'correct' : 'incorrect',
-        org: (secretOrg && guessOrg && secretOrg === guessOrg) ? 'correct' : 'incorrect',
-        nationality: nationalityStatus,
-        role: roleStatus,
-        debut: debutMetric.check,
-        age: ageMetric.check,
-        height: heightMetric.check,
+        org: orgStatus,
+        nationality: evaluateArrayMatch(parseMetaToCleanArray(gMeta.Nationality), parseMetaToCleanArray(sMeta.Nationality)),
+        role: evaluateArrayMatch(parseMetaToCleanArray(gMeta.Role), parseMetaToCleanArray(sMeta.Role)),
+        debut: evaluateNumericMetric(Number(gMeta.DebutYear || 0), Number(sMeta.DebutYear || 0)).check,
+        age: evaluateNumericMetric(getAgeFromDateString(gMeta.Birthday, gMeta.PassingDate), getAgeFromDateString(sMeta.Birthday, sMeta.PassingDate)).check,
+        height: evaluateNumericMetric(Number(gMeta.Height || 0), Number(sMeta.Height || 0), true).check,
       },
       arrows: {
-        debut: debutMetric.arrow,
-        age: ageMetric.arrow,
-        height: heightMetric.arrow,
+        debut: evaluateNumericMetric(Number(gMeta.DebutYear || 0), Number(sMeta.DebutYear || 0)).arrow,
+        age: evaluateNumericMetric(getAgeFromDateString(gMeta.Birthday, gMeta.PassingDate), getAgeFromDateString(sMeta.Birthday, sMeta.PassingDate)).arrow,
+        height: evaluateNumericMetric(Number(gMeta.Height || 0), Number(sMeta.Height || 0), true).arrow
       }
     };
 
     setGuesses(prev => [newRow, ...prev]);
     setSearchQuery('');
     setShowDropdown(false);
+    if (guessedEntity.id === secretEntity.id) setGameOver(true);
+  }, [secretEntity, gameOver, getOrganizationDetails, getAgeFromDateString]);
 
-    if (guessedEntity.id === secretEntity.id) {
-      setGameOver(true);
-    }
-  }, [secretEntity, gameOver, getOrganizationName, getAgeFromDateString]);
-
-  if (!secretEntity) {
-    return <div style={{ color: '#fff', padding: '20px' }}>Loading dynamic records...</div>;
-  }
+  if (!secretEntity) return <div>Loading...</div>;
 
   return (
     <GuessWhoView
@@ -233,7 +195,7 @@ const GuessWhoGameEngine: React.FC<EngineProps> = ({ theme, availableEntities })
       guesses={guesses}
       gameOver={gameOver}
       showDropdown={showDropdown}
-      filteredDropdownOptions={filteredDropdownOptions}
+      filteredDropdownOptions={availableEntities.filter(e => e.name.toLowerCase().includes(searchQuery.toLowerCase()) && !guesses.some(g => g.entity.id === e.id)).slice(0, 8)}
       setSearchQuery={setSearchQuery}
       setShowDropdown={setShowDropdown}
       startNewGame={startNewGame}

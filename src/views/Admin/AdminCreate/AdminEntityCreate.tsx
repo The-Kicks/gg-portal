@@ -3,7 +3,6 @@ import type { Theme, HydratedEntity } from '../../../types';
 import { useAdminEntityCreate } from './useAdminEntityCreate';
 import styles from '../AdminGlobal.module.css';
 
-// Fix missing constant errors: Pas deze eventueel aan naar imports uit je echte config
 const CORE_IMAGE_FIELDS: string[] = ['thumbnail', 'banner', 'avatar', 'logo'];
 
 interface Props {
@@ -12,6 +11,10 @@ interface Props {
   onCancel: () => void;
 }
 
+/**
+ * Admin component responsible for orchestrating the entity creation multi-section form,
+ * facilitating structural attribute bindings, layer validation, and custom drag-and-drop media ingestion.
+ */
 export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
   const {
     name,
@@ -46,17 +49,29 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     handleSubmit
   } = useAdminEntityCreate({ theme, onSave });
 
+  /**
+   * Generates specific style indicator class name mappings based on unique 
+   * identifier database availability statuses.
+   */
   const getInputValidationClass = (): string => {
     if (idStatus === 'available') return styles.inputAvailable;
     if (idStatus === 'taken') return styles.inputTaken;
     return '';
   };
 
+  /**
+   * Assesses an incoming media reference string to check if it points to a video container format
+   * or a standard cloud video-sharing endpoint.
+   */
   const isVideoUrl = (url: string): boolean => {
     const lowerUrl = url.toLowerCase();
     return lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.webm') || lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be');
   };
 
+  /**
+   * Extracts distinct unique route components from external link signatures to format standard
+   * embedded iframe player locations for video streaming frames.
+   */
   const getVideoEmbedUrl = (url: string): string | null => {
     const lowerUrl = url.toLowerCase();
     if (lowerUrl.includes('youtube.com/watch')) {
@@ -70,6 +85,10 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     return null;
   };
 
+  /**
+   * Splits text inputs by character boundaries, normalizes legacy video links, 
+   * and isolates novel uniform records from existing asset groups.
+   */
   const handleCustomParseAlbum = () => {
     if (!albumInput.trim()) return;
 
@@ -105,10 +124,10 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     setAlbumInput('');
   };
 
-  // ==========================================
-  // SUB-RENDER FUNCTIES
-  // ==========================================
-
+  /**
+   * Conditionally returns a sub-layout interface populated with custom schema constraints 
+   * required by the active architectural tree hierarchy.
+   */
   const renderLayerSpecificMetadata = () => {
     const isL4 = type.toLowerCase() === 'l4';
     const isL3 = type.toLowerCase() === 'l3';
@@ -146,7 +165,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
 
   return (
     <div className={styles.container}>
-      {/* Back to Dashboard Button */}
       <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-start' }}>
         <button 
           type="button" 
@@ -161,7 +179,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
       <div className={styles.formCard}>
         <h2 className={styles.formCardTitle}>Create New Entity Records</h2>
 
-        {/* Core Base Info Grid */}
         <div className={styles.baseInfoGrid}>
           <div>
             <div className={styles.fieldLabel}>
@@ -237,10 +254,8 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         </div>
 
-        {/* Dynamic & Layer Conditional Sections */}
         {renderLayerSpecificMetadata()}
 
-        {/* Dynamic Attributes */}
         <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Theme Properties)</h3>
         <div className={styles.innerSection}>
           {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
@@ -261,7 +276,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
                       <button type="button" onClick={() => handleRemoveMetadataField(key)} className={styles.btnRemove}>Remove</button>
                     </div>
 
-                    {/* 🔥 HIER AANGEPAST: Alleen een dropdown tonen als er triggerValues zijn EN het géén 'status' veld betreft */}
                     {triggerValues && !isStatusKey ? (
                       <select
                         id={`dynamic-select-${key}`}
@@ -299,7 +313,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         </div>
 
-        {/* Media Assets Section */}
         <h3 className={styles.sectionTitle}>Media Assets (Images & Videos)</h3>
         <div className={styles.innerSection}>
           <div style={{ marginBottom: '15px' }}>
@@ -502,7 +515,6 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
           </div>
         </div>
 
-        {/* Footer Actions */}
         <div className={styles.footerActions} style={{ marginTop: '30px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
           <button type="button" onClick={(e) => void handleSubmit(e)} className={`${styles.btn} ${styles.btnPrimary}`} style={{ padding: '12px 24px', fontSize: '16px' }}>Create & Save</button>

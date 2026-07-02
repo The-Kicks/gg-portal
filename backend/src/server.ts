@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 
-// Increase the text/json payload limit to allow large theme graphs or embedded assets
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -95,11 +94,10 @@ interface FullThemeResponse {
     navbarItems: string[];
     labels: Record<string, string | undefined>;
     layerMetadata: Record<string, MetaDataStandard | undefined>;
-    gameSettings: GameSettings; // Combined game settings response for the frontend
+    gameSettings: GameSettings;
     entities: HydratedEntity[];
 }
 
-// Interface om de linter waarschuwing in de GET route op te lossen
 interface VirtualTrackStructure {
     name?: string;
     status?: string;
@@ -108,21 +106,35 @@ interface VirtualTrackStructure {
     milestones?: string;
 }
 
-// --- ROUTES ---
+interface IncomingFrontendConnection {
+    id: string;
+    themeId: string;
+    sourceEntityId: string;
+    targetEntityId: string;
+    metadata: ConnectionMetadata;
+    direction?: string;
+}
 
+type UpdateEntityResponse = { success: boolean; message: string } | { error: string };
+
+/**
+ * Validates that the backend service is up and running.
+ */
 app.get('/api/health', (_req: Request, res: Response) => {
     res.json({ status: "Backend up and running!" });
 });
 
-// --- THEME ROUTES (GET, POST, PUT, DELETE) ---
-
+/**
+ * Retrieves all themes from the database and constructs a completely hydrated 
+ * graph payload for each theme, including related entities, connections, 
+ * game settings, and virtual tracks.
+ */
 app.get('/api/themes', async (_req: Request, res: Response) => {
     try {
         const themes = await prisma.theme.findMany();
         const fullThemesResult: FullThemeResponse[] = [];
 
         for (const theme of themes) {
-            // 1. Fetch data from linked tables
             const dbEntities = await prisma.entity.findMany({
                 where: { themeId: theme.id }
             });
@@ -131,33 +143,26 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 where: { themeId: theme.id }
             });
 
-            // Fetch ALL rows for this theme (e.g., 'guesswho' AND 'blindranking')
             const dbGameSettings = await prisma.gameSetting.findMany({
                 where: { themeId: theme.id }
             });
 
-            // Reconstruct individual rows into a single combined frontend object
             const combinedGameSettings: GameSettings = {};
             dbGameSettings.forEach((setting) => {
                 combinedGameSettings[setting.gameName] = setting.gameSettings as unknown as Record<string, unknown>;
             });
 
-            // 2. Map database records to initial HydratedEntity objects
             const hydratedEntities: HydratedEntity[] = dbEntities.map((e) => {
                 const entityMetadata = (e.metadata || {}) as Record<string, unknown>;
                 const extractedStatus = e.status
                     ? e.status
                     : (typeof entityMetadata.status === 'string' ? entityMetadata.status : 'active');
 
-                // RECONSTRUCTIE VAN VIRTUELE TRACKS VOOR DE FRONTEND
                 const frontendConnections: HydratedEntityConnection[] = [];
 
-                // Als er customTracks in de metadata staan, bouwen we ze om naar connectie-objecten
                 if (Array.isArray(entityMetadata.customTracks)) {
-                    // TYPE-SAFE: track gebruikt nu VirtualTrackStructure i.p.v. any
                     (entityMetadata.customTracks as VirtualTrackStructure[]).forEach((track) => {
                         const trackName = track.name || 'Custom Track';
-                        // Zorg voor een unieke en herkenbare ID die matcht met de frontend (virtual-track:naam)
                         const trackId = `virtual-track:${trackName.toLowerCase().replace(/\s+/g, '-')}`;
 
                         frontendConnections.push({
@@ -170,8 +175,8 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                                 startDate: track.startDate || '',
                                 endDate: track.endDate || '',
                                 milestones: track.milestones || '',
-                                customTargetName: trackName, // Belangrijk voor het tonen van de naam
-                                isNonRelational: true        // Zodat de frontend weet dat dit een track is
+                                customTargetName: trackName,
+                                isNonRelational: true
                             }
                         });
                     });
@@ -186,7 +191,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                     isStandalone: e.isStandalone,
                     image: (e.image || { profileCard: '', heroBanner: '' }) as unknown as EntityImages,
                     metadata: entityMetadata,
-                    connections: frontendConnections, // Vul alvast met de virtuele connecties
+                    connections: frontendConnections,
                     targetConnections: []
                 };
             });
@@ -195,7 +200,6 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 hydratedEntities.map((e) => [e.id, e])
             );
 
-            // 3. Hydrate all edges (connections) between the graph nodes
             for (const conn of dbConnections) {
                 const source = entityMap.get(conn.sourceEntityId);
                 const target = entityMap.get(conn.targetEntityId);
@@ -236,7 +240,6 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 if (target) target.targetConnections.push(hydratedConn);
             }
 
-            // 4. Construct the complete theme payload
             fullThemesResult.push({
                 id: theme.id,
                 title: theme.title,
@@ -269,6 +272,9 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
     }
 });
 
+/**
+ * Checks whether a specific entity exists within the database by its unique identifier.
+ */
 app.get('/api/themes/:themeId/entities/check/:entityId', async (req: Request, res: Response) => {
     const { entityId } = req.params;
     try {
@@ -282,6 +288,10 @@ app.get('/api/themes/:themeId/entities/check/:entityId', async (req: Request, re
     }
 });
 
+/**
+ * Creates a new theme configuration and inserts all related game settings 
+ * within a single atomic database transaction.
+ */
 app.post('/api/themes', async (req: Request, res: Response) => {
     try {
         const {
@@ -291,7 +301,6 @@ app.post('/api/themes', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // Map gameSettings keys (guesswho, blindranking, etc.) to individual creation promises
         const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) =>
             prisma.gameSetting.create({
                 data: {
@@ -325,6 +334,11 @@ app.post('/api/themes', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * Updates an existing theme's layout and settings. To avoid orphaned configuration 
+ * records, it clears previous game configurations and re-inserts current settings 
+ * atomically.
+ */
 app.put('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
@@ -335,7 +349,6 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // To avoid orphan records, clear old settings first and insert current active games fresh inside the transaction
         const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) =>
             prisma.gameSetting.create({
                 data: {
@@ -373,6 +386,10 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * Deletes a specific theme graph configuration along with all related cascading 
+ * game settings within a database transaction.
+ */
 app.delete('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
@@ -388,19 +405,10 @@ app.delete('/api/themes/:id', async (req: Request, res: Response) => {
     }
 });
 
-// --- ENTITY ROUTES (CREATE & UPDATE) ---
-// --- ENTITY ROUTES (CREATE) ---
-
-// Interface voor inkomende connecties vanuit de frontend die mogelijk extra UI-flags bevatten
-interface IncomingFrontendConnection {
-    id: string;
-    themeId: string;
-    sourceEntityId: string;
-    targetEntityId: string;
-    metadata: ConnectionMetadata;
-    direction?: string; // Optionele UI-flag om incoming/outgoing te onderscheiden
-}
-
+/**
+ * Creates a new relational graph entity within a specific theme. It parses virtual 
+ * tracks into metadata fields and bulk inserts legitimate physical relationships.
+ */
 app.post(
     '/api/themes/:themeId/entities',
     async (
@@ -415,10 +423,8 @@ app.post(
         }
 
         try {
-            // Type-safe cast van de connecties naar onze uitgebreide frontend interface
             const safeConnections = (connections || []) as IncomingFrontendConnection[];
 
-            // 1. Filter de virtuele tracks eruit om ze als metadata op te slaan (net als in je PUT route)
             const virtualTracks = safeConnections.filter(conn => {
                 const targetId = conn.targetEntityId || conn.id;
                 return targetId && targetId.startsWith('virtual-track:');
@@ -439,7 +445,6 @@ app.post(
                 customTracks: customTracksData
             };
 
-            // 2. Filter de echte database connecties (sluit incoming & virtuele tracks uit)
             const connectionsToInsert = safeConnections
                 .filter(conn => {
                     const targetId = conn.targetEntityId || conn.id;
@@ -447,14 +452,12 @@ app.post(
                 })
                 .map((conn) => ({
                     themeId,
-                    sourceEntityId: id, // De ID van de nieuw aan te maken entiteit
+                    sourceEntityId: id,
                     targetEntityId: conn.targetEntityId || conn.id,
                     metadata: (conn.metadata || { status: 'active' }) as unknown as Prisma.InputJsonValue
                 }));
 
-          // 3. Voer alles atomair uit binnen een Prisma Transactie
             const [newEntity] = await prisma.$transaction([
-                // Maak de basis entiteit aan
                 prisma.entity.create({
                     data: {
                         id,
@@ -469,14 +472,11 @@ app.post(
                         }
                     }
                 }),
-
-                // Voeg eventuele initiële database-connecties toe
                 prisma.entityConnection.createMany({
                     data: connectionsToInsert
                 })
             ]);
 
-            // Map de database-velden expliciet naar de verwachte BaseEntity structuur
             const responsePayload: BaseEntity = {
                 id: newEntity.id,
                 themeId: newEntity.themeId,
@@ -484,17 +484,14 @@ app.post(
                 type: newEntity.type,
                 status: newEntity.status,
                 isStandalone: newEntity.isStandalone,
-                // Veilige type-cast van de database JsonValue naar de verwachte EntityImages
                 image: (newEntity.image || { profileCard: '', heroBanner: '' }) as unknown as EntityImages,
                 metadata: (newEntity.metadata || {}) as Record<string, unknown>
             };
 
-            // Geef de nu 100% matchende BaseEntity terug aan de frontend
             res.status(201).json(responsePayload);
         } catch (error: unknown) {
             console.error("Error creating graph entity and relationships:", error);
             
-            // Type-safe error handhaving voor Prisma error-codes
             if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
                 return res.status(409).json({ error: "An entity with this unique ID combination already exists within this theme." });
             }
@@ -504,8 +501,10 @@ app.post(
     }
 );
 
-type UpdateEntityResponse = { success: boolean; message: string } | { error: string };
-
+/**
+ * Updates an entity and synchronizes its outgoing graph connections. 
+ * Separates virtual tracks into component metadata and synchronizes real relational connections.
+ */
 app.put(
     '/api/themes/:themeId/entities/:entityId',
     async (req: Request<{ themeId: string; entityId: string }, UpdateEntityResponse, HydratedEntity>, res: Response<UpdateEntityResponse>) => {
@@ -514,7 +513,6 @@ app.put(
 
         try {
             const safeConnections = connections || [];
-
 
             const virtualTracks = safeConnections.filter(conn => {
                 const targetId = conn.targetEntityId || conn.id;
@@ -554,7 +552,6 @@ app.put(
                 });
 
             await prisma.$transaction([
-                // Update de basisgegevens inclusief de NIEUWE aangepaste metadata
                 prisma.entity.update({
                     where: { id: entityId },
                     data: {
@@ -566,16 +563,12 @@ app.put(
                         metadata: updatedMetadata as Prisma.InputJsonValue,
                     }
                 }),
-
-                // Schoon alleen je eigen uitgaande connecties op
                 prisma.entityConnection.deleteMany({
                     where: {
                         themeId,
                         sourceEntityId: entityId
                     }
                 }),
-
-                // Voeg de legitieme database connecties toe
                 prisma.entityConnection.createMany({
                     data: connectionsToInsert
                 })

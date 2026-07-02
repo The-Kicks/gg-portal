@@ -499,7 +499,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   : conn.metadata?.customTargetName || 'Custom Shared Track')
                 : (conn.relatedEntity?.name || conn.relatedEntityId);
 
-              // Dynamisch de triggers ophalen op basis van het DOELWIT-type (bv. 'l4')
               const targetType = conn.direction === 'outgoing'
                 ? conn.relatedEntity?.type
                 : originalEntity.type;

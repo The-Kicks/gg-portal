@@ -69,14 +69,13 @@ export const useTimelineBuilder = (
   }, []);
 
   const unifiedConnections = useMemo<UnifiedConnection[]>(() => {
-    // Wijzig dit in useTimelineBuilder.ts in de unifiedConnections useMemo:
 
     const outgoing = localConnections.map(c => ({
       id: c.id,
       direction: 'outgoing' as const,
       relatedEntity: c.targetEntity,
       relatedEntityId: c.targetEntityId,
-      status: String(c.metadata?.status || 'active').toLowerCase(), // <-- Alleen metadata check + toLowerCase
+      status: String(c.metadata?.status || 'active').toLowerCase(), 
       startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
       endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined,
       metadata: c.metadata
@@ -87,7 +86,7 @@ export const useTimelineBuilder = (
       direction: 'incoming' as const,
       relatedEntity: c.sourceEntity,
       relatedEntityId: c.sourceEntityId,
-      status: String(c.metadata?.status || 'active').toLowerCase(), // <-- Alleen metadata check + toLowerCase
+      status: String(c.metadata?.status || 'active').toLowerCase(), 
       startDate: c.metadata?.startDate ? String(c.metadata.startDate) : undefined,
       endDate: c.metadata?.endDate ? String(c.metadata.endDate) : undefined,
       metadata: c.metadata
@@ -125,7 +124,7 @@ export const useTimelineBuilder = (
   }, []);
 
   /**
-   * Genereert een deterministische virtuele slug ID zodat meerdere idols/coureurs
+   * Genereert een deterministische virtuele slug ID zodat meerdere coureurs
    * aan exact dezelfde custom track gekoppeld kunnen worden.
    */
   const handleCreateNonRelationalTrack = useCallback((trackName: string) => {
@@ -157,7 +156,7 @@ export const useTimelineBuilder = (
         status: 'active',
         startDate: '',
         endDate: '',
-        excludedPeriods: '', // <-- TOEGEVOEGD
+        excludedPeriods: '', 
         isNonRelational: true,
         customTargetName: trackName,
         milestones: ''
@@ -184,8 +183,7 @@ export const useTimelineBuilder = (
     const selectedLayerLevel = LAYER_ORDER[selectedNode.type.toLowerCase()] || 99;
 
     const connectionId = -1 - Math.floor(Math.random() * 1000000);
-    // Voeg hier excludedPeriods toe aan de basis metadata van een nieuwe connectie
-    const baseMeta = { status: 'active', startDate: '', endDate: '', excludedPeriods: '' }; // <-- AANGEPAST
+    const baseMeta = { status: 'active', startDate: '', endDate: '', excludedPeriods: '' }; 
 
     if (currentLayerLevel <= selectedLayerLevel) {
       const newOutgoingConn: HydratedEntityConnection = {

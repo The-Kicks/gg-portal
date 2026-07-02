@@ -57,7 +57,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
   const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
 
-  // View Entire Timeline feature states
   const [isTimelineTall, setIsTimelineTall] = useState(false);
   const [forceShowEntireTimeline, setForceShowEntireTimeline] = useState(false);
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -100,22 +99,19 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     if (!dateStr) return '';
     const trimmed = dateStr.trim();
 
-    // 1. Puur een jaartal (bv. "2017")
     if (/^\d{4}$/.test(trimmed)) {
       return trimmed;
     }
 
-    // 2. DD-MM-YYYY (bv. "31-05-2024")
     const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
     if (ddmmyyyyMatch) {
-      const [, day, month, year] = ddmmyyyyMatch; // Eerste element overgeslagen om '_' waarschuwing te voorkomen
+      const [, day, month, year] = ddmmyyyyMatch; 
       const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
       if (!isNaN(dateObj.getTime())) {
         return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
       }
     }
 
-    // 3. Tekstuele datums (bv. "Jul 2017")
     const dateObj = new Date(trimmed);
     if (isNaN(dateObj.getTime())) return trimmed;
 
@@ -133,14 +129,13 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     return () => intersectionObserver.disconnect();
   }, [shouldShowHeroSection]);
 
-  // Dynamic monitoring for "View Entire Timeline" triggers (> 50vh)
   useEffect(() => {
     if (timelineItems.length === 0 || !timelineContainerRef.current) return;
 
     const resizeObserver = new ResizeObserver(() => {
       if (!timelineContainerRef.current) return;
       const contentHeight = timelineContainerRef.current.scrollHeight;
-      const maxHeightAllowed = window.innerHeight * 0.5; // 50% of screen height
+      const maxHeightAllowed = window.innerHeight * 0.5; 
       setIsTimelineTall(contentHeight > maxHeightAllowed);
     });
 
@@ -369,7 +364,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                   <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
                   <div className={styles.mediaGrid}>
                     {[0, 1, 2].map((colIndex) => {
-                      // Veranderd van '_' naar '_item' om Vite/TypeScript fouten te voorkomen
                       const itemsInColumn = galleryItems.filter((_item, index) => index % 3 === colIndex);
                       const rawPadding = columnPaddings[sectionKey]?.[colIndex] || 0;
                       const finalPlaceholderHeight = rawPadding - 24;

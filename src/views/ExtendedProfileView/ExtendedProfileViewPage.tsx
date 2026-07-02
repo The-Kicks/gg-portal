@@ -359,7 +359,6 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       const timeA = safeGetTime(a.startDate);
       const timeB = safeGetTime(b.startDate);
 
-      // Zowel voor Active als Past items: de nieuwste startDate komt nu bovenaan
       return timeB - timeA;
     });
   }, [profileDetails, id]);

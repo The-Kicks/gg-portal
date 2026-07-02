@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Theme, HydratedEntity, BaseEntity, LayerKey } from '../../../types';
 import { entityService } from '../EntityService';
-
 import { useStandardEntityAttributes } from '../adminUtils/useStandardEntityAttributes';
 import { useDynamicAttributes, buildMetadataInputs } from '../adminUtils/useDynamicAttributes';
 import type { MetadataValue } from '../adminUtils/useDynamicAttributes';
@@ -17,24 +16,29 @@ interface MilestoneStructure {
   title: string;
 }
 
+/**
+ * A custom React hook that manages the complex state machinery, payload validation, 
+ * asynchronous slug-uniqueness checks, and payload restructuring needed to 
+ * provision and persist standard or layer-specific system entities.
+ */
 export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProps) => {
   const [type, setType] = useState<LayerKey>('l4');
   const [customSuffix, setCustomSuffix] = useState<string>('');
   const [idStatus, setIdStatus] = useState<'idle' | 'available' | 'taken'>('idle');
 
-  // Haal de metadata-standaard op voor de huidige geselecteerde laag uit het Theme
   const currentLayerMetadata = theme.layerMetadata[type];
 
   const standardAttrs = useStandardEntityAttributes(undefined);
   const dynamicAttrs = useDynamicAttributes(undefined, theme, type);
   const mediaCategories = useMediaCategories(undefined, theme, currentLayerMetadata, type);
 
-  // Handmatige type switch via de dropdown
+  /**
+   * Resets and rebuilds localized multi-tier structure presets, structural assets, 
+   * and schema definitions whenever the target layer depth drops or rises.
+   */
   const handleTypeChange = (newType: LayerKey) => {
     setType(newType);
     standardAttrs.setStatus('active');
-
-    // Automatische suggestie bij laagwissel, maar overschrijfbaar via de checkbox
     standardAttrs.setIsStandalone(newType.toLowerCase() === 'l4');
 
     mediaCategories.setAlbumInput('');
@@ -43,7 +47,10 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     dynamicAttrs.setMetadataInputs(buildMetadataInputs(undefined, theme, newType));
   };
 
-  // Handmatige toggle voor de standalone checkbox in de UI
+  /**
+   * Synchronizes system entity behavioral states to reflect manual switches 
+   * in single-node detached rendering execution contexts.
+   */
   const handleStandaloneChange = (checked: boolean) => {
     standardAttrs.setIsStandalone(checked);
 
@@ -52,7 +59,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     }
   };
 
-  // Debounced unique ID check
   useEffect(() => {
     const baseSlug = standardAttrs.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
     const suffix = customSuffix.trim() ? customSuffix.toLowerCase().trim().replace(/[^a-z0-9]/g, '-') : '';
@@ -75,7 +81,10 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     return () => clearTimeout(delayDebounceFn);
   }, [standardAttrs.name, customSuffix, theme.id]);
 
-  // Type-safe parser voor de milestone strings uit de admin textarea
+  /**
+   * Evaluates text strings collected from interface text blocks and transforms line breaks 
+   * into highly organized timeline lists with separate date keys.
+   */
   const parseAdminMilestones = (rawText: unknown): MilestoneStructure[] => {
     if (Array.isArray(rawText)) {
       return rawText as MilestoneStructure[];
@@ -103,6 +112,10 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
       .filter((m): m is MilestoneStructure => m !== null);
   };
 
+  /**
+   * Breaks apart multi-line text input areas into distinct media URL arrays 
+   * or a scalar string element based on total asset entries discovered.
+   */
   const reconstructImageObject = (currentInputs: Record<string, string>): Record<string, string | string[]> => {
     const result: Record<string, string | string[]> = {};
     Object.keys(currentInputs).forEach(key => {
@@ -120,6 +133,10 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     return result;
   };
 
+  /**
+   * Converts custom schema text maps into strict native types including primitive numbers, 
+   * date markers, or structured array lists.
+   */
   const reconstructObject = (currentInputs: Record<string, string>): Record<string, MetadataValue> => {
     const result: Record<string, MetadataValue> = {};
 
@@ -152,6 +169,10 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     return result;
   };
 
+  /**
+   * Validates form parameters, normalizes metadata properties, parses media blocks, 
+   * and submits finalized configurations to the persistent layer service.
+   */
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -254,7 +275,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     }
   };
 
-  // 🔥 ALLEEN 'status' opruimen, 'Real Name' blijft 100% onaangetast
   const cleanTriggerFieldsMap = { ...dynamicAttrs.triggerFieldsMap };
   delete cleanTriggerFieldsMap['status'];
   delete cleanTriggerFieldsMap['Status'];
@@ -281,7 +301,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     setStatus: standardAttrs.setStatus,
     isStandalone: standardAttrs.isStandalone,
 
-    // Media
     albumInput: mediaCategories.albumInput,
     setAlbumInput: mediaCategories.setAlbumInput,
     unassignedImages: mediaCategories.unassignedImages,
@@ -290,7 +309,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     newImageKey: mediaCategories.newImageKey,
     setNewImageKey: mediaCategories.setNewImageKey,
 
-    // Dynamic Attributes
     metadataInputs: dynamicAttrs.metadataInputs,
     newMetadataKey: dynamicAttrs.newMetadataKey,
     setNewMetadataKey: dynamicAttrs.setNewMetadataKey,
@@ -301,7 +319,6 @@ export const useAdminEntityCreate = ({ theme, onSave }: UseAdminEntityCreateProp
     partitionedMetadataKeys: cleanPartitionedMetadataKeys,
     handleMetadataInputChange: dynamicAttrs.handleMetadataInputChange,
 
-    // Handlers
     handleImageInputChange: mediaCategories.handleImageInputChange,
     handleAddImageField: mediaCategories.handleAddImageField,
     handleAddMetadataField: dynamicAttrs.handleAddMetadataField,

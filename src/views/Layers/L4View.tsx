@@ -13,6 +13,9 @@ interface Props {
   theme: Theme;
 }
 
+/**
+ * Iterates through arbitrary metadata collections recursively to match search terms.
+ */
 const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean => {
   if (!metadata || !term) return false;
   const lowerTerm = term.toLowerCase().trim();
@@ -33,6 +36,10 @@ const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean =
   return scan(metadata);
 };
 
+/**
+ * L4View processes, filters, and displays leaf nodes representing Layer 4 individual entities.
+ * Maps relational link parameters dynamically to evaluate hierarchy clusters and team rosters.
+ */
 export const L4View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const parentMap = new Map<string, ParentBucket>();
@@ -67,9 +74,9 @@ export const L4View: React.FC<Props> = ({ theme }) => {
   if (endpoints.length === 0) {
     return (
       <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
-        <h3>Geen data gevonden voor {theme.labels.l4 || 'Laag 4'}. 🛑</h3>
+        <h3>No data found for {theme.labels.l4 || 'Layer 4'}.</h3>
         <p style={{ opacity: 0.6, fontSize: '0.9rem', marginTop: '0.5rem' }}>
-          De dataset bevat geen entiteiten met type "l4" voor "{theme.title}".
+          The dataset does not contain entities with type "l4" for "{theme.title}".
         </p>
       </div>
     );
@@ -93,7 +100,6 @@ export const L4View: React.FC<Props> = ({ theme }) => {
       return entity;
     });
 
-  // MAPPING ANALYSIS SYSTEM
   endpoints.forEach((l4Entity) => {
     const allConns = [...(l4Entity.connections || []), ...(l4Entity.targetConnections || [])];
 
@@ -131,17 +137,13 @@ export const L4View: React.FC<Props> = ({ theme }) => {
           parentMap.set(l3Entity.id, { parent: l3Entity, children: [] });
         }
         const bucket = parentMap.get(l3Entity.id)!;
-
-        // Starten met een schone lei gebaseerd op de metadata van het lid
         const enrichedMetadata = { ...(l4Entity.metadata || {}) };
 
         if (isFormerConnection) {
           enrichedMetadata.isFormer = true;
         }
 
-        // 🔥 DYNAMISCHE RELATIONSHIP BADGE SYSTEM (EXTRA ROBUUST)
         if (triggers && connectionStatus) {
-          // 1. Zoek de trigger waarbij de key overeenkomt met onze connectionStatus (bijv. 'hiatus')
           const matchedTriggerEntry = Object.entries(triggers).find(
             ([key]) => connectionStatus.includes(key.toLowerCase()) || key.toLowerCase().includes(connectionStatus)
           );
@@ -154,11 +156,9 @@ export const L4View: React.FC<Props> = ({ theme }) => {
               'key' in triggerConfig &&
               'value' in triggerConfig
             ) {
-              // Injecteer de dynamische trigger (bijv. customTrack of alert key)
               enrichedMetadata[String(triggerConfig.key)] = String(triggerConfig.value);
             }
 
-            // Explicitly set dynamic boolean flags for the EntityCard just in case
             if (triggerKey.toLowerCase() === 'hiatus') {
               enrichedMetadata.isHiatus = true;
             }
@@ -168,12 +168,10 @@ export const L4View: React.FC<Props> = ({ theme }) => {
           }
         }
 
-        // Zorg dat de metadata ook de actuele relatiestatus bevat als de kaart daarop inspecteert
         enrichedMetadata.status = connectionStatus;
 
         const enrichedChild: HydratedEntity = {
           ...l4Entity,
-          // Dwing de status af naar 'hiatus' (of de actuele relatiestatus)
           status: connectionStatus || l4Entity.status,
           metadata: enrichedMetadata
         };
@@ -189,6 +187,9 @@ export const L4View: React.FC<Props> = ({ theme }) => {
   const isInactiveStatus = (status: string) =>
     ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
 
+  /**
+   * Partitions and sorts sibling collections prioritizing core active roles over reserve or auxiliary positions.
+   */
   const sortGroupChildren = (children: HydratedEntity[]) => {
     return [...children].sort((a, b) => {
       const roleA = String(a.metadata?.role || '').toLowerCase();

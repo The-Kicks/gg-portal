@@ -482,10 +482,30 @@
 .timelineHeaderRow {
   display: grid;
   grid-template-columns: 240px 1fr;
-  align-items: center;
+  align-items: flex-end; /* Aangepast voor uitlijning van labels */
   border-bottom: 2px solid color-mix(in srgb, var(--text), transparent 90%);
-  padding-bottom: 0.8rem;
+  padding-bottom: 0.5rem;
   margin-bottom: 1rem;
+}
+
+/* Nieuwe stijlen voor Ticks en Labels */
+.timelineTick {
+  width: 1px;
+  height: 6px;
+  background-color: var(--text);
+  opacity: 0.3;
+  margin: 0 auto;
+}
+
+.timelineYearLabel {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text);
+  opacity: 0.6;
+  margin-top: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-align: center;
 }
 
 .timelineMemberStickyLabel {
@@ -499,16 +519,6 @@
 .timelineBarsArea {
   position: relative;
   width: 100%;
-  height: 100%;
-}
-
-.timelineYearScaleLabel {
-  font-size: 0.8rem;
-  font-weight: 800;
-  color: var(--text);
-  opacity: 0.7;
-  text-align: center;
-  box-sizing: border-box;
   height: 100%;
 }
 
@@ -712,7 +722,7 @@
 }
 
 .isFormerTeammate {
-  opacity: 0.45;          
+  opacity: 0.45;           
   filter: grayscale(100%);  
   transform: scale(0.98);   
   transition: 

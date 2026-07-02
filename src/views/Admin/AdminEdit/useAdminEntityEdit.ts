@@ -1,6 +1,5 @@
-import { useMemo, useEffect, } from 'react';
+import { useMemo, useEffect } from 'react';
 import type { Theme, HydratedEntity, HydratedEntityConnection } from '../../../types';
-
 import { useStandardEntityAttributes } from '../adminUtils/useStandardEntityAttributes';
 import { useDynamicAttributes, buildMetadataInputs, REQUIRED_L4_FIELDS } from '../adminUtils/useDynamicAttributes';
 import type { MetadataValue, LayerMetadataMap } from '../adminUtils/useDynamicAttributes';
@@ -18,6 +17,11 @@ interface MilestoneStructure {
   title: string;
 }
 
+/**
+ * A custom React hook that encapsulates state synchronization, structural mutations, 
+ * administrative metadata updates, and validation controls for modifying an 
+ * existing system entity configuration.
+ */
 export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEditProps) => {
   const originalEntity = useMemo(() => {
     return (theme.entities || []).find(e => e.id === entityId);
@@ -28,7 +32,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
   const mediaCategories = useMediaCategories(originalEntity, theme, dynamicAttrs.layerConfig);
   const timelineBuilder = useTimelineBuilder(originalEntity, theme, entityId);
 
-  // Parse de complete layermetadata map één keer centraal
   const parsedLayerMetadata = useMemo<LayerMetadataMap>(() => {
     if (!theme.layerMetadata) return {};
     try {
@@ -36,12 +39,14 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
         ? (JSON.parse(theme.layerMetadata) as LayerMetadataMap)
         : (theme.layerMetadata as unknown as LayerMetadataMap);
     } catch (error) {
-      console.error("Fout bij het parsen van layerMetadata:", error);
+      console.error("Error parsing layerMetadata:", error);
       return {};
     }
   }, [theme.layerMetadata]);
 
-  // Dynamische helper om de triggers op te halen op basis van het type van het doelwit (bijv. 'l4')
+  /**
+   * Retrieves status trigger string configurations corresponding to a requested target layer key.
+   */
   const getTriggersForTargetType = (targetType: string | undefined): string[] => {
     const typeKey = (targetType || 'l4').toLowerCase();
     const config = parsedLayerMetadata[typeKey];
@@ -52,7 +57,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
   };
 
-  // Helper om milestones tekst om te zetten naar [{date, title}]
+  /**
+   * Evaluates unstructured block text string values collected from interface text blocks and transforms 
+   * line breaks into structured milestone timeline arrays containing localized date entries.
+   */
   const parseAdminMilestones = (rawText: unknown): MilestoneStructure[] => {
     if (Array.isArray(rawText)) {
       return rawText as MilestoneStructure[];
@@ -81,6 +89,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .filter((m): m is MilestoneStructure => m !== null);
   };
 
+  /**
+   * Converts polymorphic milestone objects or array primitives back into flat string arrays 
+   * separated by newline delimiters for presentation in interface components.
+   */
   const formatMilestonesToText = (milestones: unknown): string => {
     if (!milestones) return '';
     if (typeof milestones === 'string') return milestones;
@@ -103,7 +115,11 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     return '';
   };
 
- const handleSyncMilestones = () => {
+  /**
+   * Automatically isolates and attaches applicable chronological milestones to target 
+   * connection indices matching the established boundary lifetime of the relationship instance.
+   */
+  const handleSyncMilestones = () => {
     const rawL3Milestones = dynamicAttrs.metadataInputs['l3Milestones'] || '';
     if (!rawL3Milestones.trim()) return;
 
@@ -112,27 +128,21 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       .map(line => line.trim())
       .filter(Boolean);
 
-    // Helper om veilig het jaartal uit een DD-MM-YYYY of YYYY string te vissen
     const extractYear = (dateStr: string | undefined): number | null => {
       if (!dateStr) return null;
       const clean = dateStr.trim();
-      // Check eerst of het eindigt op een 4-cijferig jaar (DD-MM-YYYY)
       const ddmmyyyyMatch = clean.match(/\d{2}-\d{2}-(\d{4})/);
       if (ddmmyyyyMatch) return parseInt(ddmmyyyyMatch[1], 10);
-      // Check of het begint met een 4-cijferig jaar (YYYY)
       const yyyyMatch = clean.match(/^(\d{4})/);
       if (yyyyMatch) return parseInt(yyyyMatch[1], 10);
       return null;
     };
 
-    // We mappen direct over de localConnections state om de wijzigingen synchroon toe te passen
     const updatedLocalConnections = timelineBuilder.localConnections.map(conn => {
       const currentRelationText = formatMilestonesToText(conn.metadata?.milestones);
       
-      // Safe-Sync: Sla relaties over waar al handmatig milestones zijn ingevuld
       if (currentRelationText.trim().length > 0) return conn;
 
-      // Pak de datums via onze nieuwe extractYear helper
       const startYear = extractYear(conn.metadata?.startDate);
       if (!startYear || isNaN(startYear)) return conn;
 
@@ -143,7 +153,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
 
       if (!endYear || isNaN(endYear)) return conn;
 
-      // Filter milestones die chronologisch binnen de actieve periode vallen
       const matchedMilestones = milestoneLines.filter(line => {
         const yearMatch = line.match(/^(\d{4})/) || line.match(/\d{2}-\d{2}-(\d{4})/);
         if (!yearMatch) return false;
@@ -154,8 +163,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
 
       if (matchedMilestones.length > 0) {
         const updatedText = matchedMilestones.join('\n');
-        
-        // Converteer de platte tekst direct naar de vereiste [{date, title}] object-structuur
         const parsedMilestones = parseAdminMilestones(updatedText);
 
         return {
@@ -170,7 +177,6 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
       return conn;
     });
 
-    // Update de state in één klap! React merkt de nieuwe array-referentie op en vult direct de velden
     timelineBuilder.setLocalConnections(updatedLocalConnections);
   };
 
@@ -205,6 +211,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, theme]);
 
+  /**
+   * Matches raw text areas containing media resource links into clean collections 
+   * or a single element depending on total distinct links discovered.
+   */
   const reconstructImageObject = (
     currentInputs: Record<string, string>,
     originalImage: Record<string, unknown>
@@ -225,6 +235,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     return result;
   };
 
+  /**
+   * Standardizes incoming schema values to align with original attribute types 
+   * including native booleans, number arrays, and distinct timeline configurations.
+   */
   const reconstructObject = (
     currentInputs: Record<string, string>,
     originalObject: Record<string, unknown>
@@ -259,6 +273,10 @@ export const useAdminEntityEdit = ({ theme, entityId, onSave }: UseAdminEntityEd
     return result;
   };
 
+  /**
+   * Asserts runtime validation boundaries across required constraints, re-normalizes dates, 
+   * structures link states, and submits updates to the persisting application logic layers.
+   */
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) {
       e.preventDefault();
