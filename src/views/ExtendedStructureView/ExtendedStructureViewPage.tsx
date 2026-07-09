@@ -21,9 +21,41 @@ export interface FormattedStatItem {
   displayValue: string;
 }
 
-// ==========================================================================
-// PURE UTILITY FUNCTIONS (Data Translators)
-// ==========================================================================
+export interface RenderedExcludedPeriod {
+  left: string;
+  width: string;
+  reason?: string;
+}
+
+export interface MemberTimelineRow {
+  memberId: string;
+  memberName: string;
+  memberImage: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  isFormer: boolean;
+  barStyle: React.CSSProperties;
+  excludedPeriods: RenderedExcludedPeriod[];
+}
+
+interface ExcludedPeriod {
+  start: string;
+  end: string;
+  reason?: string; 
+}
+
+interface TimelineConnectionMeta {
+  memberId: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  excludedPeriods?: ExcludedPeriod[];
+}
+
+/**
+ * Resolves the structural media classification key based on resource URI suffix or platform signature.
+ */
 const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   const lowerCaseFile = file.toLowerCase();
   if (lowerCaseFile.includes('youtube.com') || lowerCaseFile.includes('youtu.be')) return 'video-embed';
@@ -31,11 +63,17 @@ const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   return 'image';
 };
 
+/**
+ * Checks whether an asset string pointer contains a valid path structure.
+ */
 const isStringValid = (url: string): boolean => {
   const cleaned = url.trim().toLowerCase();
   return cleaned !== "" && cleaned !== "/placeholder.png" && cleaned !== "placeholder.png";
 };
 
+/**
+ * Calculates responsive media dimension metadata offsets used to define grid container allocation blocks.
+ */
 const mapMediaItemToGridSpace = (
   file: string,
   mediaDimensions: Record<string, boolean>
@@ -62,6 +100,9 @@ const mapMediaItemToGridSpace = (
   return { file, type: mediaType, itemClassKey, spanSpaces: gridSpanSpaces };
 };
 
+/**
+ * Injects placeholder item records to preserve layout alignment and fill spatial gaps in the flex grid.
+ */
 const fillRowGapsWithPlaceholders = (
   structuredRowItems: PreparedMediaItem[],
   totalAssignedSpaces: number,
@@ -81,9 +122,41 @@ const fillRowGapsWithPlaceholders = (
   return { counter: counter + 1, cost: isHorizontalPlaceholder ? 2 : 1 };
 };
 
-// ==========================================================================
-// MAIN CONTROLLER COMPONENT
-// ==========================================================================
+/**
+ * Converts dynamic date string fragments safely into decimal representations for linear alignment.
+ */
+const extractYearDecimal = (dateStr?: string): number => {
+  if (!dateStr) return new Date().getFullYear();
+
+  const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const day = parseInt(ddmmyyyyMatch[1], 10);
+    const month = parseInt(ddmmyyyyMatch[2], 10) - 1; 
+    const year = parseInt(ddmmyyyyMatch[3], 10);
+    
+    const totalDaysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
+    const dateObj = new Date(year, month, day);
+    const startOfYear = new Date(year, 0, 1);
+    const dayOfYear = Math.floor((dateObj.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return year + (dayOfYear / totalDaysInYear);
+  }
+
+  const parsedDate = new Date(dateStr);
+  if (!isNaN(parsedDate.getTime())) {
+    const year = parsedDate.getFullYear();
+    const month = parsedDate.getMonth();
+    return year + (month / 12);
+  }
+
+  const match = dateStr.match(/\d{4}/);
+  return match ? parseInt(match[0], 10) : new Date().getFullYear();
+};
+
+/**
+ * High-level orchestration component that normalizes cross-tier group hierarchies, 
+ * renders media grids, and builds absolute chronological team tracking grids.
+ */
 export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
   const { id, themeName } = useParams<{ id: string; themeName: string }>();
   const navigate = useNavigate();
@@ -99,7 +172,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     setHeroImageError(false);
   }
 
-  // --- TRAVERSAL CONTROLLER ---
   const structureData = useMemo(() => {
     if (!id || !theme.entities) return null;
 
@@ -110,10 +182,12 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
 
     const l1ParentsMap = new Map<string, BaseEntity>();
     const l2ParentsMap = new Map<string, BaseEntity>();
-    
+
     const relatedL2sMap = new Map<string, BaseEntity>();
     const relatedL3sMap = new Map<string, BaseEntity>();
     const relatedL4sMap = new Map<string, BaseEntity>();
+
+    const rawMemberConnections: TimelineConnectionMeta[] = [];
 
     const getConnections = (ent: HydratedEntity) => [
       ...(ent.connections || []),
@@ -127,13 +201,31 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
 
         if (other.type === 'l2') l2ParentsMap.set(other.id, other);
         if (other.type === 'l1') l1ParentsMap.set(other.id, other);
-        
+
         if (other.type === 'l4') {
-          const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
+          const connectionMeta = conn.metadata as Record<string, unknown> | undefined;
+
+          const relStatus = String(connectionMeta?.status || connectionMeta?.membershipStatus || 'active').toLowerCase().trim();
+          const extractedStartDate = String(connectionMeta?.startDate || connectionMeta?.joinedDate || '');
+          const extractedEndDate = String(connectionMeta?.endDate || connectionMeta?.leftDate || '');
+          const excludedPeriods = connectionMeta?.excludedPeriods as ExcludedPeriod[] | undefined;
+
+          rawMemberConnections.push({
+            memberId: other.id,
+            startDate: extractedStartDate,
+            endDate: extractedEndDate,
+            status: relStatus,
+            excludedPeriods
+          });
+
+          const existingEntityMeta = (other.metadata || {}) as Record<string, unknown>;
+
           relatedL4sMap.set(other.id, {
             ...other,
             metadata: {
-              ...(other.metadata || {}),
+              ...existingEntityMeta,
+              startDate: extractedStartDate,
+              endDate: extractedEndDate,
               groupStatus: relStatus,
               status: relStatus,
             },
@@ -152,7 +244,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
           }
         });
       }
-    } 
+    }
     else if (activeLayer === 'l2') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -169,7 +261,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
             const other = conn.sourceEntity?.id === fullL3.id ? conn.targetEntity : conn.sourceEntity;
             if (other && other.type === 'l4') {
               const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
-              if (relStatus === 'former' || relStatus === 'left') return;
 
               relatedL4sMap.set(other.id, {
                 ...other,
@@ -183,7 +274,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
           });
         }
       });
-    } 
+    }
     else if (activeLayer === 'l1') {
       getConnections(targetEntity).forEach((conn) => {
         const other = conn.sourceEntity?.id === targetEntity.id ? conn.targetEntity : conn.sourceEntity;
@@ -210,7 +301,6 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
             const other = conn.sourceEntity?.id === fullL3.id ? conn.targetEntity : conn.sourceEntity;
             if (other && other.type === 'l4') {
               const relStatus = String(conn.metadata?.status || conn.metadata?.membershipStatus || 'active').toLowerCase().trim();
-              if (relStatus === 'former' || relStatus === 'left') return;
 
               relatedL4sMap.set(other.id, {
                 ...other,
@@ -229,7 +319,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     const parents: BaseEntity[] = [];
     const absoluteL1 = Array.from(l1ParentsMap.values())[0];
     const absoluteL2 = Array.from(l2ParentsMap.values())[0];
-    
+
     if (absoluteL1) parents.push(absoluteL1);
     if (absoluteL2 && absoluteL2.id !== absoluteL1?.id) parents.push(absoluteL2);
 
@@ -237,13 +327,159 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       targetEntity,
       activeLayer,
       parents,
+      rawMemberConnections,
       relatedL2s: Array.from(relatedL2sMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
       relatedL3s: Array.from(relatedL3sMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
       relatedL4s: Array.from(relatedL4sMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
     };
   }, [id, theme.entities]);
 
-  // --- ROUTING CONTROL ---
+  const memberTimelineData = useMemo(() => {
+    if (!structureData || structureData.activeLayer !== 'l3' || structureData.relatedL4s.length === 0) {
+      return null;
+    }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentYearDecimal = currentYear + (now.getMonth() / 12) + (now.getDate() / 365);
+
+    const hasActiveMembers = structureData.relatedL4s.some(member => {
+      const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
+      const normalizedStatus = String(connectionMeta?.status || 'active').toLowerCase().trim();
+      return !['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
+    });
+
+    const parsedRows = structureData.relatedL4s.map(member => {
+      const connectionMeta = structureData.rawMemberConnections.find(c => c.memberId === member.id);
+      const entityImages = member.image as EntityImages | undefined;
+      const imgUrl = entityImages ? getEntityImage(entityImages, 'profileCard') : '';
+
+      const startYearDecimal = extractYearDecimal(connectionMeta?.startDate);
+      const normalizedStatus = String(connectionMeta?.status || 'active').toLowerCase().trim();
+      const isFormer = ['former', 'left', 'past', 'inactive'].includes(normalizedStatus);
+
+      const endYearDecimal = isFormer
+        ? (connectionMeta?.endDate ? extractYearDecimal(connectionMeta.endDate) : startYearDecimal)
+        : currentYearDecimal;
+
+      return {
+        member,
+        imgUrl,
+        connectionMeta,
+        normalizedStatus,
+        isFormer,
+        startDec: startYearDecimal,
+        endDec: Math.max(startYearDecimal, endYearDecimal)
+      };
+    });
+
+    const minTimelineStart = parsedRows.length > 0 ? Math.min(...parsedRows.map(r => r.startDec)) : currentYear;
+    const highestHistoricalYear = parsedRows.length > 0 ? Math.max(...parsedRows.map(r => r.endDec)) : currentYear;
+    
+    const maxTimelineEnd = hasActiveMembers ? currentYearDecimal : highestHistoricalYear;
+    const totalTimeRange = maxTimelineEnd - minTimelineStart;
+
+    const rows: MemberTimelineRow[] = parsedRows.map(({ member, imgUrl, connectionMeta, normalizedStatus, isFormer, startDec, endDec }) => {
+      const leftPercent = totalTimeRange > 0 ? ((startDec - minTimelineStart) / totalTimeRange) * 100 : 0;
+      const individualDuration = endDec - startDec;
+      const widthPercent = totalTimeRange > 0 ? (individualDuration / totalTimeRange) * 100 : 100;
+
+      let backgroundStyle = '';
+      const uiExcludedPeriods: RenderedExcludedPeriod[] = [];
+      const excludedPeriods = connectionMeta?.excludedPeriods;
+
+      if (Array.isArray(excludedPeriods) && excludedPeriods.length > 0 && individualDuration > 0) {
+        const gradientParts: string[] = [];
+        let lastStopPercent = 0;
+
+        const activeChunkColor = isFormer ? 'color-mix(in srgb, var(--secondary), transparent 50%)' : 'var(--primary)';
+        const breakChunkColor = 'rgba(100, 116, 139, 0.25)'; 
+
+        const sortedPeriods = [...excludedPeriods]
+          .map(p => ({
+            start: extractYearDecimal(p.start),
+            end: extractYearDecimal(p.end),
+            reason: p.reason
+          }))
+          .sort((a, b) => a.start - b.start);
+
+        sortedPeriods.forEach(p => {
+          const breakStartPercent = ((p.start - startDec) / individualDuration) * 100;
+          const breakEndPercent = ((p.end - startDec) / individualDuration) * 100;
+
+          if (breakStartPercent < 100 && breakEndPercent > 0) {
+            const cleanStart = Math.max(0, breakStartPercent);
+            const cleanEnd = Math.min(100, breakEndPercent);
+
+            gradientParts.push(`${activeChunkColor} ${lastStopPercent}%`);
+            gradientParts.push(`${activeChunkColor} ${cleanStart}%`);
+
+            gradientParts.push(`${breakChunkColor} ${cleanStart}%`);
+            gradientParts.push(`${breakChunkColor} ${cleanEnd}%`);
+
+            uiExcludedPeriods.push({
+              left: `${cleanStart}%`,
+              width: `${cleanEnd - cleanStart}%`,
+              reason: p.reason
+            });
+
+            lastStopPercent = cleanEnd;
+          }
+        });
+
+        if (lastStopPercent < 100) {
+          gradientParts.push(`${activeChunkColor} ${lastStopPercent}%`);
+          gradientParts.push(`${activeChunkColor} ${100}%`);
+        }
+
+        if (gradientParts.length > 0) {
+          backgroundStyle = `linear-gradient(to right, ${gradientParts.join(', ')})`;
+        }
+      }
+
+      return {
+        memberId: member.id,
+        memberName: member.name,
+        memberImage: imgUrl || '/placeholder.png',
+        startDate: connectionMeta?.startDate || '',
+        endDate: connectionMeta?.endDate || '',
+        status: normalizedStatus,
+        isFormer,
+        excludedPeriods: uiExcludedPeriods, 
+        barStyle: {
+          left: `${Math.max(0, Math.min(100, leftPercent))}%`,
+          width: `${Math.max(0.5, Math.min(100 - leftPercent, widthPercent))}%`,
+          ...(backgroundStyle ? { background: backgroundStyle, boxShadow: 'none' } : {})
+        }
+      };
+    });
+
+    const todayOffsetPercentage = totalTimeRange > 0 ? ((currentYearDecimal - minTimelineStart) / totalTimeRange) * 100 : 100;
+
+    const startYearCal = Math.floor(minTimelineStart);
+    const endYearCal = Math.floor(maxTimelineEnd);
+    
+    const yearsScale: number[] = [];
+    for (let y = startYearCal; y <= endYearCal; y++) {
+      yearsScale.push(y);
+    }
+
+    return {
+      rows,
+      yearsScale,
+      minTimelineStart,
+      maxTimelineEnd,
+      totalTimeRange,
+      globalTodayMarker: {
+        show: currentYearDecimal >= minTimelineStart && currentYearDecimal <= maxTimelineEnd,
+        offset: Math.max(0, Math.min(100, todayOffsetPercentage))
+      }
+    };
+  }, [structureData]);
+
+  /**
+   * Evaluates system configurations and directs routing to specific detail lists or summary cards.
+   */
   const handleNavigation = useCallback((targetId: string, layer: "l1" | "l2" | "l3" | "l4") => {
     const isL4 = layer === 'l4';
     const isL3AsProfile = (layer === 'l3' && structureData?.relatedL4s.length === 0 && structureData?.activeLayer === 'l2');
@@ -251,7 +487,9 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     navigate(`/${themeName}/${targetView}/${targetId}`);
   }, [navigate, themeName, structureData]);
 
-  // --- TETRIS-STYLE MEDIA GENERATOR ---
+  /**
+   * Sorts and packs associated string image pathways into multi-span asset presentation categories.
+   */
   const preparedMediaSections = useMemo(() => {
     const entityImages = structureData?.targetEntity.image as EntityImages | undefined;
     if (!structureData?.targetEntity || !entityImages) return {};
@@ -295,8 +533,11 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     });
 
     return organizedSections;
-  }, [structureData, mediaDimensions]);
+  }, [mediaDimensions, structureData]);
 
+  /**
+   * Fallback evaluation layer verifying asset path parameters before committing image layouts to viewports.
+   */
   const assets = useMemo(() => {
     if (!structureData?.targetEntity) return null;
     const entityImages = structureData.targetEntity.image as EntityImages | undefined;
@@ -310,22 +551,36 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
     return { profileCardImageUrl, heroBannerImageUrl, hasProfileCard, hasHeroBanner, shouldShowHeroSection };
   }, [structureData, profileImageError, heroImageError]);
 
+  /**
+   * Selects explicit header text structures based on localization schemas configuration flags.
+   */
   const sidebarSubLabel = useMemo(() => {
     if (!structureData) return '';
     const { activeLayer } = structureData;
     return activeLayer === 'l1'
       ? `${theme.labels.l1 ?? 'Company'} Overview`
       : activeLayer === 'l2'
-      ? `${theme.labels.l2 ?? 'Label'} Structure`
-      : activeLayer === 'l3'
-      ? `${theme.labels.l3 ?? 'Group'} Roster`
-      : (theme.labels[activeLayer] ?? activeLayer);
+        ? `${theme.labels.l2 ?? 'Label'} Structure`
+        : activeLayer === 'l3'
+          ? `${theme.labels.l3 ?? 'Group'} Roster`
+          : (theme.labels[activeLayer] ?? activeLayer);
   }, [structureData, theme.labels]);
 
+  /**
+   * Groups primitives inside the object payload, dropping non-renderable nested parameters.
+   */
   const formattedStatistics = useMemo<FormattedStatItem[]>(() => {
     if (!structureData?.targetEntity?.metadata) return [];
     return Object.entries(structureData.targetEntity.metadata)
-      .filter(([key, value]) => key !== 'description' && key !== 'status' && key !== 'membershipStatus' && !!value)
+      .filter(([key, value]) => {
+        if (key === 'description' || key === 'status' || key === 'membershipStatus' || !value) return false;
+
+        if (Array.isArray(value)) {
+          return value.length > 0 && typeof value[0] !== 'object';
+        }
+
+        return typeof value !== 'object';
+      })
       .map(([key, value]) => ({
         key,
         label: theme.labels[key] ?? key,
@@ -357,6 +612,7 @@ export const ExtendedStructureViewPage: React.FC<Props> = ({ theme }) => {
       setProfileImageError={setProfileImageError}
       setHeroImageError={setHeroImageError}
       onNavigate={handleNavigation}
+      memberTimeline={memberTimelineData}
     />
   );
 };

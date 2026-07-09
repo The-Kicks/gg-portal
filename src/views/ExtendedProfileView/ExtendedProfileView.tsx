@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
 import styles from './ExtendedProfileView.module.css';
 import ReactCountryFlag from 'react-country-flag';
-import type { PreparedMediaItem, FormattedStatItem, TeammateStructure } from './ExtendedProfileViewPage';
+import type { PreparedMediaItem, FormattedStatItem, TeammateStructure, TimelineItem } from './ExtendedProfileViewPage';
 import type { BaseEntity, Theme } from '../../types';
 
 interface ExtendedProfileViewProps {
@@ -25,6 +25,7 @@ interface ExtendedProfileViewProps {
   setMediaDimensions: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   groupedTeammates: Record<string, { groupName: string; members: TeammateStructure[] }>;
   groupKeys: string[];
+  timelineItems: TimelineItem[];
 }
 
 export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
@@ -46,12 +47,19 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
   setMediaDimensions,
   groupedTeammates,
   groupKeys,
+  timelineItems,
 }) => {
   const [isHeroScrolledPast, setIsHeroScrolledPast] = useState(false);
   const heroSectionRef = useRef<HTMLDivElement>(null);
 
   const [columnPaddings, setColumnPaddings] = useState<Record<string, number[]>>({});
   const colContentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const [expandedMilestones, setExpandedMilestones] = useState<Record<string, boolean>>({});
+
+  const [isTimelineTall, setIsTimelineTall] = useState(false);
+  const [forceShowEntireTimeline, setForceShowEntireTimeline] = useState(false);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const { themeName } = useParams();
@@ -83,6 +91,33 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     navigate(`/${themeName}/profile/${targetId}`);
   };
 
+  const toggleMilestones = (itemId: string) => {
+    setExpandedMilestones(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+  };
+
+  const formatTimelineDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const trimmed = dateStr.trim();
+
+    if (/^\d{4}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (ddmmyyyyMatch) {
+      const [, day, month, year] = ddmmyyyyMatch; 
+      const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(dateObj.getTime())) {
+        return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      }
+    }
+
+    const dateObj = new Date(trimmed);
+    if (isNaN(dateObj.getTime())) return trimmed;
+
+    return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+  };
+
   useEffect(() => {
     if (!shouldShowHeroSection) return;
     const observerOptions = { threshold: 0.05 };
@@ -93,6 +128,20 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
     if (heroSectionRef.current) intersectionObserver.observe(heroSectionRef.current);
     return () => intersectionObserver.disconnect();
   }, [shouldShowHeroSection]);
+
+  useEffect(() => {
+    if (timelineItems.length === 0 || !timelineContainerRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!timelineContainerRef.current) return;
+      const contentHeight = timelineContainerRef.current.scrollHeight;
+      const maxHeightAllowed = window.innerHeight * 0.5; 
+      setIsTimelineTall(contentHeight > maxHeightAllowed);
+    });
+
+    resizeObserver.observe(timelineContainerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [timelineItems]);
 
   useEffect(() => {
     if (!hasMedia) return;
@@ -108,11 +157,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
           const maxHeight = Math.max(h0, h1, h2);
           if (maxHeight > 0) {
-            newPaddings[sectionKey] = [
-              maxHeight - h0,
-              maxHeight - h1,
-              maxHeight - h2
-            ];
+            newPaddings[sectionKey] = [maxHeight - h0, maxHeight - h1, maxHeight - h2];
           }
         });
 
@@ -185,32 +230,132 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <div className={styles.infoCard}>
               <h3 className={styles.sidebarTitle}>Stats</h3>
               <div className={styles.statsGrid}>
-                {formattedStatistics.map((stat) => (
-                  <div key={stat.key} className={styles.statBox}>
-                    <label>{stat.label}</label>
-                    {stat.key === 'Nationality' && Array.isArray(entity.metadata?.Nationality) ? (
-                      <div className={styles.metadata} style={{ display: 'flex', gap: '5px' }}>
-                        {entity.metadata.Nationality.map((flagcode: string) => (
-                          <ReactCountryFlag
-                            key={flagcode}
-                            countryCode={flagcode}
-                            svg
-                            style={{ width: '1.5em', height: '1.5em' }}
-                            title={flagcode}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <span>{stat.displayValue}</span>
-                    )}
-                  </div>
-                ))}
+                {formattedStatistics
+                  .filter((stat) => stat.key !== 'customTracks')
+                  .map((stat) => (
+                    <div key={stat.key} className={styles.statBox}>
+                      <label>{stat.label}</label>
+                      {stat.key === 'Nationality' && Array.isArray(entity.metadata?.Nationality) ? (
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          {entity.metadata.Nationality.map((flagcode: string) => (
+                            <ReactCountryFlag
+                              key={flagcode}
+                              countryCode={flagcode}
+                              svg
+                              style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }}
+                              title={flagcode}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <span>{stat.displayValue}</span>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
         </aside>
 
         <main className={styles.contentArea}>
+          {timelineItems.length > 0 && (
+            <section className={styles.timelineSection}>
+              <h2 className={styles.sectionHeading}>Timeline</h2>
+
+              <div
+                ref={timelineContainerRef}
+                className={`${styles.timelineContainerDynamic} ${isTimelineTall && !forceShowEntireTimeline ? styles.isCapped : ''}`}
+              >
+                <div className={styles.timelineTrack}>
+                  {timelineItems.map((item) => {
+                    const isExpanded = !!expandedMilestones[item.id];
+                    const totalMilestones = item.milestones?.length || 0;
+                    const visibleMilestones = isExpanded ? item.milestones || [] : (item.milestones || []).slice(0, 3);
+                    const hasMoreThanLimit = totalMilestones > 3;
+
+                    const startStr = formatTimelineDate(item.startDate);
+                    const endStr = formatTimelineDate(item.endDate);
+                    const shouldShowEndDate = item.endDate && item.endDate !== item.startDate;
+
+                    const isPastItem = item.status?.toLowerCase() !== 'active';
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`${styles.timelineItem} ${isPastItem ? styles.isPastItem : ''}`}
+                      >
+                        <div className={styles.timelineSideInfo}>
+                          <span className={styles.timelineDuration}>
+                            {startStr}
+                            {shouldShowEndDate && ` — ${endStr}`}
+                            {!item.endDate && item.status === 'active' && ' — Present'}
+                          </span>
+                          {item.status && (
+                            <span className={`${styles.timelineBadge} ${styles[String(item.status).toLowerCase()] || ''}`}>
+                              {item.status}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className={styles.timelineNode}>
+                          <div className={styles.timelineDot} />
+                        </div>
+
+                        <div className={styles.timelineCard}>
+                          <h4 className={styles.timelineGroupTitle}>{item.groupName}</h4>
+                          {item.milestones && totalMilestones > 0 && (
+                            <div className={styles.milestonesWrapper}>
+                              <div className={styles.milestonesTrackLine} />
+                              {visibleMilestones.map((milestone, mIdx) => (
+                                <div key={`${milestone.title}-${mIdx}`} className={styles.milestoneRow}>
+                                  <div className={styles.milestoneIndicator}>
+                                    <div className={styles.milestoneMiniDot} />
+                                  </div>
+                                  <div className={styles.milestoneContent}>
+                                    <span className={styles.milestoneDate}>{formatTimelineDate(milestone.date)}</span>
+                                    <span className={styles.milestoneTitle}>{milestone.title}</span>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {hasMoreThanLimit && (
+                                <button onClick={() => toggleMilestones(item.id)} className={styles.milestoneExpandButton}>
+                                  {isExpanded ? (
+                                    <>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6" /></svg>
+                                      <span>Less</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                                      <span>{totalMilestones - 3} more</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {isTimelineTall && !forceShowEntireTimeline && (
+                  <div className={styles.timelineFadeOverlay}>
+                    <button
+                      className={styles.viewEntireTimelineButton}
+                      onClick={() => setForceShowEntireTimeline(true)}
+                    >
+                      <span>View Entire Timeline</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           {hasMedia ? (
             gallerySectionKeys.map(sectionKey => {
               const galleryItems = mediaSections[sectionKey];
@@ -218,9 +363,8 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                 <section key={sectionKey} className={styles.mediaSection}>
                   <h2 className={styles.sectionHeading}>{theme.labels[sectionKey] ?? sectionKey}</h2>
                   <div className={styles.mediaGrid}>
-
                     {[0, 1, 2].map((colIndex) => {
-                      const itemsInColumn = galleryItems.filter((_, index) => index % 3 === colIndex);
+                      const itemsInColumn = galleryItems.filter((_item, index) => index % 3 === colIndex);
                       const rawPadding = columnPaddings[sectionKey]?.[colIndex] || 0;
                       const finalPlaceholderHeight = rawPadding - 24;
 
@@ -246,7 +390,11 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                                   ) : item.type === 'video-file' ? (
                                     <video
                                       src={mediaSourcePath}
-                                      controls
+                                      autoPlay={true}
+                                      loop={true}
+                                      muted={true}
+                                      playsInline={true}
+                                      controls={true}
                                       preload="metadata"
                                       onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
                                     />
@@ -261,11 +409,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                           {finalPlaceholderHeight > 10 && (
                             <div
                               className={`${styles.mediaItem} ${styles.decorativePlaceholder}`}
-                              style={{
-                                height: finalPlaceholderHeight,
-                                padding: finalPlaceholderHeight < 80 ? '0' : undefined,
-                                minHeight: 0
-                              }}
+                              style={{ height: finalPlaceholderHeight, padding: finalPlaceholderHeight < 80 ? '0' : undefined, minHeight: 0 }}
                             >
                               {finalPlaceholderHeight >= 80 && (
                                 <div className={styles.placeholderInner}>
@@ -275,7 +419,6 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                               )}
                             </div>
                           )}
-
                         </div>
                       );
                     })}
@@ -287,7 +430,7 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <div className={styles.emptyMediaContainer}>
               <div className={styles.emptyMediaInner}>
                 <div className={styles.emptyMediaIconWrapper}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
                     <circle cx="9" cy="9" r="2" />
                     <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
@@ -303,14 +446,13 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
             <section className={styles.teammatesSection}>
               {groupKeys.map(groupId => {
                 const { groupName, members } = groupedTeammates[groupId];
-
                 return (
                   <div key={groupId} className={styles.groupSubSection}>
                     <h2 className={styles.sectionHeading}>{groupName} Members</h2>
                     <div className={styles.teammatesGrid}>
                       {members.map((member) => {
                         const currentStatus = String(member.l4.metadata?.groupStatus || '').toLowerCase();
-                        const isFormer = ['former', 'retired', 'ex'].includes(currentStatus);
+                        const isFormer = ['former', 'retired', 'ex', 'disbanded'].includes(currentStatus);
 
                         return (
                           <div

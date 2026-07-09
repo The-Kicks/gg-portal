@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
-import { useAdminEntityCreate, CORE_IMAGE_FIELDS } from './useAdminEntityCreate';
+import { useAdminEntityCreate } from './useAdminEntityCreate';
 import styles from '../AdminGlobal.module.css';
+
+const CORE_IMAGE_FIELDS: string[] = ['thumbnail', 'banner', 'avatar', 'logo'];
 
 interface Props {
   theme: Theme;
-  onSave: (newEntity: HydratedEntity) => void;
+  onSave: (newEntity: HydratedEntity) => void | Promise<void>;
   onCancel: () => void;
 }
 
+/**
+ * Admin component responsible for orchestrating the entity creation multi-section form,
+ * facilitating structural attribute bindings, layer validation, and custom drag-and-drop media ingestion.
+ */
 export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) => {
   const {
     name,
@@ -18,17 +24,14 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     type,
     status,
     setStatus,
-    isStandalone,
-    setIsStandalone,
     idStatus,
     imageInputs,
     metadataInputs,
     newImageKey,
+    triggerFieldsMap,
     setNewImageKey,
     newMetadataKey,
     setNewMetadataKey,
-    dynamicTriggers,
-    triggerFieldsMap,
     partitionedMetadataKeys,
     albumInput,
     setAlbumInput,
@@ -46,20 +49,46 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     handleSubmit
   } = useAdminEntityCreate({ theme, onSave });
 
-  // Tracks the current active drag source to manage UI state
-  const [activeDragSource, setActiveDragSource] = useState<string | null>(null);
-
+  /**
+   * Generates specific style indicator class name mappings based on unique 
+   * identifier database availability statuses.
+   */
   const getInputValidationClass = (): string => {
     if (idStatus === 'available') return styles.inputAvailable;
     if (idStatus === 'taken') return styles.inputTaken;
     return '';
   };
 
+  /**
+   * Assesses an incoming media reference string to check if it points to a video container format
+   * or a standard cloud video-sharing endpoint.
+   */
   const isVideoUrl = (url: string): boolean => {
     const lowerUrl = url.toLowerCase();
-    return lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.webm');
+    return lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.webm') || lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be');
   };
 
+  /**
+   * Extracts distinct unique route components from external link signatures to format standard
+   * embedded iframe player locations for video streaming frames.
+   */
+  const getVideoEmbedUrl = (url: string): string | null => {
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.includes('youtube.com/watch')) {
+      const videoId = new URL(url).searchParams.get('v');
+      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+    }
+    if (lowerUrl.includes('youtu.be/')) {
+      const videoId = url.split('youtu.be/')[1]?.split(/[?#]/)[0];
+      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+    }
+    return null;
+  };
+
+  /**
+   * Splits text inputs by character boundaries, normalizes legacy video links, 
+   * and isolates novel uniform records from existing asset groups.
+   */
   const handleCustomParseAlbum = () => {
     if (!albumInput.trim()) return;
 
@@ -77,7 +106,9 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     const dynamicAssignedUrls: string[] = [];
     Object.values(imageInputs).forEach(val => {
       if (val) {
-        const parsed = val.split(',').map(s => s.trim()).filter(Boolean);
+        const parsed = (Array.isArray(val) ? val : (val as string).split(/[\s,]+/))
+          .map(s => s.trim())
+          .filter(Boolean);
         dynamicAssignedUrls.push(...parsed);
       }
     });
@@ -93,120 +124,32 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
     setAlbumInput('');
   };
 
-  return (
-    <div className={styles.formCard}>
-      <h2 className={styles.formCardTitle}>Create New Entity Records</h2>
-
-      {/* Core Base Info Grid */}
-      <div className={styles.baseInfoGrid}>
-        <div>
-          <div className={styles.fieldLabel}>
-            Name {idStatus === 'taken' && <span className={styles.textError}>(ID taken!)</span>}
-          </div>
-          <input
-            id="base-name-input"
-            name="name"
-            type="text"
-            placeholder="e.g., Johan Cruijff"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            className={`${styles.inputField} ${getInputValidationClass()}`}
-          />
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Unique Suffix (Optional)</div>
-          <input
-            id="base-suffix-input"
-            name="customSuffix"
-            type="text"
-            placeholder="e.g., Ajax"
-            value={customSuffix}
-            onChange={e => setCustomSuffix(e.target.value)}
-            className={`${styles.inputField} ${getInputValidationClass()}`}
-          />
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Tier / Layer Type</div>
-          <select
-            id="base-type-select"
-            name="type"
-            value={type}
-            onChange={e => handleTypeChange(e.target.value)}
-            className={styles.inputField}
-          >
-            {[
-              { key: 'l1', fallback: 'Layer 1 (Main Category)' },
-              { key: 'l2', fallback: 'Layer 2 (Governing Body)' },
-              { key: 'l3', fallback: 'Layer 3 (Team / Club)' },
-              { key: 'l4', fallback: 'Layer 4 (Individual / Player)' },
-            ].map(({ key, fallback }) => {
-              const customLabel = theme?.labels?.[key];
-              return (
-                <option key={key} value={key}>
-                  {customLabel ? `${customLabel} (${key.toUpperCase()})` : fallback}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Status</div>
-          <select
-            id="base-status-select"
-            name="status"
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-            className={styles.inputField}
-          >
-            <option value="active">Active</option>
-            <option value="disbanded">Disbanded</option>
-            <option value="inactive">Inactive</option>
-            <option value="retired">Retired</option>
-            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => (
-              <option key={triggerKey} value={triggerKey}>
-                {triggerConfig.value.charAt(0).toUpperCase() + triggerConfig.value.slice(1)} (Schema Trigger)
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Standalone Node</div>
-          <input
-            id="base-standalone-checkbox"
-            name="isStandalone"
-            type="checkbox"
-            checked={isStandalone}
-            onChange={e => setIsStandalone(e.target.checked)}
-            className={styles.checkbox}
-          />
-        </div>
-        <div>
-          <div className={styles.fieldLabel}>Passing Date</div>
-          <input
-            id="meta-field-PassingDate"
-            name="PassingDate"
-            type="text"
-            placeholder="DD-MM-YYYY"
-            value={metadataInputs['PassingDate'] || ''}
-            onChange={e => handleMetadataInputChange('PassingDate', e.target.value)}
-            className={styles.inputField}
-          />
-        </div>
-      </div>
-
-      {/* Required Game Fields */}
-      {type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
+  /**
+   * Conditionally returns a sub-layout interface populated with custom schema constraints 
+   * required by the active architectural tree hierarchy.
+   */
+  const renderLayerSpecificMetadata = () => {
+    const isL4 = type.toLowerCase() === 'l4';
+    const isL3 = type.toLowerCase() === 'l3';
+    
+    if ((isL4 || isL3) && partitionedMetadataKeys.requiredKeys.length > 0) {
+      return (
         <div className={styles.requiredSection}>
-          <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
+          <h3 className={styles.requiredTitle}>
+            🔒 Required Metrics ({isL3 ? 'Layer 3 Team Core' : 'Layer 4 Individual Core'})
+          </h3>
+          <p className={`${styles.labelSubText} ${styles.textMuted}`}>
+            These attributes are strictly required by the engine config for this tier level.
+          </p>
           <div className={styles.twoColumnGrid}>
             {partitionedMetadataKeys.requiredKeys.map(key => (
               <div key={key}>
-                <div className={styles.requiredLabel}>{key}</div>
+                <div className={styles.requiredLabel}>
+                  {key} {key.toLowerCase() === 'nationality' && <small className={styles.textMuted}>(Comma separated list)</small>}
+                </div>
                 <input
-                  id={`required-field-${key}`}
-                  name={key}
                   type="text"
-                  placeholder={`Enter required ${key}`}
+                  placeholder={key.toLowerCase() === 'birthday' ? 'DD-MM-YYYY' : `Enter required ${key}`}
                   value={metadataInputs[key] || ''}
                   onChange={e => handleMetadataInputChange(key, e.target.value)}
                   className={`${styles.inputField} ${styles.requiredInput}`}
@@ -215,271 +158,367 @@ export const AdminEntityCreate: React.FC<Props> = ({ theme, onSave, onCancel }) 
             ))}
           </div>
         </div>
-      )}
+      );
+    }
+    return null;
+  };
 
-      {/* Dynamic Attributes */}
-      <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Populated via {type.toUpperCase()} Theme Schema)</h3>
-      <div className={styles.innerSection}>
-        {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
-          <p className={styles.textMuted}>No specific layout metadata schema properties injected for this layer.</p>
-        ) : (
+  return (
+    <div className={styles.container}>
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-start' }}>
+        <button 
+          type="button" 
+          onClick={onCancel} 
+          className={`${styles.btn} ${styles.btnBack}`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+        >
+          ⬅️ Back to Dashboard
+        </button>
+      </div>
+
+      <div className={styles.formCard}>
+        <h2 className={styles.formCardTitle}>Create New Entity Records</h2>
+
+        <div className={styles.baseInfoGrid}>
+          <div>
+            <div className={styles.fieldLabel}>
+              Name {idStatus === 'taken' && <span className={styles.textError}>(ID taken!)</span>}
+            </div>
+            <input
+              id="base-name-input"
+              name="name"
+              type="text"
+              placeholder="e.g., Johan Cruijff"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className={`${styles.inputField} ${getInputValidationClass()}`}
+            />
+          </div>
+          <div>
+            <div className={styles.fieldLabel}>Unique Suffix (Optional)</div>
+            <input
+              id="base-suffix-input"
+              name="customSuffix"
+              type="text"
+              placeholder="e.g., Ajax"
+              value={customSuffix}
+              onChange={e => setCustomSuffix(e.target.value)}
+              className={`${styles.inputField} ${getInputValidationClass()}`}
+            />
+          </div>
+          <div>
+            <div className={styles.fieldLabel}>Tier / Layer Type</div>
+            <select
+              id="base-type-select"
+              name="type"
+              value={type}
+              onChange={e => handleTypeChange(e.target.value)}
+              className={styles.inputField}
+            >
+              {[
+                { key: 'l1', fallback: 'Layer 1 (Main Category)' },
+                { key: 'l2', fallback: 'Layer 2 (Governing Body)' },
+                { key: 'l3', fallback: 'Layer 3 (Team / Club)' },
+                { key: 'l4', fallback: 'Layer 4 (Individual / Player)' },
+              ].map(({ key, fallback }) => {
+                const customLabel = theme?.labels?.[key];
+                return (
+                  <option key={key} value={key}>
+                    {customLabel ? `${customLabel} (${key.toUpperCase()})` : fallback}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          <div>
+            <div className={styles.fieldLabel}>Status</div>
+            <select value={status} onChange={e => setStatus(e.target.value)} className={styles.inputField}>
+              <option value="active">Active</option>
+              <option value="disbanded">Disbanded</option>
+              <option value="inactive">Inactive</option>
+              <option value="retired">Retired</option>
+            </select>
+          </div>
+
+          <div>
+            <div className={styles.fieldLabel}>Passing Date</div>
+            <input
+              id="meta-field-PassingDate"
+              name="PassingDate"
+              type="text"
+              placeholder="DD-MM-YYYY"
+              value={metadataInputs['PassingDate'] || ''}
+              onChange={e => handleMetadataInputChange('PassingDate', e.target.value)}
+              className={styles.inputField}
+            />
+          </div>
+        </div>
+
+        {renderLayerSpecificMetadata()}
+
+        <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes (Theme Properties)</h3>
+        <div className={styles.innerSection}>
+          {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
+            <p className={styles.textMuted}>No specific layout metadata schema properties injected for this layer.</p>
+          ) : (
+            <div className={styles.twoColumnGrid}>
+              {partitionedMetadataKeys.dynamicKeys.map(key => {
+                const triggerValues = triggerFieldsMap[key];
+                const isStatusKey = key.toLowerCase() === 'status';
+
+                return (
+                  <div key={key}>
+                    <div className={styles.labelActionRow}>
+                      <span>
+                        {key}
+                        {triggerValues && !isStatusKey && <span className={styles.textWarning}> (Required by theme 🔒)</span>}
+                      </span>
+                      <button type="button" onClick={() => handleRemoveMetadataField(key)} className={styles.btnRemove}>Remove</button>
+                    </div>
+
+                    {triggerValues && !isStatusKey ? (
+                      <select
+                        id={`dynamic-select-${key}`}
+                        name={key}
+                        value={metadataInputs[key] || ''}
+                        onChange={e => handleMetadataInputChange(key, e.target.value)}
+                        className={styles.inputField}
+                      >
+                        <option value="">-- Active / Normal --</option>
+                        {triggerValues.map(val => (
+                          <option key={val} value={val}>
+                            {val.charAt(0).toUpperCase() + val.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id={`dynamic-input-${key}`}
+                        name={key}
+                        type="text"
+                        value={metadataInputs[key] || ''}
+                        onChange={e => handleMetadataInputChange(key, e.target.value)}
+                        className={styles.inputField}
+                        placeholder={`Enter value for ${key}`}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className={styles.innerActionRow}>
+            <input id="new-metadata-key-input" name="newMetadataKey" type="text" placeholder="e.g., Twitter" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} className={styles.inlineInput} />
+            <button type="button" onClick={handleAddMetadataField} className={`${styles.btn} ${styles.btnPrimary}`}>Add Attribute Property</button>
+          </div>
+        </div>
+
+        <h3 className={styles.sectionTitle}>Media Assets (Images & Videos)</h3>
+        <div className={styles.innerSection}>
+          <div style={{ marginBottom: '15px' }}>
+            <div className={styles.fieldLabel} style={{ fontSize: '12px' }}>📋 Bulk Link Ingestion List</div>
+            <div className={styles.innerActionRow} style={{ marginTop: '5px' }}>
+              <textarea
+                placeholder="Plak hier meerdere URL's gescheiden door spaties, komma's of regels..."
+                value={albumInput}
+                onChange={e => setAlbumInput(e.target.value)}
+                className={styles.textareaField}
+                rows={2}
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+              <button type="button" onClick={handleCustomParseAlbum} className={`${styles.btn} ${styles.btnPrimary}`}>In Pool Laden</button>
+            </div>
+          </div>
+
+          {unassignedImages.length > 0 && (
+            <div
+              className={styles.innerActionRow}
+              style={{
+                marginBottom: '20px', padding: '15px', border: '1px dashed var(--border-color, #ccc)', borderRadius: '6px',
+                display: 'flex', gap: '15px', overflowX: 'auto', minHeight: '140px', background: 'rgba(0,0,0,0.02)'
+              }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => {
+                e.preventDefault();
+                const dragData = e.dataTransfer.getData('text/plain');
+                try {
+                  const { url, sourceKey } = JSON.parse(dragData);
+                  if (sourceKey) {
+                    handleUnassignImage(url, sourceKey);
+                  }
+                } catch {
+                  const url = e.dataTransfer.getData('url') || dragData;
+                  if (url && !unassignedImages.includes(url)) {
+                    setUnassignedImages(prev => [...prev, url]);
+                  }
+                }
+              }}
+            >
+              {unassignedImages.map((url, idx) => {
+                const embedUrl = getVideoEmbedUrl(url);
+                return (
+                  <div
+                    key={`${url}-${idx}`}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: null }));
+                    }}
+                    style={{ position: 'relative', cursor: 'grab', flexShrink: 0 }}
+                  >
+                    {isVideoUrl(url) ? (
+                      <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333' }}>
+                        {embedUrl ? (
+                          <iframe src={embedUrl} title="Video preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }} />
+                        ) : (
+                          <video src={url} muted loop autoPlay draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover' }} />
+                        )}
+                      </div>
+                    ) : (
+                      <img src={url} alt="Staging thumb" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className={styles.twoColumnGrid}>
-            {partitionedMetadataKeys.dynamicKeys.map(key => {
-              const triggerValues = triggerFieldsMap[key];
+            {Object.keys(imageInputs).map(key => {
+              const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
+              const rawValue = imageInputs[key];
+              const assignedUrls = Array.isArray(rawValue)
+                ? rawValue
+                : typeof rawValue === 'string'
+                  ? rawValue.split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+                  : [];
+
               return (
-                <div key={key}>
+                <div
+                  key={key}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const dragData = e.dataTransfer.getData('text/plain');
+                    try {
+                      const { url, sourceKey } = JSON.parse(dragData);
+                      if (sourceKey === key) return;
+
+                      if (sourceKey) {
+                        const sourceList = (Array.isArray(imageInputs[sourceKey])
+                          ? imageInputs[sourceKey]
+                          : typeof imageInputs[sourceKey] === 'string'
+                            ? (imageInputs[sourceKey]).split(/[\s,]+/)
+                            : []
+                        ).map((s: string) => s.trim()).filter((s: string) => s && s !== url);
+
+                        const targetList = (Array.isArray(imageInputs[key])
+                          ? imageInputs[key]
+                          : typeof imageInputs[key] === 'string'
+                            ? (imageInputs[key]).split(/[\s,]+/)
+                            : []
+                        ).map((s: string) => s.trim()).filter(Boolean);
+
+                        if (!targetList.includes(url)) {
+                          targetList.push(url);
+                        }
+
+                        handleImageInputChange(sourceKey, sourceList.join('\n'));
+                        handleImageInputChange(key, targetList.join('\n'));
+                      } else {
+                        handleAssignImage(url, key);
+                      }
+                    } catch {
+                      const url = e.dataTransfer.getData('url') || dragData;
+                      if (url) {
+                        handleAssignImage(url, key);
+                      }
+                    }
+                  }}
+                >
                   <div className={styles.labelActionRow}>
                     <span>
                       {key}
-                      {triggerValues && <span className={styles.textWarning}> (Required by theme 🔒)</span>}
+                      {isCoreMediaKey && <span className={styles.textWarning} style={{ color: '#d32f2f' }}> (Core Asset 🔒)</span>}
                     </span>
-                    <button type="button" onClick={() => handleRemoveMetadataField(key)} className={styles.btnRemove}>Remove</button>
+                    <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove Field</button>
                   </div>
 
-                  {triggerValues ? (
-                    <select
-                      id={`dynamic-select-${key}`}
-                      name={key}
-                      value={metadataInputs[key] || ''}
-                      onChange={e => handleMetadataInputChange(key, e.target.value)}
-                      className={styles.inputField}
-                    >
-                      <option value="">-- Active / Normal --</option>
-                      {triggerValues.map(val => (
-                        <option key={val} value={val}>
-                          {val.charAt(0).toUpperCase() + val.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      id={`dynamic-input-${key}`}
-                      name={key}
-                      type="text"
-                      value={metadataInputs[key] || ''}
-                      onChange={e => handleMetadataInputChange(key, e.target.value)}
-                      className={styles.inputField}
-                    />
+                  {assignedUrls.length > 0 && (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                      {assignedUrls.map((url, uIdx) => {
+                        const embedUrl = getVideoEmbedUrl(url);
+                        return (
+                          <div
+                            key={`${url}-${uIdx}`}
+                            draggable
+                            onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: key })); }}
+                            style={{ position: 'relative', cursor: 'grab', transition: 'transform 0.2s ease' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.zIndex = '10'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.zIndex = '1'; }}
+                          >
+                            {isVideoUrl(url) ? (
+                              <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid currentColor' }}>
+                                {embedUrl ? (
+                                  <iframe src={embedUrl} title="Video preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }} />
+                                ) : (
+                                  <video src={url} muted loop autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                )}
+                              </div>
+                            ) : (
+                              <img src={url} alt="Asset preview" style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid currentColor', boxShadow: '0 4px 6px rgba(0,0,0,0.15)' }} />
+                            )}
+
+                            <button
+                              type="button"
+                              title="Dupliceren naar Pool"
+                              onClick={() => {
+                                if (!unassignedImages.includes(url)) {
+                                  setUnassignedImages(prev => [...prev, url]);
+                                }
+                              }}
+                              style={{
+                                position: 'absolute', top: '-5px', right: '-5px',
+                                background: '#22c55e', color: '#fff', border: 'none',
+                                borderRadius: '50%', width: '20px', height: '20px', fontSize: '14px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)', zIndex: 20, fontWeight: 'bold'
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
+
+                  <textarea
+                    value={Array.isArray(imageInputs[key]) ? (imageInputs[key] as string[]).join('\n') : (imageInputs[key] as string) || ''}
+                    onChange={e => {
+                      handleImageInputChange(key, e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
+                    ref={el => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+                    className={styles.textareaField}
+                    rows={1}
+                    style={{ minHeight: '38px', resize: 'none', overflowY: 'hidden', lineHeight: '1.5' }}
+                  />
                 </div>
               );
             })}
           </div>
-        )}
-        <div className={styles.innerActionRow}>
-          <input id="new-metadata-key-input" name="newMetadataKey" type="text" placeholder="e.g., Twitter" value={newMetadataKey} onChange={e => setNewMetadataKey(e.target.value)} className={styles.inlineInput} />
-          <button type="button" onClick={handleAddMetadataField} className={`${styles.btn} ${styles.btnPrimary}`}>Add Attribute Property</button>
-        </div>
-      </div>
 
-      {/* Media Assets */}
-      <h3 className={styles.sectionTitle}>📸 Media Assets (Imgur CDN Links Only)</h3>
-      <div className={styles.innerSection}>
-        <div style={{ marginBottom: '15px' }}>
-          <div className={styles.fieldLabel} style={{ fontSize: '12px' }}>📋 Bulk Imgur Link Ingestion List</div>
-          <div className={styles.innerActionRow} style={{ marginTop: '5px' }}>
-            <textarea
-              id="bulk-album-textarea"
-              name="albumInput"
-              placeholder="Paste Imgur links separated by spaces, commas or newlines..."
-              value={albumInput}
-              onChange={e => setAlbumInput(e.target.value)}
-              className={styles.textareaField}
-              rows={2}
-              style={{ width: '100%', resize: 'vertical' }}
-            />
-            <button
-              type="button"
-              onClick={handleCustomParseAlbum}
-              className={`${styles.btn} ${styles.btnPrimary}`}
-            >
-              Load In Pool
-            </button>
+          <div className={styles.innerActionRow}>
+            <input type="text" placeholder="e.g., streamingTeaser" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} className={styles.inlineInput} />
+            <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>Add Asset Field</button>
           </div>
         </div>
 
-        {/* Unassigned Drag Pool */}
-        {unassignedImages.length > 0 && (
-          <div
-            className={styles.innerActionRow}
-            style={{
-              marginBottom: '20px', padding: '15px', border: '1px dashed var(--text-muted, #ccc)', borderRadius: '6px',
-              display: 'flex', gap: '15px', overflowX: 'auto', minHeight: '140px', background: 'rgba(0,0,0,0.02)'
-            }}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => {
-              e.preventDefault();
-              const dragData = e.dataTransfer.getData('text/plain');
-              
-              try {
-                if (dragData && dragData.startsWith('{')) {
-                  const { url, sourceKey } = JSON.parse(dragData);
-                  if (sourceKey) {
-                    handleUnassignImage(url, sourceKey);
-                    return;
-                  }
-                }
-              } catch (err) {
-                console.warn("[UI Log] JSON processing error on pool drop.", err);
-              }
-
-              let fallbackUrl = e.dataTransfer.getData('url') || dragData;
-              if (fallbackUrl) {
-                fallbackUrl = fallbackUrl.trim();
-                if (fallbackUrl.toLowerCase().endsWith('.gifv')) {
-                  fallbackUrl = fallbackUrl.slice(0, -5) + '.mp4';
-                }
-                if (!unassignedImages.includes(fallbackUrl)) {
-                  setUnassignedImages(prev => [...prev, fallbackUrl]);
-                }
-              }
-            }}
-          >
-            {unassignedImages.map((url, idx) => (
-              <div
-                key={`${url}-${idx}`}
-                draggable
-                onDragStart={e => {
-                  setTimeout(() => setActiveDragSource('pool'), 0);
-                  e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: null }));
-                }}
-                onDragEnd={() => setActiveDragSource(null)}
-                style={{ position: 'relative', cursor: 'grab', flexShrink: 0 }}
-              >
-                {isVideoUrl(url) ? (
-                  <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333' }}>
-                    <video src={url} muted loop autoPlay draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-                  </div>
-                ) : (
-                  <img src={url} alt="Staging thumb" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', pointerEvents: 'none' }} />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Media Asset Inputs Grid */}
-        <div className={styles.twoColumnGrid}>
-          {Object.keys(imageInputs).map(key => {
-            const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
-            const rawValue = imageInputs[key] || '';
-            const assignedUrls = rawValue.split(',').map(s => s.trim()).filter(Boolean);
-
-            return (
-              <div
-                key={key}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => {
-                  e.preventDefault();
-                  const dragData = e.dataTransfer.getData('text/plain');
-                  let urlToAssign = '';
-                  let detectedSourceKey: string | null = null;
-
-                  try {
-                    if (dragData && dragData.startsWith('{')) {
-                      const { url, sourceKey } = JSON.parse(dragData);
-                      urlToAssign = url;
-                      detectedSourceKey = sourceKey;
-                    }
-                  } catch (err) {
-                    console.warn("[UI Log] Error parsing drop payload.", err);
-                  }
-
-                  if (!urlToAssign) urlToAssign = e.dataTransfer.getData('url') || dragData;
-                  if (!urlToAssign) return;
-                  
-                  urlToAssign = urlToAssign.trim();
-                  if (urlToAssign.toLowerCase().endsWith('.gifv')) {
-                    urlToAssign = urlToAssign.slice(0, -5) + '.mp4';
-                  }
-
-                  if (detectedSourceKey === key) return;
-
-                  if (detectedSourceKey) {
-                    const sourceList = (imageInputs[detectedSourceKey] || '')
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(s => s && s !== urlToAssign);
-
-                    const targetList = rawValue
-                      .split(',')
-                      .map(s => s.trim())
-                      .filter(Boolean);
-
-                    if (!targetList.includes(urlToAssign)) targetList.push(urlToAssign);
-
-                    handleImageInputChange(detectedSourceKey, sourceList.join(', '));
-                    handleImageInputChange(key, targetList.join(', '));
-                  } else {
-                    handleAssignImage(urlToAssign, key);
-                  }
-                }}
-              >
-                <div className={styles.labelActionRow}>
-                  <span>
-                    {key}
-                    {isCoreMediaKey ? <small className={styles.textMuted}> (Core Asset)</small> : <small className={styles.textWarning}> (Optional Theme Key)</small>}
-                  </span>
-                  {!isCoreMediaKey && <button type="button" onClick={() => handleRemoveImageField(key)} className={styles.btnRemove}>Remove</button>}
-                </div>
-
-                {assignedUrls.length > 0 && (
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                    {assignedUrls.map((url, subIdx) => (
-                      <div
-                        key={`${url}-${subIdx}`}
-                        draggable
-                        onDragStart={e => {
-                          setTimeout(() => setActiveDragSource(key), 0);
-                          e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: key }));
-                        }}
-                        onDragEnd={() => setActiveDragSource(null)}
-                        style={{ position: 'relative', cursor: 'grab', transition: 'transform 0.2s ease', pointerEvents: activeDragSource ? 'none' : 'auto' }}
-                      >
-                        {isVideoUrl(url) ? (
-                          <div style={{ width: '110px', height: '110px', background: '#111', borderRadius: '6px', overflow: 'hidden', border: '1px solid currentColor' }}>
-                            <video src={url} muted loop autoPlay draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-                          </div>
-                        ) : (
-                          <img src={url} alt="Asset preview" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid currentColor', boxShadow: '0 4px 6px rgba(0,0,0,0.15)', pointerEvents: 'none' }} />
-                        )}
-                        <button
-                          type="button"
-                          title="Duplicate to Staging Pool"
-                          onClick={() => { if (!unassignedImages.includes(url)) setUnassignedImages(prev => [...prev, url]); }}
-                          style={{
-                            position: 'absolute', top: '-5px', right: '-5px', background: '#22c55e', color: '#fff', border: 'none',
-                            borderRadius: '50%', width: '20px', height: '20px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 20
-                          }}
-                        >+</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <textarea
-                  id={`media-textarea-${key}`}
-                  name={key}
-                  placeholder="https://i.imgur.com/example.png"
-                  value={rawValue}
-                  onChange={e => handleImageInputChange(key, e.target.value)}
-                  className={styles.textareaField}
-                  style={{ minHeight: '38px', resize: 'none', overflowY: 'hidden', pointerEvents: activeDragSource ? 'none' : 'auto' }}
-                />
-              </div>
-            );
-          })}
+        <div className={styles.footerActions} style={{ marginTop: '30px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
+          <button type="button" onClick={(e) => void handleSubmit(e)} className={`${styles.btn} ${styles.btnPrimary}`} style={{ padding: '12px 24px', fontSize: '16px' }}>Create & Save</button>
         </div>
-
-        <div className={styles.innerActionRow}>
-          <input id="new-image-key-input" name="newImageKey" type="text" placeholder="e.g., logo or fanart" value={newImageKey} onChange={e => setNewImageKey(e.target.value)} className={styles.inlineInput} />
-          <button type="button" onClick={handleAddImageField} className={`${styles.btn} ${styles.btnOutline}`}>Add Asset Field</button>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className={styles.footerActions}>
-        <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`}>Cancel</button>
-        <button type="button" onClick={() => void handleSubmit()} className={`${styles.btn} ${styles.btnPrimary}`}>Create & Save</button>
       </div>
     </div>
   );

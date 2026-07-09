@@ -1,5 +1,3 @@
-/* AdminGlobal.module.css */
-
 :root {
   --bg-main: #0f172a;        /* Diep corporate slate-900 */
   --bg-surface: #1e293b;     /* Iets lichtere slate-800 voor kaarten/tabellen */
@@ -42,6 +40,7 @@
 .buttonGroup {
   display: flex;
   gap: 15px;
+  align-items: center;
 }
 
 /* Algemene knop-basis */
@@ -411,12 +410,56 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px; /* Small layout gap pulling inputs tight against buttons */
+  flex-wrap: wrap;
 }
 
 .connectionRowLeft {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  flex: 1; /* Pushes the date group and buttons entirely to the right */
+  min-width: 0; /* Prevents overflow when strings like team profiles get long */
+}
+
+/* Custom Inline Date Alignments mapped to theme standard tokens */
+.connectionDates {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* Tight functional layout spacing */
+}
+
+.dateFieldGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dateLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dateHeaderInput {
+  width: 135px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dateHeaderInput:focus {
+  border-color: var(--adminprimary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 
 .badgeInbound {

@@ -42,7 +42,6 @@ export const AdminEditPage: React.FC<Props> = ({ theme }) => {
           try {
             await entityService.update(theme.id, id, updated);
 
-            // Notify the application layout to refresh the active records
             window.dispatchEvent(new Event('refresh-database'));
 
             navigate(-1);

@@ -14,7 +14,7 @@ export async function fetchThemes(): Promise<Theme[]> {
     return await response.json() as Theme[];
   } catch (error) {
     console.error("Fout bij het ophalen van de thema's uit de database:", error);
-    return []; // Fallback naar een lege array als de server uit staat
+    return []; 
   }
 }
 
@@ -31,7 +31,7 @@ export async function fetchEntitiesByLayer(themeId: string, layer: string): Prom
     return await response.json() as HydratedEntity[];
   } catch (error) {
     console.error(`Fout bij het ophalen van entiteiten voor ${themeId} op laag ${layer}:`, error);
-    return []; // Fallback naar een lege array bij een error
+    return []; 
   }
 }
 

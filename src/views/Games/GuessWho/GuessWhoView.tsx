@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import ReactCountryFlag from 'react-country-flag';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { GuessRow } from './GuessWhoViewPage';
@@ -50,35 +50,37 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   handleSelectGuess,
   getAgeFromDateString
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [setShowDropdown]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (filteredDropdownOptions.length > 0) {
         e.preventDefault();
         handleSelectGuess(filteredDropdownOptions[0]);
+        setShowDropdown(false);
       }
     }
   };
 
-  /**
-   * Vertaalt de nationaliteit naar vlaggen via pure string splitting (geen regex)
-   */
   const renderNationalityCell = (entity: HydratedEntity): React.ReactNode => {
     const meta = (entity.metadata || {}) as Record<string, unknown>;
     let nationalities: string[] = [];
 
     const rawValue = meta.Nationality;
     if (Array.isArray(rawValue)) {
-      nationalities = rawValue
-        .flatMap(n => String(n).split(','))
-        .flatMap(n => n.split('/'))
-        .map(n => n.trim())
-        .filter(Boolean);
+      nationalities = rawValue.flatMap(n => String(n).split(',')).flatMap(n => n.split('/')).map(n => n.trim()).filter(Boolean);
     } else if (typeof rawValue === 'string') {
-      nationalities = rawValue
-        .split(',')
-        .flatMap(n => n.split('/'))
-        .map(n => n.trim())
-        .filter(Boolean);
+      nationalities = rawValue.split(',').flatMap(n => n.split('/')).map(n => n.trim()).filter(Boolean);
     } else if (rawValue) {
       nationalities = [String(rawValue).trim()];
     }
@@ -104,7 +106,6 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   const renderMetadataString = (entity: HydratedEntity, key: string): string => {
     const ignoredMeta = theme.gameSettings?.guesswho?.ignoredMetadata || [];
     if (ignoredMeta.includes(key)) return '-';
-
     const meta = (entity.metadata || {}) as Record<string, unknown>;
     return String(meta[key] || '').trim() || '-';
   };
@@ -117,10 +118,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
 
   const getProfileImage = (entity: HydratedEntity): string => {
     const imgObj = entity.image as Record<string, unknown> | null;
-    if (imgObj && typeof imgObj.profileCard === 'string') {
-      return imgObj.profileCard;
-    }
-    return 'https://via.placeholder.com/50';
+    return (imgObj && typeof imgObj.profileCard === 'string') ? imgObj.profileCard : 'https://via.placeholder.com/50';
   };
 
   const activeColumns = useMemo(() => {
@@ -134,10 +132,8 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
       { id: 'age', label: 'Age' },
       { id: 'height', label: 'Height' },
     ];
-
     const rawDisabled = theme?.gameSettings?.guesswho?.disabledColumns;
     const disabledList = Array.isArray(rawDisabled) ? rawDisabled.map(s => String(s).trim().toLowerCase()) : [];
-
     return allColumns.filter(col => !disabledList.includes(col.id.toLowerCase()));
   }, [theme]);
 
@@ -157,7 +153,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
           <button className={styles.actionBtn} onClick={startNewGame}>Play Again</button>
         </div>
       ) : (
-        <div className={styles.searchWrapper}>
+        <div className={styles.searchWrapper} ref={containerRef}>
           <input
             type="text"
             className={styles.searchBar}
@@ -173,7 +169,10 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
           {showDropdown && filteredDropdownOptions.length > 0 && (
             <ul className={styles.dropdown}>
               {filteredDropdownOptions.map((e, index) => (
-                <li key={e.id} className={styles.dropdownItem} onClick={() => handleSelectGuess(e)}>
+                <li key={e.id} className={styles.dropdownItem} onClick={() => {
+                  handleSelectGuess(e);
+                  setShowDropdown(false);
+                }}>
                   <img src={getProfileImage(e)} alt="" className={styles.avatarMini} />
                   <div>
                     <div className={styles.dropName}>
@@ -196,83 +195,42 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
         <table className={styles.gameTable}>
           <thead>
             <tr>
-              {activeColumns.map(col => (
-                <th key={col.id}>{col.label}</th>
-              ))}
+              {activeColumns.map(col => <th key={col.id}>{col.label}</th>)}
             </tr>
           </thead>
           <tbody>
-            {guesses.map((row, idx) => {
-              return (
-                <tr key={idx}>
-                  {activeColumns.map(col => {
-                    const meta = row.entity.metadata as Record<string, unknown> | undefined;
+            {guesses.map((row, idx) => (
+              <tr key={idx}>
+                {activeColumns.map(col => {
+                  const meta = row.entity.metadata as Record<string, unknown> | undefined;
+                  switch (col.id) {
+                    case 'profile': return <td key={col.id} className={styles.cellProfile}><img src={getProfileImage(row.entity)} alt="" className={styles.tableAvatar} /></td>;
+                    case 'name': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.name]}`}>{row.entity.name || '-'}</td>;
+                    case 'org': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.org]}`}>{row.displayOrg || '-'}</td>;
+                    case 'nationality': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.nationality]}`}>{renderNationalityCell(row.entity)}</td>;
+                    case 'role': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.role]}`}>{renderMetadataString(row.entity, 'Role')}</td>;
+                    case 'debut': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.debut]}`}>{renderNumericDisplay(meta?.DebutYear)} {row.arrows.debut}</td>;
+                    case 'age': { 
+                      const ageVal = getAgeFromDateString(meta?.Birthday, meta?.PassingDate);
+                      const hasPassingDate = !!meta?.PassingDate;
 
-                    switch (col.id) {
-                      case 'profile':
-                        return (
-                          <td key={col.id} className={styles.cellProfile}>
-                            <img src={getProfileImage(row.entity)} alt="" className={styles.tableAvatar} />
-                          </td>
-                        );
-                      case 'name':
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.name]}`}>
-                            {row.entity.name || '-'}
-                          </td>
-                        );
-                      case 'org':
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.org]}`}>
-                            {row.displayOrg || '-'}
-                          </td>
-                        );
-                      case 'nationality':
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.nationality]}`}>
-                            {renderNationalityCell(row.entity)}
-                          </td>
-                        );
-                      case 'role':
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.role]}`}>
-                            {renderMetadataString(row.entity, 'Role')}
-                          </td>
-                        );
-                      case 'debut':
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.debut]}`}>
-                            {renderNumericDisplay(meta?.DebutYear)} {row.arrows.debut}
-                          </td>
-                        );
-                      case 'age': {
-                        const ageVal = getAgeFromDateString(meta?.Birthday, meta?.PassingDate);
-                        const hasPassingDate = !!meta?.PassingDate;
-
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.age]}`}>
-                            {meta?.Birthday ? (
-                              <>
-                                {ageVal} {row.arrows.age}
-                                {hasPassingDate && <span title="Deceased"> 🕊️</span>}
-                              </>
-                            ) : '-'}
-                          </td>
-                        );
-                      }
-                      case 'height':
-                        return (
-                          <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.height]}`}>
-                            {renderNumericDisplay(meta?.Height, 'cm')} {row.arrows.height}
-                          </td>
-                        );
-                      default:
-                        return null;
+                      return (
+                        <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.age]}`}>
+                          {meta?.Birthday ? (
+                            <>
+                              {ageVal} {row.arrows.age}
+                              {hasPassingDate && <span title="Deceased"> 🕊️</span>}
+                            </>
+                          ) : '-'}
+                        </td>
+                      );
                     }
-                  })}
-                </tr>
-              );
-            })}
+                    case 'height': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.height]}`}>{renderNumericDisplay(meta?.Height, 'cm')} {row.arrows.height}</td>;
+                    default: return null;
+                  }
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

@@ -26,6 +26,20 @@ export interface TeammateStructure {
   l3: BaseEntity[];
 }
 
+export interface TimelineMilestone {
+  date: string;
+  title: string;
+}
+
+export interface TimelineItem {
+  id: string;
+  groupName: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  milestones?: TimelineMilestone[];
+}
+
 const getMediaType = (file: string): 'image' | 'video-file' | 'video-embed' => {
   const lowerCaseFile = file.toLowerCase();
   if (lowerCaseFile.includes('youtube.com') || lowerCaseFile.includes('youtu.be')) return 'video-embed';
@@ -61,6 +75,16 @@ const mapMediaItemToMasonry = (
     type: mediaType,
     itemClassKey: isHorizontal ? 'horizontalImageItem' : 'tallImageItem'
   };
+};
+
+const safeGetTime = (dateStr?: string): number => {
+  if (!dateStr) return 0;
+  const trimmed = dateStr.trim();
+  if (/^\d{4}$/.test(trimmed)) {
+    return new Date(`${trimmed}-01-01`).getTime();
+  }
+  const parsed = new Date(trimmed).getTime();
+  return isNaN(parsed) ? 0 : parsed;
 };
 
 const useProfileAssetValidator = (targetEntity: BaseEntity | undefined) => {
@@ -99,6 +123,17 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
   const { id } = useParams<{ id: string }>();
   const [mediaDimensions, setMediaDimensions] = useState<Record<string, boolean>>({});
 
+  const layerMetadataConfig = useMemo(() => {
+    if (!theme.layerMetadata) return null;
+    try {
+      return typeof theme.layerMetadata === 'string'
+        ? JSON.parse(theme.layerMetadata)
+        : theme.layerMetadata;
+    } catch {
+      return null;
+    }
+  }, [theme.layerMetadata]);
+
   const profileDetails = useMemo(() => {
     if (!id || !theme.entities) return null;
     const targetEntity = theme.entities.find(e => e.id === id);
@@ -124,23 +159,24 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
 
   const assets = useProfileAssetValidator(profileDetails?.targetEntity);
 
-  const relatedTeammates = useMemo<TeammateStructure[]>(() => {
-    if (!profileDetails || !id || !theme.entities) return [];
+  const groupedTeammates = useMemo(() => {
+    const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
+    if (!profileDetails || !id || !theme.entities) return groups;
 
     const targetEntity = profileDetails.targetEntity;
     const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
 
-    const parentL3s: BaseEntity[] = [];
+    const parentL3s = new Map<string, BaseEntity>();
     allConns.forEach(conn => {
       const parent = conn.sourceEntity?.type === 'l3'
         ? conn.sourceEntity
         : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
-      if (parent && !parentL3s.some(p => p.id === parent.id)) {
-        parentL3s.push(parent);
+      if (parent) {
+        parentL3s.set(parent.id, parent);
       }
     });
 
-    const teammatesMap = new Map<string, TeammateStructure>();
+    const formerTriggerValue = String(layerMetadataConfig?.['l4']?.statusTriggers?.former?.value || 'former').toLowerCase();
 
     theme.entities.forEach(entity => {
       if (entity.type !== 'l4') return;
@@ -152,61 +188,31 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
           ? conn.sourceEntity
           : (conn.targetEntity?.type === 'l3' ? conn.targetEntity : null);
 
-        if (p && parentL3s.some(parentL3 => parentL3.id === p.id)) {
-          const membershipStatus = conn.metadata?.status || 'active';
+        if (p && parentL3s.has(p.id)) {
+          const membershipStatus = String(conn.metadata?.status || 'active').toLowerCase();
+          const isFormerTeammate = ['former', 'retired', 'ex', 'disbanded', formerTriggerValue].includes(membershipStatus);
 
-          if (!teammatesMap.has(entity.id)) {
+          if (!groups[p.id]) {
+            groups[p.id] = { groupName: p.name, members: [] };
+          }
+
+          if (!groups[p.id].members.some(m => m.l4.id === entity.id)) {
             const enrichedEntity: HydratedEntity = {
               ...entity,
               metadata: {
                 ...entity.metadata,
-                membershipStatus
+                groupStatus: isFormerTeammate ? 'former' : 'active'
               }
             };
-            teammatesMap.set(entity.id, { l4: enrichedEntity, l3: [p] });
-          } else {
-            const existing = teammatesMap.get(entity.id);
-            if (existing && !existing.l3.some(group => group.id === p.id)) {
-              existing.l3.push(p);
-            }
+
+            groups[p.id].members.push({ l4: enrichedEntity, l3: [p] });
           }
         }
       });
     });
 
-    const rawTeammates = Array.from(teammatesMap.values());
-    const formerTriggerValue = String(theme.layerMetadata?.['l4']?.statusTriggers?.former?.value || 'former').toLowerCase();
-
-    return rawTeammates.map(member => {
-      const explicitStatus = String(member.l4?.metadata?.['membershipStatus'] || '').toLowerCase();
-      const isFormerTeammate = explicitStatus === 'former' || explicitStatus === formerTriggerValue;
-
-      return {
-        ...member,
-        l4: {
-          ...member.l4,
-          metadata: {
-            ...(member.l4.metadata || {}),
-            groupStatus: isFormerTeammate ? 'former' : 'active'
-          }
-        }
-      };
-    });
-  }, [id, profileDetails, theme.entities, theme.layerMetadata]);
-
-  const groupedTeammates = useMemo(() => {
-    const groups: Record<string, { groupName: string; members: TeammateStructure[] }> = {};
-    
-    relatedTeammates.forEach(member => {
-      member.l3.forEach(group => {
-        if (!groups[group.id]) {
-          groups[group.id] = { groupName: group.name, members: [] };
-        }
-        groups[group.id].members.push(member);
-      });
-    });
     return groups;
-  }, [relatedTeammates]);
+  }, [id, profileDetails, theme.entities, layerMetadataConfig]);
 
   const groupKeys = useMemo(() => {
     return Object.keys(groupedTeammates).sort((a, b) => {
@@ -219,6 +225,144 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     });
   }, [groupedTeammates]);
 
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    if (!profileDetails?.targetEntity) return [];
+
+    const targetEntity = profileDetails.targetEntity;
+    const allConns = [...(targetEntity.connections || []), ...(targetEntity.targetConnections || [])];
+    const extractedEvents: TimelineItem[] = [];
+
+    const safeStringCast = (val: unknown): string | undefined => {
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === 'object') return undefined;
+      const str = String(val).trim();
+      return str !== '' ? str : undefined;
+    };
+
+    const parseMilestones = (rawMilestones: unknown): TimelineMilestone[] | undefined => {
+      if (!Array.isArray(rawMilestones)) return undefined;
+      return (rawMilestones as unknown[])
+        .map(m => {
+          if (m && typeof m === 'object') {
+            const milestone = m as { date?: unknown; title?: unknown };
+            const date = safeStringCast(milestone.date);
+            const title = safeStringCast(milestone.title);
+            if (date && title) return { date, title };
+          }
+          return null;
+        })
+        .filter((m): m is TimelineMilestone => m !== null);
+    };
+
+    allConns.forEach(conn => {
+      const connectedEntity = conn.sourceEntity?.id !== id ? conn.sourceEntity : conn.targetEntity;
+
+      if (connectedEntity) {
+        const startDate = safeStringCast(conn.metadata?.startDate || conn.metadata?.startdate);
+        let endDate = safeStringCast(conn.metadata?.endDate || conn.metadata?.enddate);
+        const status = safeStringCast(conn.metadata?.status);
+
+        if (startDate && endDate && startDate === endDate) {
+          endDate = undefined;
+        }
+
+        const groupName = safeStringCast(conn.metadata?.eventName) ||
+          safeStringCast(conn.metadata?.relationshipLabel) ||
+          connectedEntity.name;
+
+        const isGroupMembership = connectedEntity.type === 'l3';
+
+        if (startDate || endDate || !isGroupMembership) {
+          extractedEvents.push({
+            id: String(conn.id || `${connectedEntity.id}-${startDate || 'unknown'}`),
+            groupName: groupName,
+            startDate,
+            endDate,
+            status,
+            milestones: parseMilestones(conn.metadata?.milestones)
+          });
+        }
+      }
+    });
+
+    if (Array.isArray(targetEntity.metadata?.customTracks)) {
+      (targetEntity.metadata.customTracks as unknown[]).forEach((item, index) => {
+        if (item && typeof item === 'object') {
+          const track = item as { name?: unknown; startDate?: unknown; startdate?: unknown; endDate?: unknown; enddate?: unknown; status?: unknown; milestones?: unknown };
+          const trackName = safeStringCast(track.name);
+          if (trackName) {
+            const startDate = safeStringCast(track.startDate || track.startdate);
+            let endDate = safeStringCast(track.endDate || track.enddate);
+
+            if (startDate && endDate && startDate === endDate) {
+              endDate = undefined;
+            }
+
+            extractedEvents.push({
+              id: `custom-track-${targetEntity.id}-${index}`,
+              groupName: trackName,
+              startDate,
+              endDate,
+              status: safeStringCast(track.status),
+              milestones: parseMilestones(track.milestones)
+            });
+          }
+        }
+      });
+    }
+
+    const standaloneStartDate = safeStringCast(targetEntity.metadata?.standaloneStartDate || targetEntity.metadata?.startDate || targetEntity.metadata?.startdate);
+    let standaloneEndDate = safeStringCast(targetEntity.metadata?.standaloneEndDate || targetEntity.metadata?.endDate || targetEntity.metadata?.enddate);
+
+    if (standaloneStartDate && standaloneEndDate && standaloneStartDate === standaloneEndDate) {
+      standaloneEndDate = undefined;
+    }
+
+    if (targetEntity.isStandalone || standaloneStartDate || standaloneEndDate) {
+      let standaloneLabel = safeStringCast(targetEntity.metadata?.standaloneLabel) || 'Solo / Standalone Activities';
+
+      if (!targetEntity.metadata?.standaloneLabel) {
+        const metadataKeys = targetEntity.metadata ? Object.keys(targetEntity.metadata) : [];
+        const hasFootballFields = metadataKeys.some(k => ['position', 'club', 'goals', 'caps'].includes(k.toLowerCase()));
+        const hasF1Fields = metadataKeys.some(k => ['number', 'podiums', 'wins', 'championships'].includes(k.toLowerCase()));
+
+        if (hasFootballFields) {
+          standaloneLabel = 'Professional Football Career';
+        } else if (hasF1Fields) {
+          standaloneLabel = 'Formula 1 Racing Career';
+        } else if (targetEntity.type === 'l4') {
+          standaloneLabel = 'Solo Career / Individual Activities';
+        }
+      }
+
+      const entityStatus = safeStringCast(targetEntity.status) || 'active';
+      const isDuplicate = extractedEvents.some(e => e.groupName === standaloneLabel);
+
+      if (!isDuplicate && (standaloneStartDate || standaloneEndDate || targetEntity.isStandalone)) {
+        extractedEvents.push({
+          id: `standalone-track-${targetEntity.id}`,
+          groupName: standaloneLabel,
+          startDate: standaloneStartDate,
+          endDate: standaloneEndDate,
+          status: entityStatus,
+          milestones: parseMilestones(targetEntity.metadata?.milestones)
+        });
+      }
+    }
+    return extractedEvents.sort((a, b) => {
+      const isAActive = a.status?.toLowerCase() === 'active';
+      const isBActive = b.status?.toLowerCase() === 'active';
+
+      if (isAActive && !isBActive) return -1;
+      if (!isAActive && isBActive) return 1;
+
+      const timeA = safeGetTime(a.startDate);
+      const timeB = safeGetTime(b.startDate);
+
+      return timeB - timeA;
+    });
+  }, [profileDetails, id]);
+
   const sidebarSubLabel = useMemo(() => {
     if (!profileDetails) return '';
     const { parents, activeLayer } = profileDetails;
@@ -229,9 +373,16 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
     if (!profileDetails?.targetEntity) return [];
 
     const { targetEntity, activeLayer } = profileDetails;
-    const standardExclusions = new Set<string>(['description']);
+    const standardExclusions = new Set<string>([
+      'description',
+      'startdate',
+      'enddate',
+      'standalonestartdate',
+      'standaloneenddate',
+      'standalonelabel'
+    ]);
     const dynamicStatusKeys = new Set<string>();
-    const layerMeta = theme.layerMetadata?.[activeLayer];
+    const layerMeta = layerMetadataConfig?.[activeLayer];
 
     if (layerMeta?.statusTriggers && typeof layerMeta.statusTriggers === 'object') {
       Object.values(layerMeta.statusTriggers).forEach((trigger) => {
@@ -265,7 +416,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
         label: theme.labels[key] ?? key,
         displayValue: Array.isArray(value) ? value.join(', ') : String(value)
       }));
-  }, [profileDetails, theme.labels, theme.layerMetadata]);
+  }, [profileDetails, theme.labels, layerMetadataConfig]);
 
   const preparedMediaSections = useMemo(() => {
     const entityImages = profileDetails?.targetEntity.image as EntityImages | undefined;
@@ -316,6 +467,7 @@ export const ExtendedProfileViewPage: React.FC<Props> = ({ theme }) => {
       setMediaDimensions={setMediaDimensions}
       groupedTeammates={groupedTeammates}
       groupKeys={groupKeys}
+      timelineItems={timelineItems}
       {...assets}
     />
   );

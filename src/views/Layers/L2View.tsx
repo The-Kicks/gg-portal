@@ -1,3 +1,4 @@
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Theme, HydratedEntity, BaseEntity } from '../../types';
 import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard';
@@ -13,8 +14,8 @@ interface Props {
 }
 
 /**
- * L2View processes relational map groupings that link Layer 2 nodes upward to Layer 1 roots.
- * Analogy: Engine Power Unit Manufacturers or Sub-Agencies (e.g., Ferrari Powertrains, SM Entertainment).
+ * L2View maps, aggregates, and renders Layer 2 subsidiary nodes 
+ * nested inside their corresponding Layer 1 parent entities.
  */
 export const L2View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
@@ -25,15 +26,13 @@ export const L2View: React.FC<Props> = ({ theme }) => {
   if (endpoints.length === 0) {
     return (
       <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
-        <h3>Geen data gevonden voor {theme.labels.l2 || 'Laag 2'}. 🛑</h3>
+        <h3>No data found for {theme.labels.l2 || 'Layer 2'}.</h3>
       </div>
     );
   }
 
-  // Isolates independent structural operators marked as standalone nodes
   const standaloneEntities = endpoints.filter((endpoint) => endpoint.isStandalone);
 
-  // RELATIONAL GRAPH MAPPING SYSTEM: Evaluates connection lines to map L2 children into L1 clusters
   endpoints.forEach((l2Entity) => {
     const allConns = [...(l2Entity.connections || []), ...(l2Entity.targetConnections || [])];
 
@@ -47,7 +46,6 @@ export const L2View: React.FC<Props> = ({ theme }) => {
 
       if (!l1Entity) return;
 
-      // Filter sequence: Blocks corporate background details if hideFromGrid flags are present
       if (conn.metadata?.hideFromGrid !== true) {
         if (!parentMap.has(l1Entity.id)) {
           parentMap.set(l1Entity.id, { parent: l1Entity, children: [] });
@@ -64,13 +62,11 @@ export const L2View: React.FC<Props> = ({ theme }) => {
   const isInactiveStatus = (status: string) =>
     ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
 
-  // Distributes operational structural blocks separate from defunct corporate groupings sets
   const activeBuckets = allBuckets.filter((b) => !isInactiveStatus(b.parent.status || ''));
   const inactiveBuckets = allBuckets.filter((b) => isInactiveStatus(b.parent.status || ''));
 
   return (
     <div className={styles.layerContainer}>
-      {/* SECTION 1: Conglomerate-backed Sub-Agencies / Subsidiaries */}
       {activeBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{parent.name}</h2>
@@ -88,7 +84,6 @@ export const L2View: React.FC<Props> = ({ theme }) => {
         </div>
       ))}
 
-      {/* SECTION 2: Independent Operators (No major conglomerate backing) */}
       {standaloneEntities.length > 0 && (
         <div className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{theme.labels['l2_standalone'] ?? 'Independent Agencies'}</h2>
@@ -106,7 +101,6 @@ export const L2View: React.FC<Props> = ({ theme }) => {
         </div>
       )}
 
-      {/* SECTION 3: Historical / Defunct Corporate Divisions */}
       {inactiveBuckets.map(({ parent, children }) => (
         <div key={parent.id} className={styles.groupSection}>
           <h2 className={styles.groupHeader}>{parent.name} ({theme.labels['disbanded_tag'] ?? 'Defunct'})</h2>

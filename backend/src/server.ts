@@ -7,7 +7,9 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 interface EntityImages {
     profileCard: string;
@@ -92,25 +94,47 @@ interface FullThemeResponse {
     navbarItems: string[];
     labels: Record<string, string | undefined>;
     layerMetadata: Record<string, MetaDataStandard | undefined>;
-    gameSettings: GameSettings; // Samengestelde response voor de front-end
+    gameSettings: GameSettings;
     entities: HydratedEntity[];
 }
 
-// --- ROUTES ---
+interface VirtualTrackStructure {
+    name?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    milestones?: string;
+}
 
+interface IncomingFrontendConnection {
+    id: string;
+    themeId: string;
+    sourceEntityId: string;
+    targetEntityId: string;
+    metadata: ConnectionMetadata;
+    direction?: string;
+}
+
+type UpdateEntityResponse = { success: boolean; message: string } | { error: string };
+
+/**
+ * Validates that the backend service is up and running.
+ */
 app.get('/api/health', (_req: Request, res: Response) => {
     res.json({ status: "Backend up and running!" });
 });
 
-// --- THEME ROUTES (GET, POST, PUT, DELETE) ---
-
+/**
+ * Retrieves all themes from the database and constructs a completely hydrated 
+ * graph payload for each theme, including related entities, connections, 
+ * game settings, and virtual tracks.
+ */
 app.get('/api/themes', async (_req: Request, res: Response) => {
     try {
         const themes = await prisma.theme.findMany();
         const fullThemesResult: FullThemeResponse[] = [];
 
         for (const theme of themes) {
-            // 1. Haal data op uit de gekoppelde tabellen
             const dbEntities = await prisma.entity.findMany({
                 where: { themeId: theme.id }
             });
@@ -119,23 +143,44 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 where: { themeId: theme.id }
             });
 
-            // 🌟 GEWIJZIGD: Haal ALLE rijen op voor dit thema (bijv. 'guesswho' EN 'blindranking')
             const dbGameSettings = await prisma.gameSetting.findMany({
                 where: { themeId: theme.id }
             });
 
-            // Reconstruct de losse rijen naar één gecombineerd front-end object
             const combinedGameSettings: GameSettings = {};
             dbGameSettings.forEach((setting) => {
                 combinedGameSettings[setting.gameName] = setting.gameSettings as unknown as Record<string, unknown>;
             });
 
-            // 2. Map DB-data naar initiële HydratedEntity objecten
             const hydratedEntities: HydratedEntity[] = dbEntities.map((e) => {
                 const entityMetadata = (e.metadata || {}) as Record<string, unknown>;
                 const extractedStatus = e.status
                     ? e.status
                     : (typeof entityMetadata.status === 'string' ? entityMetadata.status : 'active');
+
+                const frontendConnections: HydratedEntityConnection[] = [];
+
+                if (Array.isArray(entityMetadata.customTracks)) {
+                    (entityMetadata.customTracks as VirtualTrackStructure[]).forEach((track) => {
+                        const trackName = track.name || 'Custom Track';
+                        const trackId = `virtual-track:${trackName.toLowerCase().replace(/\s+/g, '-')}`;
+
+                        frontendConnections.push({
+                            id: trackId,
+                            themeId: e.themeId,
+                            sourceEntityId: e.id,
+                            targetEntityId: trackId,
+                            metadata: {
+                                status: track.status || 'active',
+                                startDate: track.startDate || '',
+                                endDate: track.endDate || '',
+                                milestones: track.milestones || '',
+                                customTargetName: trackName,
+                                isNonRelational: true
+                            }
+                        });
+                    });
+                }
 
                 return {
                     id: e.id,
@@ -146,7 +191,7 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                     isStandalone: e.isStandalone,
                     image: (e.image || { profileCard: '', heroBanner: '' }) as unknown as EntityImages,
                     metadata: entityMetadata,
-                    connections: [],
+                    connections: frontendConnections,
                     targetConnections: []
                 };
             });
@@ -155,7 +200,6 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 hydratedEntities.map((e) => [e.id, e])
             );
 
-            // 3. Hydrateer alle edges (verbindingen) tussen de knopen
             for (const conn of dbConnections) {
                 const source = entityMap.get(conn.sourceEntityId);
                 const target = entityMap.get(conn.targetEntityId);
@@ -196,7 +240,6 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 if (target) target.targetConnections.push(hydratedConn);
             }
 
-            // 4. Bouw de complete response op
             fullThemesResult.push({
                 id: theme.id,
                 title: theme.title,
@@ -217,18 +260,21 @@ app.get('/api/themes', async (_req: Request, res: Response) => {
                 navbarItems: (theme.navbarItems || []) as unknown as string[],
                 labels: (theme.labels || {}) as Record<string, string | undefined>,
                 layerMetadata: (theme.layerMetadata || {}) as Record<string, MetaDataStandard | undefined>,
-                gameSettings: combinedGameSettings, 
+                gameSettings: combinedGameSettings,
                 entities: hydratedEntities
             });
         }
 
         res.json(fullThemesResult);
     } catch (error) {
-        console.error("Fout bij opbouwen van getypeerde graph dataset:", error);
-        res.status(500).json({ error: "Interne serverfout" });
+        console.error("Error building typed graph dataset:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
+/**
+ * Checks whether a specific entity exists within the database by its unique identifier.
+ */
 app.get('/api/themes/:themeId/entities/check/:entityId', async (req: Request, res: Response) => {
     const { entityId } = req.params;
     try {
@@ -237,11 +283,15 @@ app.get('/api/themes/:themeId/entities/check/:entityId', async (req: Request, re
         });
         res.json({ exists: !!existingEntity });
     } catch (error) {
-        console.error("Fout bij controleren ID:", error);
-        res.status(500).json({ error: "Kon ID-controle niet uitvoeren" });
+        console.error("Error checking entity ID existence:", error);
+        res.status(500).json({ error: "Could not execute ID check" });
     }
 });
 
+/**
+ * Creates a new theme configuration and inserts all related game settings 
+ * within a single atomic database transaction.
+ */
 app.post('/api/themes', async (req: Request, res: Response) => {
     try {
         const {
@@ -251,12 +301,11 @@ app.post('/api/themes', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // 🌟 GEWIJZIGD: Loop door de keys van gameSettings (guesswho, blindranking, etc.) en maak losse rijen aan
-        const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) => 
+        const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) =>
             prisma.gameSetting.create({
                 data: {
                     themeId: id,
-                    gameName: gameName, // Slaat nu dynamisch op onder "guesswho" of "blindranking"
+                    gameName: gameName,
                     gameSettings: (settings || {}) as Prisma.InputJsonValue
                 }
             })
@@ -280,11 +329,16 @@ app.post('/api/themes', async (req: Request, res: Response) => {
 
         res.status(201).json(newTheme);
     } catch (error) {
-        console.error("Fout bij aanmaken thema en/of gamesettings:", error);
-        res.status(500).json({ error: "Kon het thema niet aanmaken. Bestaat deze ID al?" });
+        console.error("Error creating theme and game settings:", error);
+        res.status(500).json({ error: "Could not create theme. Does this ID already exist?" });
     }
 });
 
+/**
+ * Updates an existing theme's layout and settings. To avoid orphaned configuration 
+ * records, it clears previous game configurations and re-inserts current settings 
+ * atomically.
+ */
 app.put('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
@@ -295,13 +349,11 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
             games, navbarItems, labels, layerMetadata, gameSettings
         } = req.body;
 
-        // 🌟 GEWIJZIGD: Om conflicten of wezen-instellingen te voorkomen, schonen we eerst de oude settings
-        // voor dit specifieke thema op, en knallen daarna de actieve games er splinternieuw in via de transactie.
-        const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) => 
+        const gameSettingCreates = Object.entries(gameSettings || {}).map(([gameName, settings]) =>
             prisma.gameSetting.create({
                 data: {
                     themeId: id,
-                    gameName: gameName, // Netjes gesorteerd onder eigen naam
+                    gameName: gameName,
                     gameSettings: (settings || {}) as Prisma.InputJsonValue
                 }
             })
@@ -321,21 +373,23 @@ app.put('/api/themes/:id', async (req: Request, res: Response) => {
                     layerMetadata: layerMetadata as Prisma.InputJsonValue
                 }
             }),
-            // Verwijder alle oude spelinstellingen voor dit specifieke thema
             prisma.gameSetting.deleteMany({
                 where: { themeId: id }
             }),
-            // Voeg de geüpdatete instellingen per spel toe
             ...gameSettingCreates
         ]);
 
         res.json(updatedTheme);
     } catch (error) {
-        console.error("Fout bij updaten thema en/of gamesettings:", error);
-        res.status(500).json({ error: "Kon het thema niet bijwerken." });
+        console.error("Error updating theme and game settings:", error);
+        res.status(500).json({ error: "Could not update theme layout." });
     }
 });
 
+/**
+ * Deletes a specific theme graph configuration along with all related cascading 
+ * game settings within a database transaction.
+ */
 app.delete('/api/themes/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
@@ -343,93 +397,191 @@ app.delete('/api/themes/:id', async (req: Request, res: Response) => {
             prisma.gameSetting.deleteMany({ where: { themeId: id } }),
             prisma.theme.delete({ where: { id } })
         ]);
-        
-        res.json({ success: true, message: "Thema en alle gekoppelde entiteiten/connecties/instellingen succesvol verwijderd." });
+
+        res.json({ success: true, message: "Theme and all cascading entities/connections successfully removed." });
     } catch (error) {
-        console.error("Fout bij verwijderen thema:", error);
-        res.status(500).json({ error: "Kon het thema niet verwijderen." });
+        console.error("Error deleting theme graph:", error);
+        res.status(500).json({ error: "Could not delete the selected theme." });
     }
 });
 
-// --- ENTITY ROUTES (CREATE & UPDATE) ---
-
-type CreateEntityResponse = HydratedEntity | { error: string };
-
+/**
+ * Creates a new relational graph entity within a specific theme. It parses virtual 
+ * tracks into metadata fields and bulk inserts legitimate physical relationships.
+ */
 app.post(
-    '/api/themes/:themeId/entities', 
-    async (req: Request<{ themeId: string }, CreateEntityResponse, BaseEntity>, res: Response<CreateEntityResponse>) => {
+    '/api/themes/:themeId/entities',
+    async (
+        req: Request<{ themeId: string }, UpdateEntityResponse | BaseEntity, HydratedEntity>, 
+        res: Response<UpdateEntityResponse | BaseEntity>
+    ) => {
         const { themeId } = req.params;
-        const { id, name, type, status, isStandalone, image, metadata } = req.body;
+        const { id, name, type, status, isStandalone, image, metadata, connections } = req.body;
+
+        if (!id || !name) {
+            return res.status(400).json({ error: "Missing required fields: id and name are strictly required." });
+        }
 
         try {
-            const newEntity = await prisma.entity.create({
-                data: {
-                    id, themeId, name, type,
-                    status: status || 'active',
-                    isStandalone,
-                    image: image as unknown as Prisma.InputJsonValue,
-                    metadata: metadata as Prisma.InputJsonValue,
-                }
+            const safeConnections = (connections || []) as IncomingFrontendConnection[];
+
+            const virtualTracks = safeConnections.filter(conn => {
+                const targetId = conn.targetEntityId || conn.id;
+                return targetId && targetId.startsWith('virtual-track:');
             });
 
-            const responsePayload: HydratedEntity = {
-                ...newEntity,
-                status: newEntity.status || 'active',
-                image: newEntity.image as unknown as EntityImages,
-                metadata: newEntity.metadata as Record<string, unknown>,
-                connections: [],
-                targetConnections: []
+            const customTracksData = virtualTracks.map(track => {
+                return {
+                    name: track.metadata?.customTargetName || track.id.replace('virtual-track:', ''),
+                    startDate: (track.metadata?.startDate as string) || '',
+                    endDate: (track.metadata?.endDate as string) || '',
+                    status: track.metadata?.status || 'active',
+                    milestones: (track.metadata?.milestones as string) || ''
+                };
+            });
+
+            const updatedMetadata = {
+                ...(metadata || {}),
+                customTracks: customTracksData
+            };
+
+            const connectionsToInsert = safeConnections
+                .filter(conn => {
+                    const targetId = conn.targetEntityId || conn.id;
+                    return targetId && !targetId.startsWith('virtual-track:') && conn.direction !== 'incoming';
+                })
+                .map((conn) => ({
+                    themeId,
+                    sourceEntityId: id,
+                    targetEntityId: conn.targetEntityId || conn.id,
+                    metadata: (conn.metadata || { status: 'active' }) as unknown as Prisma.InputJsonValue
+                }));
+
+            const [newEntity] = await prisma.$transaction([
+                prisma.entity.create({
+                    data: {
+                        id,
+                        name,
+                        type,
+                        status: status || 'active',
+                        isStandalone: Boolean(isStandalone),
+                        image: (image || {}) as unknown as Prisma.InputJsonValue,
+                        metadata: updatedMetadata as Prisma.InputJsonValue,
+                        theme: {
+                            connect: { id: themeId }
+                        }
+                    }
+                }),
+                prisma.entityConnection.createMany({
+                    data: connectionsToInsert
+                })
+            ]);
+
+            const responsePayload: BaseEntity = {
+                id: newEntity.id,
+                themeId: newEntity.themeId,
+                name: newEntity.name,
+                type: newEntity.type,
+                status: newEntity.status,
+                isStandalone: newEntity.isStandalone,
+                image: (newEntity.image || { profileCard: '', heroBanner: '' }) as unknown as EntityImages,
+                metadata: (newEntity.metadata || {}) as Record<string, unknown>
             };
 
             res.status(201).json(responsePayload);
-        } catch (error) {
-            console.error("Fout bij aanmaken entiteit:", error);
-            res.status(500).json({ error: "Kon entiteit niet aanmaken" });
+        } catch (error: unknown) {
+            console.error("Error creating graph entity and relationships:", error);
+            
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+                return res.status(409).json({ error: "An entity with this unique ID combination already exists within this theme." });
+            }
+
+            res.status(500).json({ error: "Internal server error during entity creation." });
         }
     }
 );
 
-type UpdateEntityResponse = { success: boolean; message: string } | { error: string };
-
+/**
+ * Updates an entity and synchronizes its outgoing graph connections. 
+ * Separates virtual tracks into component metadata and synchronizes real relational connections.
+ */
 app.put(
-    '/api/themes/:themeId/entities/:entityId', 
+    '/api/themes/:themeId/entities/:entityId',
     async (req: Request<{ themeId: string; entityId: string }, UpdateEntityResponse, HydratedEntity>, res: Response<UpdateEntityResponse>) => {
         const { themeId, entityId } = req.params;
         const { name, type, status, isStandalone, image, metadata, connections } = req.body;
 
         try {
+            const safeConnections = connections || [];
+
+            const virtualTracks = safeConnections.filter(conn => {
+                const targetId = conn.targetEntityId || conn.id;
+                return targetId && targetId.startsWith('virtual-track:');
+            });
+
+            const customTracksData = virtualTracks.map(track => {
+                const t = track as typeof track & { direction?: string };
+                return {
+                    name: t.metadata?.customTargetName || t.id.replace('virtual-track:', ''),
+                    startDate: t.metadata?.startDate || '',
+                    endDate: t.metadata?.endDate || '',
+                    status: t.metadata?.status || 'active',
+                    milestones: t.metadata?.milestones || ''
+                };
+            });
+
+            const updatedMetadata = {
+                ...(metadata || {}),
+                customTracks: customTracksData
+            };
+
+            const connectionsToInsert = safeConnections
+                .filter(conn => {
+                    const targetId = conn.targetEntityId || conn.id;
+                    const frontendConn = conn as typeof conn & { direction?: string };
+
+                    return targetId && !targetId.startsWith('virtual-track:') && frontendConn.direction !== 'incoming';
+                })
+                .map((conn) => {
+                    return {
+                        themeId,
+                        sourceEntityId: entityId,
+                        targetEntityId: conn.targetEntityId || conn.id,
+                        metadata: (conn.metadata || { status: 'active' }) as unknown as Prisma.InputJsonValue
+                    };
+                });
+
             await prisma.$transaction([
                 prisma.entity.update({
                     where: { id: entityId },
                     data: {
-                        name, type,
+                        name,
+                        type,
                         status: status || 'active',
                         isStandalone,
                         image: image as unknown as Prisma.InputJsonValue,
-                        metadata: metadata as Prisma.InputJsonValue,
+                        metadata: updatedMetadata as Prisma.InputJsonValue,
                     }
                 }),
                 prisma.entityConnection.deleteMany({
-                    where: { themeId, sourceEntityId: entityId }
+                    where: {
+                        themeId,
+                        sourceEntityId: entityId
+                    }
                 }),
                 prisma.entityConnection.createMany({
-                    data: connections.map((conn) => ({
-                        themeId,
-                        sourceEntityId: entityId,
-                        targetEntityId: conn.targetEntityId,
-                        metadata: conn.metadata as unknown as Prisma.InputJsonValue
-                    }))
+                    data: connectionsToInsert
                 })
             ]);
 
-            res.json({ success: true, message: "Entiteit succesvol gesynchroniseerd." });
+            res.json({ success: true, message: "Entity graph and virtual tracks synchronized successfully." });
         } catch (error) {
-            console.error("Fout bij bijwerken van getypeerde graph:", error);
-            res.status(500).json({ error: "Interne serverfout bij updaten" });
+            console.error("Error updating graph entity and relationships:", error);
+            res.status(500).json({ error: "Internal server error during update." });
         }
     }
 );
 
 app.listen(PORT, () => {
-    console.log(`🚀 GG-PORTAL backend server draait op http://localhost:${PORT}`);
+    console.log(`🚀 GG-PORTAL backend server running on http://localhost:${PORT}`);
 });

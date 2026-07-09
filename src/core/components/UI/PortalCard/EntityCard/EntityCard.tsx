@@ -4,11 +4,6 @@ import { ProfileCard } from '../ProfileCard/ProfileCard';
 import { MiniProfileCard } from '../ProfileCard/miniProfileCard/miniProfileCard';
 import styles from './EntityCard.module.css';
 
-/**
- * Prop definitions for the EntityCard component.
- * It takes the core entity data model, active layer navigation keys, global theme profiles,
- * rendering labels mappings, and parent relational organization references.
- */
 interface EntityCardProps {
   entity: BaseEntity;
   activeKey: LayerKey;
@@ -19,30 +14,22 @@ interface EntityCardProps {
 }
 
 /**
- * EntityCard serves as a highly dynamic controller gateway wrapper component.
- * It analyzes the entity's metadata schema configurations from the database,
- * evaluates active warning status conditions, computes styling buckets, 
- * and decides whether to swap views into a standard profile layout or a compact mini card layout.
+ * A conditional gateway controller component that evaluates layout criteria, parses metadata configurations,
+ * computes contextual status alerts, and returns either a compact mini profile or a detailed profile card view.
  */
 export const EntityCard: React.FC<EntityCardProps> = ({
   entity, activeKey, theme, labels, organization, customLabel
 }) => {
   
-  /**
-   * Layout Check: Reads the active theme configuration profile to see if the current hierarchy layer 
-   * (e.g. 'l1', 'l2') is listed inside the miniViewLayers array configuration settings.
-   */
   const shouldShowMini = theme.miniViewLayers.includes(activeKey);
 
   /**
-   * Memo Hook: Layer Standard Parsing
-   * Safely decodes and extracts structural layouts instructions for this layer out of the theme metadata.
-   * Handles cases where the database field might arrive as a raw JSON string block format.
+   * Safe data deserializer that parses the current layer configurations out of theme configurations,
+   * with fallback verification support for raw JSON strings returned by the backend layout schema.
    */
   const layerStandard = useMemo<MetaDataStandard | undefined>(() => {
     if (!theme.layerMetadata) return undefined;
 
-    // Fallback parser processing sequence if the database payload arrived formatted as a raw string block
     if (typeof theme.layerMetadata === 'string') {
       try {
         const parsed = JSON.parse(theme.layerMetadata) as Record<string, MetaDataStandard | undefined>;
@@ -53,42 +40,34 @@ export const EntityCard: React.FC<EntityCardProps> = ({
       }
     }
 
-    // Direct object key parsing reads out matching configuration levels
     const record = theme.layerMetadata as Record<string, MetaDataStandard | undefined>;
     return record[activeKey.toLowerCase()] || record[activeKey];
   }, [theme.layerMetadata, activeKey]);
 
-  // Extracts status validation conditional rules configurations out of the active schema profile
   const triggers = layerStandard?.statusTriggers;
 
   /**
-   * Memo Hook: Safe Metadata Reference Stabilizer
-   * Locks the object reference pointer in memory. This prevents downstream hooks from firing 
-   * unnecessary re-computations or layout flickering if the parent entity component tree updates.
+   * Reference cache stabilizer that isolates metadata object properties to prevent 
+   * unnecessary rendering cycles and visual layout flashes during upstream recalculations.
    */
   const safeMetadata = useMemo(() => {
     return entity.metadata || {};
   }, [entity.metadata]);
 
   /**
-   * Memo Hook: Dynamic Status Badges Evaluator
-   * Loops through the schema conditional trigger rules to compare against active entity metadata states.
-   * If an entity values matches a target requirement rule, a system badge payload object is generated.
+   * Dynamic evaluation logic engine that processes contextual criteria definitions to formulate 
+   * a filtered listing of applicable status tracking badges and forced historical entity state records.
    */
   const activeBadges = useMemo(() => {
     let badges: Array<{ key: string; value: string; label: string }> = [];
 
-    // Stap 1: Loop door de database triggers heen als deze bestaan
     if (triggers && safeMetadata) {
       badges = Object.entries(triggers).map(([triggerKey, triggerConfig]) => {
         if (!triggerConfig) return null;
         
-        // Forces comparison targets down to clean flat string evaluations
         const currentValue = String(safeMetadata[triggerConfig.key] || '');
         
-        // High flexibility case-insensitive rule check verification match sequences
         if (currentValue.toLowerCase() === String(triggerConfig.value).toLowerCase()) {
-          // Attempts to map values to custom friendly display dictionary definitions, defaulting back to capitalized strings
           const displayLabel = labels[currentValue] || labels[triggerKey] || (currentValue.charAt(0).toUpperCase() + currentValue.slice(1));
           
           return {
@@ -101,9 +80,6 @@ export const EntityCard: React.FC<EntityCardProps> = ({
       }).filter(Boolean) as Array<{ key: string; value: string; label: string }>;
     }
 
-    // 🛡️ Stap 2: HARD FORCED FALLBACK PROTECTION
-    // Als de upstream view (L4View) of de database deze entiteit expliciet als 'former' heeft gemarkeerd,
-    // en er is nog geen 'former' badge gegenereerd via de triggers, dan injecteren we deze hier handmatig.
     const isExplicitFormer = 
       String(safeMetadata.membershipStatus).toLowerCase() === 'former' ||
       String(safeMetadata.groupStatus).toLowerCase() === 'former' ||
@@ -121,22 +97,15 @@ export const EntityCard: React.FC<EntityCardProps> = ({
     return badges;
   }, [triggers, safeMetadata, labels]);
 
-  // Extracts explicit specific localized card fields according to layout configurations schema blueprints
   const profileCardBadge = layerStandard?.badgeKey ? String(safeMetadata[layerStandard.badgeKey] || '') : undefined;
   const subtitle = layerStandard?.subtitleKey ? String(safeMetadata[layerStandard.subtitleKey] || '') : undefined;
 
-  // State checks to see if special historical structural layouts logic flags are present
   const isFormer = activeBadges.some(b => b.key === 'former');
   const primaryStatusBadge = activeBadges.find(b => b.key !== 'former');
-  
-  // Computes primary state strings to pass out to external data-attributes on the HTML nodes tree
   const containerStatus = primaryStatusBadge ? primaryStatusBadge.key : (isFormer ? 'former' : undefined);
 
   const defaultLabel = customLabel ?? labels[activeKey] ?? '';
 
-  /**
-   * View Factory router assignment: Conditionally builds out components paths based on layout states
-   */
   const cardContent = shouldShowMini && layerStandard ? (
     <MiniProfileCard
       entity={entity}
@@ -159,22 +128,20 @@ export const EntityCard: React.FC<EntityCardProps> = ({
   return (
     <div
       className={`${styles.cardWrapper} ${isFormer ? styles.isFormer : ''}`}
-      data-status={containerStatus} // Attaches metadata tags directly onto DOM nodes for advanced CSS selection hooks
+      data-status={containerStatus}
     >
-      {/* Floating status alert tags overlay wrapper grouping panel */}
       <div className={styles.badgeOverlay}>
         {activeBadges.map((badge) => {
           let badgeClass = styles.statusBadge;
           
-          // MAPS LOGICAL KEYS DIRECTLY INTO DISTINCT VISUAL CSS STYLE CLASSES PRESETS
           if (badge.key === 'former') {
             badgeClass = styles.statusBadge;
           } else if (badge.key === 'alert' || badge.key === 'danger' || badge.key === 'critical') {
-            badgeClass = styles.alertBadge; // High danger crimson warning buckets
+            badgeClass = styles.alertBadge;
           } else if (badge.key === 'warning' || badge.key === 'caution') {
-            badgeClass = styles.warningBadge; // Caution amber attention color alerts
+            badgeClass = styles.warningBadge;
           } else if (badge.key === 'info' || badge.key === 'success' || badge.key === 'accent') {
-            badgeClass = styles.infoBadge; // Clean vibrant status confirmation shades
+            badgeClass = styles.infoBadge;
           }
 
           return (
@@ -184,8 +151,6 @@ export const EntityCard: React.FC<EntityCardProps> = ({
           );
         })}
       </div>
-      
-      {/* Outputs the computed selected structural interior card component content tree */}
       {cardContent}
     </div>
   );

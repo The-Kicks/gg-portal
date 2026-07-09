@@ -1,16 +1,9 @@
 import React from 'react';
-import { useAdminEntityEdit, CORE_IMAGE_FIELDS } from './useAdminEntityEdit';
+import { useAdminEntityEdit } from './useAdminEntityEdit';
+import { CORE_IMAGE_FIELDS } from '../adminUtils/useMediaCategories';
+import { formatEntityImages, isVideoUrl, getVideoEmbedUrl } from '../adminUtils/adminEntityHelpers';
 import type { Theme, HydratedEntity } from '../../../types';
 import styles from '../AdminGlobal.module.css';
-
-// Completely linter-proof mock service placeholder
-const entityService = {
-  update: async (themeId: string, id: string, data: unknown): Promise<void> => {
-    void themeId;
-    void id;
-    void data;
-  }
-};
 
 interface AdminEntityEditProps {
   theme: Theme;
@@ -19,46 +12,13 @@ interface AdminEntityEditProps {
   onCancel: () => void | Promise<void>;
 }
 
-/**
- * Helper function to format all media assets strictly as space-separated strings.
- * Built to be fully type-safe without using the 'any' type.
- */
-const formatEntityImages = (imageObj: Record<string, unknown>): Record<string, string> => {
-  const formatted: Record<string, string> = {};
-
-  Object.keys(imageObj).forEach(key => {
-    const value = imageObj[key];
-    if (Array.isArray(value)) {
-      formatted[key] = value
-        .flatMap(v => typeof v === 'string' ? v.split(/[\s,]+/) : [])
-        .map(s => s.trim())
-        .filter(Boolean)
-        .join(' ');
-    } else if (typeof value === 'string') {
-      formatted[key] = value
-        .split(/[\s,]+/)
-        .map(s => s.trim())
-        .filter(Boolean)
-        .join(' ');
-    } else {
-      formatted[key] = '';
-    }
-  });
-
-  return formatted;
-};
-
 export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityId, onSave, onCancel }) => {
 
-  // Intercept the save process to format all media assets strictly as space-separated strings
   const handleLocalSave = async (updatedEntity: HydratedEntity) => {
     if (updatedEntity.image) {
       const formattedImage = formatEntityImages(updatedEntity.image as Record<string, unknown>);
-      
-      // Type-assert explicitly to EntityImages to satisfy strict type requirements without using any
       updatedEntity.image = formattedImage as NonNullable<HydratedEntity['image']>;
     }
-
     await onSave(updatedEntity);
   };
 
@@ -68,8 +28,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     setName,
     status,
     setStatus,
-    isStandalone,
-    setIsStandalone,
     albumInput,
     setAlbumInput,
     unassignedImages,
@@ -80,31 +38,30 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     setNewImageKey,
     newMetadataKey,
     setNewMetadataKey,
-    expandedChildId,
-    setExpandedChildId,
     connectionSearchTerm,
     setConnectionSearchTerm,
     isConnectionDropdownOpen,
     setIsConnectionDropdownOpen,
     dropdownRef,
-    dynamicTriggers,
     triggerFieldsMap,
+    getTriggersForTargetType,
     partitionedMetadataKeys,
     filteredAvailableTargets,
     unifiedConnections,
-    setLocalConnections,
-    setLocalTargetConnections,
     handleImageInputChange,
     handleMetadataInputChange,
     handleAddImageField,
     handleAddMetadataField,
     handleRemoveImageField,
     handleRemoveMetadataField,
-    handleConnectionStatusChange,
+    handleConnectionMetadataChange,
     handleRemoveConnection,
-    handleAddConnection,
+    handleCreateNonRelationalTrack,
+    handleApplyConnection,
     handleAssignImage,
     handleUnassignImage,
+    formatMilestonesToText,
+    handleSyncMilestones,
     handleSubmit
   } = useAdminEntityEdit({ theme, entityId, onSave: handleLocalSave });
 
@@ -112,46 +69,14 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
     return <div className={styles.textWarning}>Error: Target entity profile could not be localized.</div>;
   }
 
-  // Helper function to check if a URL represents a video asset
-  const isVideoUrl = (url: string): boolean => {
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
-    const videoPlatforms = ['youtube.com', 'youtu.be', 'vimeo.com', 'twitch.tv', 'streamable.com'];
-    const lowerUrl = url.toLowerCase();
-    return (
-      videoExtensions.some(ext => lowerUrl.includes(ext)) ||
-      videoPlatforms.some(platform => lowerUrl.includes(platform))
-    );
-  };
-
-  // Helper function to generate embeds for YouTube and Vimeo previews
-  const getVideoEmbedUrl = (url: string): string | null => {
-    const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes('youtube.com/watch')) {
-      const videoId = url.split('v=')[1]?.split('&')[0];
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-    }
-    if (lowerUrl.includes('youtu.be/')) {
-      const videoId = url.split('youtu.be/')[1]?.split('?')[0];
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-    }
-    if (lowerUrl.includes('vimeo.com/')) {
-      const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
-      return videoId ? `https://player.vimeo.com/video/${videoId}` : null;
-    }
-    return null;
-  };
-
-  // Enhanced bulk ingestion handler to block duplicates directly
   const handleCustomParseAlbum = () => {
     if (!albumInput.trim()) return;
 
-    // Retrieve all unique URLs from the bulk field based on spaces/newlines/commas
     const freshUrls = albumInput
       .split(/[\s,]+/)
       .map(s => s.trim())
       .filter(Boolean);
 
-    // Gather all URLs currently linked somewhere in the asset fields
     const dynamicAssignedUrls: string[] = [];
     Object.keys(imageInputs).forEach(key => {
       const val = imageInputs[key];
@@ -163,7 +88,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       }
     });
 
-    // Filter the fresh input: must not already be in the unassigned pool or in an asset
     const uniqueFreshUrls = freshUrls.filter(url => {
       const isAlreadyInPool = unassignedImages.includes(url);
       const isAlreadyInAssets = dynamicAssignedUrls.includes(url);
@@ -174,8 +98,14 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       setUnassignedImages(prev => [...prev, ...uniqueFreshUrls]);
     }
 
-    setAlbumInput(''); // Clear the input field
+    setAlbumInput('');
   };
+
+  const isL3Entity = originalEntity.type.toLowerCase() === 'l3';
+
+  const visibleDynamicKeys = partitionedMetadataKeys.dynamicKeys.filter(
+    key => key !== 'l3Milestones' && key !== 'customTracks' && key !== 'customRelationsMetadata'
+  );
 
   return (
     <div className={styles.formCard}>
@@ -197,26 +127,16 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
             <option value="disbanded">Disbanded</option>
             <option value="inactive">Inactive</option>
             <option value="retired">Retired</option>
-            {Object.entries(dynamicTriggers).map(([triggerKey, triggerConfig]) => (
-              <option key={triggerKey} value={triggerKey}>
-                {triggerConfig.value.charAt(0).toUpperCase() + triggerConfig.value.slice(1)} (Schema Trigger)
-              </option>
-            ))}
           </select>
         </div>
 
         <div>
           <div className={styles.fieldLabel}>Passing Date</div>
-          <input type="text" placeholder="DD-MM-YYYY" value={metadataInputs['PassingDate'] || ''} onChange={e => handleMetadataInputChange('PassingDate', e.target.value)} className={styles.inputField} />
-        </div>
-
-        <div>
-          <div className={styles.fieldLabel}>Standalone Node</div>
-          <input type="checkbox" checked={isStandalone} onChange={e => setIsStandalone(e.target.checked)} className={styles.checkbox} />
+          <input type="text" placeholder="DD-MM-YYYY of YYYY" value={metadataInputs['PassingDate'] || ''} onChange={e => handleMetadataInputChange('PassingDate', e.target.value)} className={styles.inputField} />
         </div>
       </div>
 
-      {/* SECTION A: CORE REQUIRED GAME FIELDS */}
+      {/* Core Required Game Fields */}
       {originalEntity.type.toLowerCase() === 'l4' && partitionedMetadataKeys.requiredKeys.length > 0 && (
         <div className={styles.requiredSection}>
           <h3 className={styles.requiredTitle}>🔒 Required Game Metrics (Layer 4 Core)</h3>
@@ -240,14 +160,14 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
         </div>
       )}
 
-      {/* SECTION B: DYNAMIC THEME ATTRIBUTES */}
+      {/* Dynamic Theme Attributes */}
       <h3 className={styles.sectionTitle}>🛠️ Dynamic Attributes</h3>
       <div className={styles.innerSection}>
-        {partitionedMetadataKeys.dynamicKeys.length === 0 ? (
+        {visibleDynamicKeys.length === 0 ? (
           <p className={`${styles.textMuted} ${styles.labelSubText}`}>No specific layout metadata schema properties injected for this layer.</p>
         ) : (
           <div className={styles.twoColumnGrid}>
-            {partitionedMetadataKeys.dynamicKeys.map(key => {
+            {visibleDynamicKeys.map(key => {
               const triggerValues = triggerFieldsMap[key];
               const isList = key.toLowerCase() === 'nationality' || (metadataInputs[key] && metadataInputs[key].includes(','));
 
@@ -278,11 +198,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
         </div>
       </div>
 
-      {/* Media Assets */}
+      {/* Media Assets Section */}
       <h3 className={styles.sectionTitle}>Media Assets (Images & Videos)</h3>
       <div className={styles.innerSection}>
-
-        {/* Bulk Link Ingestion Field */}
         <div style={{ marginBottom: '15px' }}>
           <div className={styles.fieldLabel} style={{ fontSize: '12px' }}>📋 Bulk Link Ingestion List</div>
           <div className={styles.innerActionRow} style={{ marginTop: '5px' }}>
@@ -294,22 +212,15 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               rows={2}
               style={{ width: '100%', resize: 'vertical' }}
             />
-            <button
-              type="button"
-              onClick={handleCustomParseAlbum}
-              className={`${styles.btn} ${styles.btnPrimary}`}
-            >
-              In Pool Laden
-            </button>
+            <button type="button" onClick={handleCustomParseAlbum} className={`${styles.btn} ${styles.btnPrimary}`}>In Pool Laden</button>
           </div>
         </div>
 
-        {/* Unassigned Drag Pool Container */}
         {unassignedImages.length > 0 && (
           <div
             className={styles.innerActionRow}
             style={{
-              marginBottom: '20px', padding: '15px', border: '1px dashed var(--text-muted, #ccc)', borderRadius: '6px',
+              marginBottom: '20px', padding: '15px', border: '1px dashed var(--border-color, #ccc)', borderRadius: '6px',
               display: 'flex', gap: '15px', overflowX: 'auto', minHeight: '140px', background: 'rgba(0,0,0,0.02)'
             }}
             onDragOver={e => e.preventDefault()}
@@ -319,7 +230,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
               try {
                 const { url, sourceKey } = JSON.parse(dragData);
                 if (sourceKey) {
-                  // Safely disconnect asset directly out of field back into staging pool
                   handleUnassignImage(url, sourceKey);
                 }
               } catch {
@@ -337,7 +247,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                   key={`${url}-${idx}`}
                   draggable
                   onDragStart={e => {
-                    // Pass payload indicating this asset originates from the staging pool (sourceKey: null)
                     e.dataTransfer.setData('text/plain', JSON.stringify({ url, sourceKey: null }));
                   }}
                   style={{ position: 'relative', cursor: 'grab', flexShrink: 0 }}
@@ -347,23 +256,11 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                       {embedUrl ? (
                         <iframe src={embedUrl} title="Video preview" style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }} />
                       ) : (
-                        <video
-                          src={url}
-                          muted
-                          loop
-                          autoPlay
-                          draggable={false} // Disable native video dragging to let parent container handle it
-                          style={{ width: '110px', height: '110px', objectFit: 'cover' }}
-                        />
+                        <video src={url} muted loop autoPlay draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover' }} />
                       )}
                     </div>
                   ) : (
-                    <img
-                      src={url}
-                      alt="Staging thumb"
-                      draggable={false} // CRITICAL: Disables native browser image dragging from hijacking the event
-                      style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-                    />
+                    <img src={url} alt="Staging thumb" draggable={false} style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
                   )}
                 </div>
               );
@@ -371,11 +268,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           </div>
         )}
 
-        {/* Media Fields Grid */}
         <div className={styles.twoColumnGrid}>
           {Object.keys(imageInputs).map(key => {
             const isCoreMediaKey = CORE_IMAGE_FIELDS.some(f => f.toLowerCase() === key.toLowerCase());
-
             const rawValue = imageInputs[key];
             const assignedUrls = Array.isArray(rawValue)
               ? rawValue
@@ -395,7 +290,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                     if (sourceKey === key) return;
 
                     if (sourceKey) {
-                      // Bypass the pool completely to avoid state batching race conditions and annoying flickers
                       const sourceList = (Array.isArray(imageInputs[sourceKey])
                         ? imageInputs[sourceKey]
                         : typeof imageInputs[sourceKey] === 'string'
@@ -414,11 +308,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                         targetList.push(url);
                       }
 
-                      // Execute both mutations synchronously in one clean batch pass
                       handleImageInputChange(sourceKey, sourceList.join('\n'));
                       handleImageInputChange(key, targetList.join('\n'));
                     } else {
-                      // Coming directly from the unassigned staging pool
                       handleAssignImage(url, key);
                     }
                   } catch {
@@ -462,7 +354,6 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
                             <img src={url} alt="Asset preview" style={{ width: '110px', height: '110px', objectFit: 'cover', borderRadius: '6px', border: '1px solid currentColor', boxShadow: '0 4px 6px rgba(0,0,0,0.15)' }} />
                           )}
 
-                          {/* Plus button (+) to duplicate the asset to the unassigned staging pool */}
                           <button
                             type="button"
                             title="Dupliceren naar Pool"
@@ -510,92 +401,341 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
         </div>
       </div>
 
-      {/* Mapped Registry Entity Connections */}
-      <h3 className={styles.sectionTitle}>Mapped Registry Entity Connections</h3>
+      {/* Relational Graph & Timeline Connections */}
+      <h3 className={styles.sectionTitle}>🔗 Map Network Relations & Timeline History</h3>
       <div className={styles.innerSection}>
-        {unifiedConnections.map(conn => {
-          const isL4ToL4 = originalEntity.type.toLowerCase() === 'l4' && conn.relatedEntity?.type?.toLowerCase() === 'l4';
-          const isExpanded = expandedChildId === conn.relatedEntityId;
 
-          return (
-            <div key={conn.id} className={styles.connectionRow}>
-              <div className={styles.connectionHeader}>
-                <span className={styles.connectionRowLeft}>
-                  <button type="button" onClick={() => setExpandedChildId(isExpanded ? null : conn.relatedEntityId)} className={styles.filterBtn} style={{ padding: '2px 8px', fontSize: '13px' }}>
-                    {isExpanded ? 'Collapse' : 'Expand'}
-                  </button>
-                  <span className={conn.direction === 'incoming' ? styles.badgeInbound : styles.badgeOutbound}>
-                    {conn.direction === 'incoming' ? 'INBOUND' : 'OUTBOUND'}
-                  </span>
-                  <span className={styles.layerBadge}>{conn.relatedEntity?.type?.toUpperCase() || 'L4'}</span>
-                  <strong className={styles.textPrimary}>{conn.relatedEntity?.name || conn.relatedEntityId}</strong>
-                  {isL4ToL4 && <span className={styles.textWarning}>Cross-individual connection</span>}
-                </span>
-                <div className={styles.buttonGroup} style={{ gap: '10px' }}>
-                  <select value={conn.status} onChange={e =>handleConnectionStatusChange(conn.id, conn.direction, e.target.value)} className={styles.inputField} style={{ padding: '6px 10px', width: 'auto' }}>
-                    <option value="active">Active</option>
-                    <option value="former">Former</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="retired">Retired</option>
-                  </select>
-                  <button type="button" onClick={() =>handleRemoveConnection(conn.id, conn.direction)} className={styles.btnUnlink}>Unlink</button>
-                </div>
+        {/* L3 Milestones Network Builder */}
+        {isL3Entity && (
+          <div style={{ marginBottom: '25px', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div>
+                <div className={styles.fieldLabel} style={{ marginBottom: '2px', fontWeight: 'bold' }}>🏆 L3 Global Timeline Milestones</div>
+                <small className={styles.textMuted}>Definieer hier de chronologische milestones van deze L3 (Formaat: <code>YYYY: Milestone</code>)</small>
               </div>
-
-              {isExpanded && conn.relatedEntity && (
-                <div className={styles.portalSection}>
-                  <h4 className={styles.portalTitle}>Inline sub-modification portal for: {conn.relatedEntity.name}</h4>
-                  <AdminEntityEdit
-                    theme={theme}
-                    entityId={conn.relatedEntityId}
-                    onSave={async (updatedChild) => {
-                      try {
-                        if (updatedChild.image) {
-                          const childFormattedImage = formatEntityImages(updatedChild.image as Record<string, unknown>);
-                          updatedChild.image = childFormattedImage as NonNullable<HydratedEntity['image']>;
-                        }
-
-                        await entityService.update(theme.id, updatedChild.id, updatedChild);
-                        setLocalConnections(prev => prev.map(c => c.targetEntityId === updatedChild.id ? { ...c, targetEntity: updatedChild } : c));
-                        setLocalTargetConnections(prev => prev.map(c => c.sourceEntityId === updatedChild.id ? { ...c, sourceEntity: updatedChild } : c));
-                        window.dispatchEvent(new Event('refresh-database'));
-                        setExpandedChildId(null);
-                      } catch (err) {
-                        console.error(err);
-                        alert("Could not update the downstream relational entity.");
-                      }
-                    }}
-                    onCancel={() => setExpandedChildId(null)}
-                  />
-                </div>
-              )}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                <button
+                  type="button"
+                  onClick={handleSyncMilestones}
+                  className={`${styles.btn} ${styles.btnPrimary}`}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                >
+                  🔄 Sync met actieve periodes
+                </button>
+                <span style={{ fontSize: '10px', color: '#eab308', opacity: 0.85, maxWidth: '240px', textAlign: 'right' }}>
+                  ⚠️ <em>Safe-Sync: Overschrijft geen relaties waar al handmatig milestones zijn ingevuld.</em>
+                </span>
+              </div>
             </div>
-          );
-        })}
+            <textarea
+              placeholder={`Bijvoorbeeld:\n2015: Group Formed and Pre-debut Activities\n2019: First World Tour Announced`}
+              value={metadataInputs['l3Milestones'] || ''}
+              onChange={e => handleMetadataInputChange('l3Milestones', e.target.value)}
+              className={styles.textareaField}
+              rows={4}
+              style={{ width: '100%', resize: 'vertical', lineHeight: '1.5', fontFamily: 'monospace' }}
+            />
+          </div>
+        )}
 
-        {/* Search & Selection Dropdown */}
-        <div ref={dropdownRef} className={styles.dropdownWrapper}>
-          <input
-            type="text"
-            placeholder="Type to search entities..."
-            value={connectionSearchTerm}
-            onFocus={() => setIsConnectionDropdownOpen(true)}
-            onChange={e => { setConnectionSearchTerm(e.target.value); setIsConnectionDropdownOpen(true); }}
-            className={styles.inputField}
-          />
-          {isConnectionDropdownOpen && (
+        <div style={{ position: 'relative', marginBottom: '20px' }} ref={dropdownRef}>
+          <label className={styles.fieldLabel}>Connect with Existing Node OR Create Shared Custom Track</label>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              type="text"
+              placeholder="Search existing node OR type a custom track name..."
+              value={connectionSearchTerm}
+              onChange={e => setConnectionSearchTerm(e.target.value)}
+              onFocus={() => setIsConnectionDropdownOpen(true)}
+              className={styles.inputField}
+            />
+            {connectionSearchTerm.trim().length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleCreateNonRelationalTrack(connectionSearchTerm.trim());
+                  setConnectionSearchTerm('');
+                  setIsConnectionDropdownOpen(false);
+                }}
+                className={`${styles.btn} ${styles.btnOutline}`}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                ➕ Add Custom Track
+              </button>
+            )}
+          </div>
+          {/* Dropdown voor bestaande nodes */}
+          {isConnectionDropdownOpen && filteredAvailableTargets.length > 0 && (
             <div className={styles.dropdownMenu}>
-              {filteredAvailableTargets.length > 0 ? (
-                filteredAvailableTargets.map(t => (
-                  <div key={t.id} onClick={() => { handleAddConnection(t.id); setConnectionSearchTerm(''); setIsConnectionDropdownOpen(false); }} className={styles.dropdownItem}>
-                    <span className={styles.textBold}>{t.name}</span>
-                    <span className={styles.layerBadge}>{t.type.toUpperCase()}</span>
-                  </div>
-                ))
-              ) : (
-                <div className={styles.dropdownNoResults}>No matching entities found...</div>
-              )}
+              {filteredAvailableTargets.map(target => (
+                <div
+                  key={target.id}
+                  onClick={() => {
+                    handleApplyConnection(target.id);
+                    setConnectionSearchTerm('');
+                    setIsConnectionDropdownOpen(false);
+                  }}
+                  className={styles.dropdownItem}
+                >
+                  <strong>{target.name}</strong> <small style={{ marginLeft: '4px', opacity: 0.6 }}>({target.id})</small>
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {unifiedConnections.length === 0 ? (
+            <p className={styles.textMuted}>This new record is currently isolated. Connect it to map it into the timeline graph engine.</p>
+          ) : (
+            unifiedConnections.map(conn => {
+              const uniqueConnKey = `${conn.direction}-${conn.id}-${conn.relatedEntityId}`;
+              const isNonRelational = conn.metadata?.isNonRelational || conn.relatedEntityId.startsWith('virtual-track:');
+              const isIncoming = conn.direction === 'incoming';
+
+              const displayName = isNonRelational
+                ? (typeof conn.metadata?.customTargetName === 'object'
+                  ? 'Custom Track (Foutief Object)'
+                  : conn.metadata?.customTargetName || 'Custom Shared Track')
+                : (conn.relatedEntity?.name || conn.relatedEntityId);
+
+              const targetType = conn.direction === 'outgoing'
+                ? conn.relatedEntity?.type
+                : originalEntity.type;
+
+              const activeTriggers = getTriggersForTargetType(targetType);
+
+              return (
+                <div
+                  key={uniqueConnKey}
+                  className={styles.connectionRow}
+                  style={isIncoming ? { opacity: 0.85, borderLeft: '3px solid #eab308', padding: '15px' } : undefined}
+                >
+                  {isIncoming && (
+                    <div style={{
+                      backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                      border: '1px solid rgba(234, 179, 8, 0.2)',
+                      color: '#eab308',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      marginBottom: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      ⚠️ You can only edit outgoing relations. Edit incoming relations from the source node <strong>({displayName})</strong>.
+                    </div>
+                  )}
+
+                  {/* Header Layout */}
+                  <div className={styles.connectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+
+                    {/* Linkerkant */}
+                    <div className={styles.connectionRowLeft} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className={isNonRelational ? styles.badgeOutbound : conn.direction === 'outgoing' ? styles.badgeOutbound : styles.badgeInbound}>
+                        {isNonRelational ? 'TRACK' : conn.direction === 'outgoing' ? 'OUTGOING' : 'INBOUND 🔒'}
+                      </span>
+                      <span className={styles.textBold}>{displayName}</span>
+                      {!isNonRelational && (
+                        <span className={styles.layerBadge}>
+                          {conn.relatedEntity?.type?.toUpperCase() || 'L4'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Rechterkant: Selectors & Disconnect knop */}
+                    <div className={styles.connectionDates} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div className={styles.dateFieldGroup}>
+                        <select
+                          value={String(conn.status || 'active').toLowerCase()}
+                          onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'status', e.target.value)}
+                          className={styles.dateHeaderInput}
+                          style={{ width: '140px' }}
+                          disabled={isIncoming}
+                        >
+                          <optgroup label="Core Status">
+                            <option value="active">Active</option>
+                          </optgroup>
+
+                          {activeTriggers && activeTriggers.length > 0 && (
+                            <optgroup label="Theme Tags">
+                              {activeTriggers.map((valueStr: string) => {
+                                const lowerVal = valueStr.toLowerCase();
+                                return (
+                                  <option key={valueStr} value={lowerVal}>
+                                    {valueStr}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          )}
+                          <optgroup label="Generic Status">
+                            <option value="past">Past</option>
+                            <option value="loan">Loan</option>
+                          </optgroup>
+
+                        </select>
+                      </div>
+
+                      <div className={styles.dateFieldGroup}>
+                        <span className={styles.dateLabel}>From</span>
+                        <input
+                          type="text"
+                          placeholder="DD-MM-YYYY"
+                          value={conn.startDate || ''}
+                          onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'startDate', e.target.value)}
+                          className={styles.dateHeaderInput}
+                          style={{ width: '100px', padding: '6px 8px', textAlign: 'center' }}
+                          disabled={isIncoming}
+                        />
+                      </div>
+
+                      <div className={styles.dateFieldGroup}>
+                        <span className={styles.dateLabel}>To</span>
+                        <input
+                          type="text"
+                          placeholder="Pres."
+                          value={conn.endDate || ''}
+                          onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'endDate', e.target.value)}
+                          className={styles.dateHeaderInput}
+                          style={{ width: '100px', padding: '6px 8px', textAlign: 'center' }}
+                          disabled={isIncoming}
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveConnection(conn.id, conn.direction)}
+                        className={styles.btnUnlink}
+                        disabled={isIncoming}
+                        style={isIncoming ? { opacity: 0.3, cursor: 'not-allowed' } : undefined}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Excluded Periods */}
+                  <div style={{ marginTop: '15px' }}>
+                    <div className={styles.fieldLabel} style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '500' }}>
+                      🤕 Excluded Periods (Injuries / Hiatus / Breaks)
+                    </div>
+
+                    {(() => {
+                      const periods: Array<{ start: string; end: string; reason: string }> =
+                        Array.isArray(conn.metadata?.excludedPeriods) ? conn.metadata.excludedPeriods : [];
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                          {periods.map((period, pIdx) => (
+                            <div key={pIdx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                placeholder="Start (DD-MM-YYYY)"
+                                value={period.start || ''}
+                                disabled={isIncoming}
+                                className={styles.dateHeaderInput}
+                                style={{ width: '130px', padding: '6px 8px' }}
+                                onChange={e => {
+                                  const updated = [...periods];
+                                  updated[pIdx] = { ...updated[pIdx], start: e.target.value };
+                                  handleConnectionMetadataChange(conn.id, conn.direction, 'excludedPeriods', updated);
+                                }}
+                              />
+                              <span className={styles.textMuted} style={{ fontSize: '12px' }}>to</span>
+                              <input
+                                type="text"
+                                placeholder="Eind (DD-MM-YYYY)"
+                                value={period.end || ''}
+                                disabled={isIncoming}
+                                className={styles.dateHeaderInput}
+                                style={{ width: '130px', padding: '6px 8px' }}
+                                onChange={e => {
+                                  const updated = [...periods];
+                                  updated[pIdx] = { ...updated[pIdx], end: e.target.value };
+                                  handleConnectionMetadataChange(conn.id, conn.direction, 'excludedPeriods', updated);
+                                }}
+                              />
+                              <input
+                                type="text"
+                                placeholder="Reden (bijv. Injury, Hiatus)"
+                                value={period.reason || ''}
+                                disabled={isIncoming}
+                                className={styles.inputField}
+                                style={{ margin: 0, flex: 1, padding: '6px 10px' }}
+                                onChange={e => {
+                                  const updated = [...periods];
+                                  updated[pIdx] = { ...updated[pIdx], reason: e.target.value };
+                                  handleConnectionMetadataChange(conn.id, conn.direction, 'excludedPeriods', updated);
+                                }}
+                              />
+                              {!isIncoming && (
+                                <button
+                                  type="button"
+                                  className={styles.btnRemove}
+                                  style={{ padding: '4px 10px', height: '34px', display: 'flex', alignItems: 'center' }}
+                                  onClick={() => {
+                                    const updated = periods.filter((_, i) => i !== pIdx);
+                                    handleConnectionMetadataChange(conn.id, conn.direction, 'excludedPeriods', updated);
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          {!isIncoming && (
+                            <button
+                              type="button"
+                              className={styles.btnOutline}
+                              style={{ alignSelf: 'flex-start', padding: '4px 12px', fontSize: '12px', marginTop: '4px' }}
+                              onClick={() => {
+                                const updated = [...periods, { start: '', end: '', reason: '' }];
+                                handleConnectionMetadataChange(conn.id, conn.direction, 'excludedPeriods', updated);
+                              }}
+                            >
+                              ➕ Add Period
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Milestones Textarea */}
+                  <div style={{ marginTop: '15px', paddingLeft: '5px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                        💡 Format per regel: <strong>YYYY: Milestone</strong> of <strong>DD-MM-YYYY: Milestone</strong>
+                      </span>
+                    </div>
+                    <textarea
+                      placeholder="Example:&#10;2018: Champions League Winner&#10;12-05-2021: Voted Player of the Year"
+                      value={formatMilestonesToText(conn.metadata?.milestones)}
+                      onChange={e => handleConnectionMetadataChange(conn.id, conn.direction, 'milestones', e.target.value)}
+                      className={styles.textareaField}
+                      rows={2}
+                      disabled={isIncoming}
+                      style={{
+                        height: 'auto',
+                        minHeight: '55px',
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        lineHeight: '1.4',
+                        resize: isIncoming ? 'none' : 'vertical',
+                        backgroundColor: 'rgba(0,0,0,0.2)',
+                        color: isIncoming ? 'rgba(255,255,255,0.5)' : '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '4px'
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
@@ -603,7 +743,9 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
       {/* Action Footers */}
       <div className={styles.footerActions}>
         <button type="button" onClick={onCancel} className={`${styles.btn} ${styles.btnBack}`} style={{ marginBottom: 0 }}>Cancel</button>
-        <button type="button" onClick={(e) => { void handleSubmit(e); }} className={`${styles.btn} ${styles.btnPrimary}`}>Save Commit Changes</button>
+        <button type="button" onClick={(e) => { void handleSubmit(e); }} className={`${styles.btn} ${styles.btnPrimary}`} style={{ marginBottom: 0 }}>
+          Save Modifications
+        </button>
       </div>
     </div>
   );

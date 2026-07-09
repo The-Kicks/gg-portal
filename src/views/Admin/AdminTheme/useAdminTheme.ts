@@ -1,7 +1,3 @@
-/**
- * HOOK: useAdminTheme.ts
- * Doel: Beheert de state en logica voor het bewerken en opslaan van thema-instellingen.
- */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createTheme, updateTheme, deleteTheme } from '../../../core/api';
@@ -31,6 +27,10 @@ const emptyTheme: Partial<Theme> = {
     }
 };
 
+/**
+ * A custom React hook that coordinates form states, structural fields mapping, 
+ * metadata defaults configuration, and server requests for managing application theme templates.
+ */
 export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string) {
     const navigate = useNavigate();
     const [editingTheme, setEditingTheme] = useState<Partial<Theme> | null>(null);
@@ -39,14 +39,20 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
     const [metaInputs, setMetaInputs] = useState<Record<string, MetaInputState>>({});
     const [guesswhoDisabledColumns, setGuesswhoDisabledColumns] = useState<GuessWhoColumnID[]>([]);
     
-    // Blind Ranking States
     const [blindRankingCustomInput, setBlindRankingCustomInput] = useState<string>('');
     const [blindRankingDisabled, setBlindRankingDisabled] = useState<string[]>([]);
 
+    /**
+     * Redirects the user interface context back to the administrative control panel route.
+     */
     const handleReturnToControlPanel = () => {
         navigate(`/${themeName || 'default'}/admin`);
     };
 
+    /**
+     * Seeds initial input conditions, structural parameters, and clean fallback layouts 
+     * required to configure a brand new theme entry.
+     */
     const handleStartCreate = () => {
         const initialMetaInputs: Record<string, MetaInputState> = {};
         AVAILABLE_LAYERS.forEach(layer => {
@@ -75,6 +81,10 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         setError(null);
     };
 
+    /**
+     * Populates the administrative internal form state registers from an existing active 
+     * database record layout chosen for revision.
+     */
     const handleStartEdit = (theme: Theme) => {
         setEditingTheme({ ...theme });
         setIsNew(false);
@@ -84,7 +94,6 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         const l4MediaKeys = theme.layerMetadata?.l4?.mediaKeys || [];
         const savedAvailableCategories = theme.gameSettings?.blindranking?.availableCategories || [];
         
-        // Filter out normal ranking and L4 media keys to extract purely the custom strings
         const customCats = savedAvailableCategories.filter(
             c => c !== 'Normal Ranking' && !l4MediaKeys.includes(c)
         );
@@ -109,6 +118,9 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         setMetaInputs(initialMetaInputs);
     };
 
+    /**
+     * Dispatch a request to drop a specified unique theme identifier completely from persistence models.
+     */
     const handleDelete = async (id: string) => {
         if (!window.confirm(`Are you certain you want to purge theme "${id}"?`)) return;
         try {
@@ -120,6 +132,10 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         }
     };
 
+    /**
+     * Validates required data bounds, builds sub-game object configurations, 
+     * structural arrays, and executes the theme persistence transaction pipeline.
+     */
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingTheme?.id || !editingTheme.title) {
@@ -160,7 +176,6 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
             }
         });
 
-        // Compile dynamic lists for validation and payload saving
         const l4MediaKeys = metaInputs.l4?.mediaKeys
             ? metaInputs.l4.mediaKeys.split(',').map(s => s.trim()).filter(Boolean)
             : [];
@@ -170,7 +185,6 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
 
         const finalAvailableCats = ['Normal Ranking', ...l4MediaKeys, ...customKeys];
         
-        // Exclude 'Normal Ranking' from disabled capabilities to lock it down entirely
         const finalDisabledCats = blindRankingDisabled.filter(
             cat => finalAvailableCats.includes(cat) && cat !== 'Normal Ranking'
         );
@@ -202,6 +216,9 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         }
     };
 
+    /**
+     * Modifies the display name labels applied across particular tier parameters.
+     */
     const updateLabel = (key: string, val: string) => {
         setEditingTheme(prev => {
             if (!prev) return null;
@@ -209,6 +226,9 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         });
     };
 
+    /**
+     * Updates key descriptive target metadata properties mapped down into chosen structure segments.
+     */
     const updateLayerString = (layer: string, key: 'badgeKey' | 'subtitleKey', val: string) => {
         setEditingTheme(prev => {
             if (!prev) return null;
@@ -219,10 +239,16 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         });
     };
 
+    /**
+     * Updates text configuration entries associated with dynamic metadata inputs or matrix keys.
+     */
     const updateLayerArrayInput = (layer: string, key: keyof MetaInputState, val: string) => {
         setMetaInputs(prev => ({ ...prev, [layer]: { ...prev[layer], [key]: val } }));
     };
 
+    /**
+     * Appends or excises primitive elements safely out of configured checkbox selection state arrays.
+     */
     const handleArrayToggle = (field: 'miniViewLayers' | 'games' | 'navbarItems', value: string) => {
         setEditingTheme(prev => {
             if (!prev) return null;
@@ -232,10 +258,17 @@ export function useAdminTheme(onRefresh: () => Promise<void>, themeName?: string
         });
     };
 
+    /**
+     * Toggles target data visibility settings associated with GuessWho logic execution modules.
+     */
     const handleGuessWhoColumnToggle = (columnId: GuessWhoColumnID) => {
         setGuesswhoDisabledColumns(prev => prev.includes(columnId) ? prev.filter(id => id !== columnId) : [...prev, columnId]);
     };
 
+    /**
+     * Toggles inclusion metrics indicating if a specific metric subcategory should be deactivated 
+     * under active BlindRanking gameplay modules.
+     */
     const handleBlindRankingDisabledToggle = (category: string) => {
         setBlindRankingDisabled(prev => 
             prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
