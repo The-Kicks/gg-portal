@@ -1,0 +1,501 @@
+/* ==========================================================================
+   1. SETUP SCREEN STYLES (SorterViewPage)
+   ========================================================================== */
+.optionsContainer {
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+  color: #ffffff;
+  background-color: #121214;
+  
+  /* Corrigeer de globale padding door de container 60px omhoog te trekken */
+  margin-top: -60px;
+  /* Maak de container exact even hoog als het volledige scherm */
+  height: 100vh;
+  max-height: 100vh;
+  /* Voeg intern de 60px padding weer toe zodat de content onder de navbar begint */
+  padding-top: calc(60px + 2rem); 
+  
+  overflow: hidden; /* Schakelt scrollen binnen deze module volledig uit */
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.title {
+  margin: 0 0 8px 0;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.description {
+  margin: 0 0 2rem 0;
+  color: #a1a1aa;
+  font-size: 1rem;
+}
+
+.filterSection {
+  margin-bottom: 2.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #3b82f6;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #27272a;
+  padding-bottom: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 12px;
+  background: #1e1e22;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.checkboxLabel:hover {
+  border-color: #3b82f6;
+  background: #232329;
+}
+
+.checkboxInput {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.groupName {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e4e4e7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.startButton {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  margin: 3rem auto 0 auto;
+  padding: 14px 28px;
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.startButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: #27272a;
+  color: #71717a;
+}
+
+.startButton:not(:disabled):hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* ==========================================================================
+   2. MAIN GAME SCREEN STYLES (SorterView)
+   ========================================================================== */
+.sorterContainer {
+  display: grid;
+  grid-template-columns: 1fr 340px 1fr;
+  
+  /* Corrigeer de globale padding door de container 60px omhoog te trekken */
+  margin-top: -60px;
+  /* Maak het speelscherm exact even hoog als het volledige scherm */
+  height: 100vh;
+  max-height: 100vh;
+  /* Voeg intern de 60px padding weer toe zodat het speelscherm onder de navbar begint */
+  padding-top: 60px;
+  
+  overflow: hidden; /* Schakelt scrollen op het speelscherm uit */
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.mediaColumn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.2s ease;
+}
+
+.mediaColumn:hover {
+  filter: brightness(1.1);
+}
+
+.mediaColumn:active {
+  transform: scale(0.99);
+}
+
+.mediaWrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.mediaAsset {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.entityCard {
+  position: absolute;
+  bottom: 24px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 16px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 80%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.entityCardLeft {
+  left: 24px;
+}
+
+.entityCardRight {
+  right: 24px;
+  text-align: right;
+}
+
+.entityName {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+}
+
+.entitySubtitle {
+  margin: 4px 0 0 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.centerColumn {
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(5px);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.headerZone {
+  width: 100%;
+}
+
+.matchTitle {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.5;
+}
+
+.progressContainer {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 3px;
+  background-color: var(--primary);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progressLabel {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.controlZone {
+  display: flex;
+  flex-direction: row; /* Knoppen horizontaal naast elkaar */
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.carouselControls {
+  display: flex;
+  flex-direction: row; /* Pijltjes horizontaal naast elkaar */
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.controlLabel {
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+.arrowButton {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  width: 40px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.arrowButton:disabled {
+  opacity: 0.15;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.arrowButton:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.vsBadge {
+  font-size: 1.8rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -1px;
+  opacity: 0.8;
+  margin: 0 10px;
+  color: var(--primary);
+}
+
+.leaderboardZone {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  border-radius: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.leaderboardTitle {
+  margin: 0 0 12px 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.leaderboardList {
+  padding-left: 20px;
+  margin: 0;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.leaderboardItem {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboardScore {
+  opacity: 0.5;
+  font-size: 0.8rem;
+  margin-left: 4px;
+}
+
+.errorState {
+  padding: 2rem;
+}
+
+
+/* ==========================================================================
+   3. FINISHED / RESULTS SCREEN (K-pop Photocard Grid)
+   ========================================================================== */
+.resultsContainer {
+  padding: 2rem;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto; /* Zorgt ervoor dat je wel door je ranglijst kunt scrollen als deze lang is */
+  box-sizing: border-box;
+}
+
+.resultsHeader {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.resultsTitle {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  letter-spacing: -1px;
+  background: linear-gradient(to right, #3b82f6, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.resultsSubtitle {
+  color: #a1a1aa;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Het grid waarin de photocards netjes naast elkaar komen te staan */
+.photocardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto 4rem auto;
+}
+
+/* De individuele K-pop Photocard styling */
+.photocard {
+  position: relative;
+  aspect-ratio: 2.5 / 3.5; /* De klassieke K-pop photocard verhouding */
+  background-color: #1e1e22;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.photocard:hover {
+  transform: translateY(-6px);
+  border-color: #3b82f6;
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.2);
+}
+
+/* Rank badge linksboven (bvb. #1, #2) */
+.rankBadge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  z-index: 3;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Specifieke kleur voor de top 3 */
+.topRank {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  border: none;
+}
+
+.photocardImageWrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.photocardImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Gradient overlay onderin de kaart zodat de naam altijd goed leesbaar is */
+.photocardOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 12px;
+  z-index: 2;
+}
+
+.photocardName {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.photocardScore {
+  margin: 2px 0 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #3b82f6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.photocardPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1e1e22 0%, #27272a 100%);
+}
