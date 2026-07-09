@@ -2,7 +2,6 @@ import type { Theme } from '../../types';
 import styles from './Home.module.css';
 import { PortalCard } from "../../core/components/UI/PortalCard/PortalCard.tsx";
 import { PortalGroup } from '../../core/components/UI/PortalCard/PortalGroup.tsx';
-// 🌟 Importeer useNavigate
 import { useNavigate } from 'react-router-dom';
 
 interface HomeProps {
@@ -11,7 +10,6 @@ interface HomeProps {
 }
 
 const Home = ({ theme, isDark }: HomeProps) => {
-  // 🌟 Activeer de navigator
   const navigate = useNavigate();
   const numGames = theme.games.length;
 
