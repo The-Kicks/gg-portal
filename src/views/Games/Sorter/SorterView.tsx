@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { EloExtended } from './eloUtils';
-import { calculateElo, getNextMatch } from './eloUtils';
-import { SorterResultsView } from './SorterResultsView'; // Importeer de nieuwe view
+import { calculateElo, getNextMatch, getTargetMatchesPerItem } from './eloUtils'; // Importeer de dynamische target functie
+import { SorterResultsView } from './SorterResultsView';
 import styles from './Sorter.module.css';
 
 interface SorterViewProps {
@@ -14,7 +14,7 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
   // tournamentList: Beheert de actieve lijst van alle deelnemende items en hun actuele ELO-scores.
   const [tournamentList, setTournamentList] = useState<EloExtended<HydratedEntity>[]>(initialPool);
 
-  // currentMatchup: Bevat het huidige duo (links en rechts) dat nu tegen elkaar strijdt op het scherm.
+  // currentMatchup: Bevat het huidige duo dat nu tegen elkaar strijdt.
   const [currentMatchup, setCurrentMatchup] = useState<[EloExtended<HydratedEntity>, EloExtended<HydratedEntity>] | null>(() => 
     getNextMatch(initialPool)
   );
@@ -26,7 +26,7 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
   const [leftMediaIndex, setLeftMediaIndex] = useState<number>(0);
   const [rightMediaIndex, setRightMediaIndex] = useState<number>(0);
 
-  // Verzamelt alle bruikbare media URL's van een item (eerst profileCard en heroBanner, daarna extra metadata keys).
+  // Verzamelt alle bruikbare media URL's van een item.
   const extractMediaUrls = (entity: HydratedEntity): string[] => {
     const discoveredUrls: string[] = [];
 
@@ -54,14 +54,14 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
     return discoveredUrls;
   };
 
-  // CHECK: Als de matchup null is, zijn we klaar met sorteren!
+  // CHECK: Als de matchup null is, stuurt eloUtils ons door naar het resultatenscherm.
   if (!currentMatchup) {
     return (
       <SorterResultsView 
         theme={theme}
         finalPool={tournamentList}
         extractMediaUrls={extractMediaUrls}
-        onRestart={() => window.location.reload()} // Of je eigen reset-state logica
+        onRestart={() => window.location.reload()}
       />
     );
   }
@@ -70,13 +70,13 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
   const leftItemMedia: string[] = extractMediaUrls(leftItem);
   const rightItemMedia: string[] = extractMediaUrls(rightItem);
 
-  // Berekening voortgangsbalk: We mikken op gemiddeld 15 matches per item voor een stabiele ranking.
-  const targetMatchesPerItem: number = 15;
+  // OPGELOST: Gebruik de dynamische targetMatches in plaats van het hardcoded getal 15!
+  const targetMatchesPerItem = getTargetMatchesPerItem(tournamentList.length);
   const totalMatchesPlayedAcrossPool: number = tournamentList.reduce((sum, item) => sum + item.matchesPlayed, 0);
   const averageMatchesPlayed: number = totalMatchesPlayedAcrossPool / tournamentList.length;
   const calibrationProgress: number = Math.min(Math.round((averageMatchesPlayed / targetMatchesPerItem) * 100), 100);
 
-  // Verwerkt de klik van de gebruiker op de winnaar, berekent de nieuwe ELO en vraagt direct een nieuwe matchup op.
+  // Verwerkt de klik van de gebruiker op de winnaar.
   const handleProcessVote = (winner: 'A' | 'B'): void => {
     const { newRatingA, newRatingB } = calculateElo(leftItem.elo, rightItem.elo, winner);
 
@@ -95,7 +95,7 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
     setRightMediaIndex(0);
   };
 
-  // Genereert de juiste HTML-component op basis van het bestandstype (video of afbeelding).
+  // Genereert de juiste HTML-component op basis van het bestandstype.
   const renderMediaComponent = (url: string): React.JSX.Element => {
     if (!url) {
       return <div className={styles.mediaWrapper}>No media</div>;
@@ -113,12 +113,11 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
     );
   };
 
-  // Haalt de naam van de bovenliggende groep op om te tonen als ondertitel (bijv. de teamnaam boven een speler).
+  // Haalt de naam van de bovenliggende groep op om te tonen als ondertitel.
   const getItemSubtitle = (entity: HydratedEntity): string => {
     const parentConnection = entity.targetConnections?.find(conn => conn.sourceEntity?.type === theme.orgLayer);
     return parentConnection?.sourceEntity?.name || '';
   };
-  
 
   return (
     <div className={styles.sorterContainer}>
@@ -148,7 +147,7 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
           </p>
         </div>
 
-        {/* Media Carrousel Knoppen (Verticaal gestapeld) */}
+        {/* Media Carrousel Knoppen */}
         <div className={styles.controlZone}>
           <div className={styles.carouselControls}>
             <span className={styles.controlLabel}>Left Assets</span>

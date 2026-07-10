@@ -35,37 +35,51 @@ export function calculateElo(ratingA: number, ratingB: number, outcome: 'A' | 'B
 let lastMatchIds: string[] = [];
 
 /**
- * getNextMatch: Selecteert op een slimme manier de volgende match.
- * Stop zodra de pool gemiddeld 15 matches per item heeft gespeeld.
+ * getTargetMatchesPerItem: Berekent dynamisch het breekpunt van de sorter.
+ * - Hele kleine pools (<= 6 items): Maximaal 3 tot 4 matches per item.
+ * (Bij 5 items is iedereen na ~8 tot 10 stemmen al klaar).
+ * - Middelgroot (7 - 30 items): 5 tot 7 matches per item voor een betrouwbare top.
+ * - Groot (31 - 100 items): 4 tot 5 matches per item.
+ * - Gigantisch (100+ items): Strak op 3 matches per item zodat de ladder behapbaar blijft.
+ */
+export function getTargetMatchesPerItem(poolLength: number): number {
+  if (poolLength <= 6) return 3;   // Veel beter. Snel klaar bij een kleine set!
+  if (poolLength <= 15) return 6;
+  if (poolLength <= 40) return 5;
+  if (poolLength <= 100) return 4;
+  return 3; 
+}
+/**
+ * getNextMatch: Selecteert op een slimme manier de volgende match op de ladder.
+ * Werkt feilloos voor 5 items én voor 1000 items.
  */
 export function getNextMatch<T extends HydratedEntity>(
   pool: EloExtended<T>[]
 ): [EloExtended<T>, EloExtended<T>] | null {
   if (pool.length < 2) return null;
 
-  // Harde stop: als de pool gemiddeld gekalibreerd is (15 matches per item), markeer als klaar.
-  const targetMatchesPerItem = 15;
-  const totalMatchesPlayed = pool.reduce((sum, item) => sum + item.matchesPlayed, 0);
-  const averageMatchesPlayed = totalMatchesPlayed / pool.length;
+  const targetMatches = getTargetMatchesPerItem(pool.length);
 
-  if (averageMatchesPlayed >= targetMatchesPerItem) {
+  // 1. Filter kandidaten voor Entity A die hun target nog NIET hebben bereikt.
+  // Dit zorgt ervoor dat we bij grote pools systematisch door de ongespeelde kaarten heen akkeren.
+  let candidatesA = pool.filter(e => e.matchesPlayed < targetMatches);
+
+  // Als álle items hun minimale target hebben bereikt, is de ladder klaar!
+  if (candidatesA.length === 0) {
     return null;
   }
 
-  // 1. Vind het minimale aantal gespeelde wedstrijden in de huidige pool
-  const minMatches = Math.min(...pool.map(e => e.matchesPlayed));
+  // Sorteer Entity A kandidaten op degenen met de minste matches om gaten in de ladder te voorkomen
+  const minMatchesA = Math.min(...candidatesA.map(e => e.matchesPlayed));
+  candidatesA = candidatesA.filter(e => e.matchesPlayed <= minMatchesA + 1);
 
-  // 2. Selecteer kandidaten voor Entity A die op of dichtbij dit minimum zitten
-  let candidatesA = pool.filter(e => e.matchesPlayed <= minMatches + 1);
-  if (candidatesA.length === 0) candidatesA = pool;
-
-  // Kies een willekeurige Entity A uit deze prioriteitslijst
+  // Kies een willekeurige Entity A uit de prioriteitslijst
   const entityA = candidatesA[Math.floor(Math.random() * candidatesA.length)];
 
-  // 3. Zoek geschikte tegenstanders (Entity B)
+  // 2. Zoek geschikte tegenstanders (Entity B)
   let opponents = pool.filter(e => e.id !== entityA.id);
 
-  // Filter de tegenstanders zodat we niet EXACT dezelfde match als de vorige keer voorschotelen
+  // Voorkom directe opeenvolgende herhaling van exact dezelfde matchup
   if (lastMatchIds.includes(entityA.id)) {
     const filteredOpponents = opponents.filter(e => !lastMatchIds.includes(e.id));
     if (filteredOpponents.length > 0) {
@@ -73,23 +87,29 @@ export function getNextMatch<T extends HydratedEntity>(
     }
   }
 
-  // 4. Sorteer de tegenstanders op basis van een gecombineerde score
+  // 3. Matchmaking op basis van de ladder-positie:
+  // We zoeken een tegenstander die qua ELO zo dicht mogelijk bij Entity A ligt (Swiss-system / Ladder principe).
+  // Voor de stabiliteit geven we tegenstanders die hun target óók nog niet hebben bereikt een lichte voorrang.
   const sortedOpponents = opponents.sort((a, b) => {
-    const matchDiffA = Math.abs(a.matchesPlayed - entityA.matchesPlayed);
-    const matchDiffB = Math.abs(b.matchesPlayed - entityA.matchesPlayed);
-    
-    const eloDiffA = Math.abs(a.elo - entityA.elo) / 30;
-    const eloDiffB = Math.abs(b.elo - entityA.elo) / 30;
+    const eloDiffA = Math.abs(a.elo - entityA.elo);
+    const eloDiffB = Math.abs(b.elo - entityA.elo);
 
-    const scoreA = matchDiffA + eloDiffA + (Math.random() * 0.5);
-    const scoreB = matchDiffB + eloDiffB + (Math.random() * 0.5);
+    // Bonuspounten als de tegenstander ook nog 'hongerig' is naar matches
+    const statusBonusA = a.matchesPlayed < targetMatches ? 0 : 100;
+    const statusBonusB = b.matchesPlayed < targetMatches ? 0 : 100;
+
+    // Voeg een kleine willekeurige jitter toe om herhalende loops te doorbreken
+    const scoreA = eloDiffA + statusBonusA + (Math.random() * 10);
+    const scoreB = eloDiffB + statusBonusB + (Math.random() * 10);
 
     return scoreA - scoreB;
   });
 
+  // Pak een tegenstander uit de top 3 meest gelijkwaardige tegenstanders op de ladder
   const poolSize = Math.min(sortedOpponents.length, 3);
   const entityB = sortedOpponents[Math.floor(Math.random() * poolSize)];
 
+  // Sla de match op in de in-memory herhalingsbeveiliging
   lastMatchIds = [entityA.id, entityB.id];
 
   return [entityA, entityB];
