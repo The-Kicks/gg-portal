@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { EloExtended } from './eloUtils';
-import { calculateElo, getNextMatch, getTargetMatchesPerItem } from './eloUtils'; // Importeer de dynamische target functie
+import { calculateElo, getNextMatch, getCalibrationProgress, getSorterStageInfo } from './eloUtils';
 import { SorterResultsView } from './SorterResultsView';
 import styles from './Sorter.module.css';
 
@@ -15,7 +15,7 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
   const [tournamentList, setTournamentList] = useState<EloExtended<HydratedEntity>[]>(initialPool);
 
   // currentMatchup: Bevat het huidige duo dat nu tegen elkaar strijdt.
-  const [currentMatchup, setCurrentMatchup] = useState<[EloExtended<HydratedEntity>, EloExtended<HydratedEntity>] | null>(() => 
+  const [currentMatchup, setCurrentMatchup] = useState<[EloExtended<HydratedEntity>, EloExtended<HydratedEntity>] | null>(() =>
     getNextMatch(initialPool)
   );
 
@@ -57,7 +57,7 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
   // CHECK: Als de matchup null is, stuurt eloUtils ons door naar het resultatenscherm.
   if (!currentMatchup) {
     return (
-      <SorterResultsView 
+      <SorterResultsView
         theme={theme}
         finalPool={tournamentList}
         extractMediaUrls={extractMediaUrls}
@@ -70,19 +70,35 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
   const leftItemMedia: string[] = extractMediaUrls(leftItem);
   const rightItemMedia: string[] = extractMediaUrls(rightItem);
 
-  // OPGELOST: Gebruik de dynamische targetMatches in plaats van het hardcoded getal 15!
-  const targetMatchesPerItem = getTargetMatchesPerItem(tournamentList.length);
-  const totalMatchesPlayedAcrossPool: number = tournamentList.reduce((sum, item) => sum + item.matchesPlayed, 0);
-  const averageMatchesPlayed: number = totalMatchesPlayedAcrossPool / tournamentList.length;
-  const calibrationProgress: number = Math.min(Math.round((averageMatchesPlayed / targetMatchesPerItem) * 100), 100);
+  // Voortgang van de kalibratie ophalen
+  const calibrationProgress = getCalibrationProgress(tournamentList);
+
+  // Bepaal de actuele toernooifase op basis van de status van de pool
+  const currentStage = getSorterStageInfo(tournamentList);
 
   // Verwerkt de klik van de gebruiker op de winnaar.
   const handleProcessVote = (winner: 'A' | 'B'): void => {
     const { newRatingA, newRatingB } = calculateElo(leftItem.elo, rightItem.elo, winner);
 
     const updatedList = tournamentList.map(item => {
-      if (item.id === leftItem.id) return { ...item, elo: newRatingA, matchesPlayed: item.matchesPlayed + 1 };
-      if (item.id === rightItem.id) return { ...item, elo: newRatingB, matchesPlayed: item.matchesPlayed + 1 };
+      // Als dit het linker item is: update ELO, verhoog matches en voeg rechter ID toe aan geschiedenis
+      if (item.id === leftItem.id) {
+        return {
+          ...item,
+          elo: newRatingA,
+          matchesPlayed: item.matchesPlayed + 1,
+          playedAgainst: [...item.playedAgainst, rightItem.id]
+        };
+      }
+      // Als dit het rechter item is: update ELO, verhoog matches en voeg linker ID toe aan geschiedenis
+      if (item.id === rightItem.id) {
+        return {
+          ...item,
+          elo: newRatingB,
+          matchesPlayed: item.matchesPlayed + 1,
+          playedAgainst: [...item.playedAgainst, leftItem.id]
+        };
+      }
       return item;
     });
 
@@ -134,6 +150,20 @@ export function SorterView({ theme, initialPool }: SorterViewProps) {
       {/* MIDDENSECTIE (CONSOLE & PROGRESS) */}
       <div className={styles.centerColumn}>
         <div className={styles.headerZone}>
+          
+          {/* Dynamische Stage Badge & Toelichting */}
+          <div className={styles.stageWrapper}>
+            <span 
+              className={styles.stageBadge} 
+              style={{ borderColor: currentStage.color, color: currentStage.color }}
+            >
+              {currentStage.title}
+            </span>
+            <p className={styles.stageDescription}>
+              {currentStage.description}
+            </p>
+          </div>
+
           <h2 className={styles.matchTitle}>Vote #{voteCount + 1}</h2>
 
           <div className={styles.progressContainer}>

@@ -1,23 +1,14 @@
 import type { HydratedEntity } from '../../../types';
 
-/**
- * INITIAL_ELO: De standaard startscore voor elke entiteit die nog geen matches heeft gespeeld.
- */
 export const INITIAL_ELO: number = 1200;
-
-/**
- * K_FACTOR: Bepaalt hoe zwaar een overwinning of verlies meeweegt. 
- */
 const K_FACTOR: number = 32;
 
 export type EloExtended<T> = T & {
   elo: number;
   matchesPlayed: number;
+  playedAgainst: string[];
 };
 
-/**
- * calculateElo: Berekent de nieuwe ELO-ratings voor beide entiteiten op basis van de winnaar.
- */
 export function calculateElo(ratingA: number, ratingB: number, outcome: 'A' | 'B') {
   const expectedA: number = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
   const expectedB: number = 1 / (1 + Math.pow(10, (ratingA - ratingB) / 400));
@@ -31,86 +22,190 @@ export function calculateElo(ratingA: number, ratingB: number, outcome: 'A' | 'B
   };
 }
 
-// Een simpele in-memory tracker om te voorkomen dat EXACT dezelfde match direct achter elkaar komt
-let lastMatchIds: string[] = [];
+/**
+ * getIndividualTarget: Schakelt tussen Exact Sorteren en Swiss-System Ladder.
+ * Voorkomt herhalende matches bij kleine pools door een harde 'N - 1' cap.
+ */
+export function getIndividualTarget<T extends HydratedEntity>(
+  item: EloExtended<T>,
+  sortedPool: EloExtended<T>[]
+): number {
+  const N = sortedPool.length;
+
+  // CATCH 1: Hele kleine pools (3 tot 6 items).
+  if (N <= 6) {
+    return N - 1; 
+  }
+
+  // CATCH 2: Kleine tot middelgrote pools (7 tot 32 items).
+  if (N <= 32) {
+    return Math.min(Math.ceil(2 * Math.log2(N)), N - 1); 
+  }
+
+  // FASE 2: Grote pools (N > 32).
+  const rankIndex = sortedPool.findIndex(e => e.id === item.id);
+  const percentile = 1 - (rankIndex / N); // 1.0 = nummer 1, 0.0 = laatste
+
+  // Onderste 40%: Snel lozen na 2 matches
+  if (percentile < 0.40) {
+    return 2;
+  }
+  
+  // Middenmoot (top 60% tot top 15%): Krijgt een stabiele basis
+  if (percentile < 0.85) {
+    return 4;
+  }
+
+  // De Elite zone (Bovenste 15%): Moeten intensief strijden om de echte top 100 te finetunen
+  if (N > 500) return 6;
+  return 8;
+}
 
 /**
- * getTargetMatchesPerItem: Berekent dynamisch het breekpunt van de sorter.
- * - Hele kleine pools (<= 6 items): Maximaal 3 tot 4 matches per item.
- * (Bij 5 items is iedereen na ~8 tot 10 stemmen al klaar).
- * - Middelgroot (7 - 30 items): 5 tot 7 matches per item voor een betrouwbare top.
- * - Groot (31 - 100 items): 4 tot 5 matches per item.
- * - Gigantisch (100+ items): Strak op 3 matches per item zodat de ladder behapbaar blijft.
+ * getCalibrationProgress: Berekent de nauwkeurige voortgang op basis van de gekozen modus.
  */
-export function getTargetMatchesPerItem(poolLength: number): number {
-  if (poolLength <= 6) return 3;   // Veel beter. Snel klaar bij een kleine set!
-  if (poolLength <= 15) return 6;
-  if (poolLength <= 40) return 5;
-  if (poolLength <= 100) return 4;
-  return 3; 
+export function getCalibrationProgress<T extends HydratedEntity>(pool: EloExtended<T>[]): number {
+  if (pool.length === 0) return 0;
+
+  const sortedPool = [...pool].sort((a, b) => b.elo - a.elo);
+  let totalCurrentMatches = 0;
+  let totalTargetMatches = 0;
+
+  for (const item of sortedPool) {
+    const target = getIndividualTarget(item, sortedPool);
+    totalCurrentMatches += Math.min(item.matchesPlayed, target);
+    totalTargetMatches += target;
+  }
+
+  return Math.round((totalCurrentMatches / totalTargetMatches) * 100);
 }
+
 /**
- * getNextMatch: Selecteert op een slimme manier de volgende match op de ladder.
- * Werkt feilloos voor 5 items én voor 1000 items.
+ * getNextMatch: Selecteert de ideale matchup op de ladder zonder herhalingen en grote ELO-gaten.
  */
 export function getNextMatch<T extends HydratedEntity>(
   pool: EloExtended<T>[]
 ): [EloExtended<T>, EloExtended<T>] | null {
   if (pool.length < 2) return null;
 
-  const targetMatches = getTargetMatchesPerItem(pool.length);
+  const sortedPool = [...pool].sort((a, b) => b.elo - a.elo);
 
-  // 1. Filter kandidaten voor Entity A die hun target nog NIET hebben bereikt.
-  // Dit zorgt ervoor dat we bij grote pools systematisch door de ongespeelde kaarten heen akkeren.
-  let candidatesA = pool.filter(e => e.matchesPlayed < targetMatches);
+  // Filter op items die hun persoonlijke target nog niet hebben bereikt
+  let candidates = sortedPool.filter(e => e.matchesPlayed < getIndividualTarget(e, sortedPool));
 
-  // Als álle items hun minimale target hebben bereikt, is de ladder klaar!
-  if (candidatesA.length === 0) {
+  if (candidates.length === 0) {
     return null;
   }
 
-  // Sorteer Entity A kandidaten op degenen met de minste matches om gaten in de ladder te voorkomen
-  const minMatchesA = Math.min(...candidatesA.map(e => e.matchesPlayed));
-  candidatesA = candidatesA.filter(e => e.matchesPlayed <= minMatchesA + 1);
+  const minMatches = Math.min(...candidates.map(e => e.matchesPlayed));
+  candidates = candidates.filter(e => e.matchesPlayed <= minMatches + 1);
 
-  // Kies een willekeurige Entity A uit de prioriteitslijst
-  const entityA = candidatesA[Math.floor(Math.random() * candidatesA.length)];
+  // Schud de actieve uitdagers willekeurig om vooringenomenheid te voorkomen
+  const shuffledChallengers = [...candidates].sort(() => Math.random() - 0.5);
 
-  // 2. Zoek geschikte tegenstanders (Entity B)
-  let opponents = pool.filter(e => e.id !== entityA.id);
+  // Zoek naar een uitdager die een kwalitatief goede match kan krijgen
+  for (const challenger of shuffledChallengers) {
+    const unplayedOpponents = pool.filter(e => 
+      e.id !== challenger.id && 
+      !challenger.playedAgainst.includes(e.id) // Harde Swiss-regel: geen rematches
+    );
 
-  // Voorkom directe opeenvolgende herhaling van exact dezelfde matchup
-  if (lastMatchIds.includes(entityA.id)) {
-    const filteredOpponents = opponents.filter(e => !lastMatchIds.includes(e.id));
-    if (filteredOpponents.length > 0) {
-      opponents = filteredOpponents;
+    if (unplayedOpponents.length === 0) continue;
+
+    // Sorteer potentiële tegenstanders op basis van ELO-nabijheid
+    const sortedOpponents = unplayedOpponents.sort((a, b) => {
+      const eloDiffA = Math.abs(a.elo - challenger.elo);
+      const eloDiffB = Math.abs(b.elo - challenger.elo);
+
+      const targetA = getIndividualTarget(a, sortedPool);
+      const targetB = getIndividualTarget(b, sortedPool);
+      const statusBonusA = a.matchesPlayed < targetA ? 0 : 50;
+      const statusBonusB = b.matchesPlayed < targetB ? 0 : 50;
+
+      return (eloDiffA + statusBonusA + Math.random() * 5) - (eloDiffB + statusBonusB + Math.random() * 5);
+    });
+
+    const bestOpponent = sortedOpponents[0];
+    const eloDelta = Math.abs(challenger.elo - bestOpponent.elo);
+
+    // De Swiss Noodrem
+    // Als de dichtstbijzijnde vrije tegenstander een ELO-gat heeft van > 350 punten,
+    // dan weigeren we deze oneerlijke match (zoals Nr 1 vs Nr Laatst).
+    if (eloDelta > 350) {
+      // We markeren deze specifieke uitdager virtueel als 'klaar' voor deze ronde.
+      // Hierdoor slaat het algoritme hem nu over en zoekt direct een match voor de rest.
+      challenger.matchesPlayed = getIndividualTarget(challenger, sortedPool);
+      return getNextMatch(pool); 
     }
+
+    // Kies uit de top 3 meest gelijkwaardige tegenstanders voor een beetje dynamiek
+    const poolSize = Math.min(sortedOpponents.length, 3);
+    const chosenOpponent = sortedOpponents[Math.floor(Math.random() * poolSize)];
+
+    return [challenger, chosenOpponent];
   }
 
-  // 3. Matchmaking op basis van de ladder-positie:
-  // We zoeken een tegenstander die qua ELO zo dicht mogelijk bij Entity A ligt (Swiss-system / Ladder principe).
-  // Voor de stabiliteit geven we tegenstanders die hun target óók nog niet hebben bereikt een lichte voorrang.
-  const sortedOpponents = opponents.sort((a, b) => {
-    const eloDiffA = Math.abs(a.elo - entityA.elo);
-    const eloDiffB = Math.abs(b.elo - entityA.elo);
+  return null;
+}
 
-    // Bonuspounten als de tegenstander ook nog 'hongerig' is naar matches
-    const statusBonusA = a.matchesPlayed < targetMatches ? 0 : 100;
-    const statusBonusB = b.matchesPlayed < targetMatches ? 0 : 100;
+export interface SorterStage {
+  title: string;
+  description: string;
+  color: string;
+}
 
-    // Voeg een kleine willekeurige jitter toe om herhalende loops te doorbreken
-    const scoreA = eloDiffA + statusBonusA + (Math.random() * 10);
-    const scoreB = eloDiffB + statusBonusB + (Math.random() * 10);
+/**
+ * getSorterStageInfo: Berekent in welke fase het toernooi zich globaal bevindt.
+ */
+export function getSorterStageInfo<T extends HydratedEntity>(pool: EloExtended<T>[]): SorterStage {
+  const N = pool.length;
+  if (N === 0) return { title: 'Laden...', description: '', color: '#666666' };
 
-    return scoreA - scoreB;
-  });
+  if (N <= 6) {
+    return {
+      title: "Volledige Competitie",
+      description: "Iedereen speelt exact één keer tegen elkaar voor een 100% sluitende ranglijst.",
+      color: "#3182ce"
+    };
+  }
 
-  // Pak een tegenstander uit de top 3 meest gelijkwaardige tegenstanders op de ladder
-  const poolSize = Math.min(sortedOpponents.length, 3);
-  const entityB = sortedOpponents[Math.floor(Math.random() * poolSize)];
+  if (N <= 32) {
+    return {
+      title: "Swiss Toernooifase",
+      description: "Items van gelijkwaardig niveau strijden tegen elkaar om de hiërarchie te bepalen.",
+      color: "#319795"
+    };
+  }
 
-  // Sla de match op in de in-memory herhalingsbeveiliging
-  lastMatchIds = [entityA.id, entityB.id];
+  const sortedPool = [...pool].sort((a, b) => b.elo - a.elo);
+  const activeItems = sortedPool.filter(e => e.matchesPlayed < getIndividualTarget(e, sortedPool));
 
-  return [entityA, entityB];
+  if (activeItems.length === 0) {
+    return { title: "Voltooid", description: "De ranglijst is opgesteld.", color: "#38a169" };
+  }
+
+  const heeftItemsInFase1 = activeItems.some(e => e.matchesPlayed < 2);
+  const heeftItemsInFase2 = activeItems.some(e => e.matchesPlayed < 4);
+
+  if (heeftItemsInFase1) {
+    return {
+      title: "Fase 1: Globale Schifting",
+      description: "Alle opties krijgen een basisrating. Minder populaire keuzes worden snel naar de achtergrond gefilterd.",
+      color: "#dd6b20"
+    };
+  } 
+  
+  if (heeftItemsInFase2) {
+    return {
+      title: "F2: Positiebepaling",
+      description: "De ranglijst krijgt vorm. Het algoritme scheidt de stabiele middenmoot van de potentiële winnaars.",
+      color: "#4a5568"
+    };
+  }
+
+  return {
+    title: "Fase 3: De Elite Strijd",
+    description: "De absolute koplopers worden intensief tegen elkaar uitgespeeld om de definitieve Top 3/10 te finetunen.",
+    color: "#e53e3e"
+  };
 }

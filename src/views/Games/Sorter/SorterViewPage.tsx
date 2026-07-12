@@ -10,13 +10,14 @@ interface SorterViewPageProps {
 }
 
 export function SorterViewPage({ theme }: SorterViewPageProps) {
-    // Stap 1: Geef alle entiteiten uit het thema een initiële ELO-score en zet de teller op 0 gespeelde matches.
+    // STAP 1: Geef elke entiteit nu ook een lege geschiedenis-array mee om te voldoen aan EloExtended
     const entitiesWithEloState = useMemo<EloExtended<HydratedEntity>[]>(() => {
         const allEntities = theme.entities || [];
         return allEntities.map(entity => ({
             ...entity,
             elo: INITIAL_ELO,
-            matchesPlayed: 0
+            matchesPlayed: 0,
+            playedAgainst: [] 
         }));
     }, [theme.entities]);
 
@@ -52,7 +53,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     // State waarin we de IDs bijhouden van de l1/l2/l3-groepen die door de gebruiker zijn AANGEVINKT om te uitsluiten.
     const [excludedGroupIds, setExcludedGroupIds] = useState<string[]>([]);
 
-    // Geeft aan of de sorter daadwerkelijk gestart is (schakelt tussen optiescherm en speelscherm).
+    // Geeft aan of de sorter daadwerkelijk gestart is (schakelt tussen optiescherm alleyspeelscherm).
     const [isSorterActive, setIsSorterActive] = useState<boolean>(false);
 
     // De uiteindelijke selectie van l4-items die naar het speelscherm wordt gestuurd zodra de gebruiker op start drukt.
@@ -90,10 +91,8 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
         return rankableItems.filter(item => {
             const connectedParentIds = item.targetConnections?.map(conn => conn.sourceEntityId) || [];
 
-            // Als de gebruiker nog helemaal niets heeft uitgezet, mag alles gewoon door
             if (excludedGroupIds.length === 0) return true;
 
-            // We kijken of er minstens één gekoppelde groep is die we NIET hebben uitgevinkt
             const heeftActieveRelatie = connectedParentIds.some(parentId => !excludedGroupIds.includes(parentId));
 
             return heeftActieveRelatie;
