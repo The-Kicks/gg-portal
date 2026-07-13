@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { EloExtended } from './eloUtils';
-import styles from './Sorter.module.css';
+import styles from './SorterCSS/SorterResults.module.css';
 
 interface SorterResultsViewProps {
   theme: Theme;
