@@ -1,246 +1,288 @@
-import { useState } from 'react';
-import type { Theme, HydratedEntity } from '../../../types';
+import React from 'react';
+import type { Theme } from '../../../types';
 import type { EloExtended } from './eloUtils';
-import { calculateElo, getNextMatch, getCalibrationProgress, getSorterStageInfo } from './eloUtils';
-import { SorterResultsView } from './SorterResultsView';
-import styles from './Sorter.module.css';
+import type { SorterEntity } from './SorterViewPage';
+import { getCalibrationProgress, getSorterStageInfo } from './eloUtils';
+import game from './SorterCSS/SorterGame.module.css';
+import results from './SorterCSS/SorterResults.module.css';
+
+const styles = {
+  ...game,
+  ...results
+};
 
 interface SorterViewProps {
   theme: Theme;
-  initialPool: EloExtended<HydratedEntity>[];
+  tournamentList: EloExtended<SorterEntity>[];
+  currentMatchup: [EloExtended<SorterEntity>, EloExtended<SorterEntity>];
+  voteCount: number;
+  leftItemMedia: string[];
+  rightItemMedia: string[];
+  currentLeftMediaUrl: string;
+  currentRightMediaUrl: string;
+  currentLeftFav: string;
+  currentRightFav: string;
+  leftMediaIndex: number;
+  rightMediaIndex: number;
+  hoveredAction: string;
+  setLeftMediaIndex: React.Dispatch<React.SetStateAction<number>>;
+  setRightMediaIndex: React.Dispatch<React.SetStateAction<number>>;
+  setHoveredAction: (action: string) => void;
+  onProcessVote: (winner: 'A' | 'B') => void;
+  onUndo: () => void;
+  canUndo: boolean;
+  onSave: () => void;
+  toggleFavorite: (side: 'left' | 'right') => void;
 }
 
-export function SorterView({ theme, initialPool }: SorterViewProps) {
-  // tournamentList: Beheert de actieve lijst van alle deelnemende items en hun actuele ELO-scores.
-  const [tournamentList, setTournamentList] = useState<EloExtended<HydratedEntity>[]>(initialPool);
+interface KeyInfo {
+  key: string;
+  label: string | React.ReactNode;
+  action: string;
+}
 
-  // currentMatchup: Bevat het huidige duo dat nu tegen elkaar strijdt.
-  const [currentMatchup, setCurrentMatchup] = useState<[EloExtended<HydratedEntity>, EloExtended<HydratedEntity>] | null>(() =>
-    getNextMatch(initialPool)
-  );
-
-  // Aantal uitgebrachte stemmen/keuzes tijdens deze sessie.
-  const [voteCount, setVoteCount] = useState<number>(0);
-
-  // Indexhouders voor de carrousels om horizontaal door de afbeeldingen/video's te bladeren.
-  const [leftMediaIndex, setLeftMediaIndex] = useState<number>(0);
-  const [rightMediaIndex, setRightMediaIndex] = useState<number>(0);
-
-  // Verzamelt alle bruikbare media URL's van een item.
-  const extractMediaUrls = (entity: HydratedEntity): string[] => {
-    const discoveredUrls: string[] = [];
-
-    if (entity.image?.profileCard) {
-      discoveredUrls.push(entity.image.profileCard.trim());
-    }
-    if (entity.image?.heroBanner) {
-      discoveredUrls.push(entity.image.heroBanner.trim());
-    }
-
-    const layerMetadata = theme.layerMetadata[entity.type];
-    if (layerMetadata && layerMetadata.mediaKeys) {
-      layerMetadata.mediaKeys.forEach(key => {
-        if (key === 'profileCard' || key === 'heroBanner') return;
-
-        const dynamicMediaData = entity.image[key];
-        if (typeof dynamicMediaData === 'string') {
-          discoveredUrls.push(...dynamicMediaData.split(' ').map(url => url.trim()).filter(Boolean));
-        } else if (Array.isArray(dynamicMediaData)) {
-          discoveredUrls.push(...dynamicMediaData.filter((url): url is string => typeof url === 'string').map(url => url.trim()));
-        }
-      });
-    }
-
-    return discoveredUrls;
-  };
-
-  // CHECK: Als de matchup null is, stuurt eloUtils ons door naar het resultatenscherm.
-  if (!currentMatchup) {
-    return (
-      <SorterResultsView
-        theme={theme}
-        finalPool={tournamentList}
-        extractMediaUrls={extractMediaUrls}
-        onRestart={() => window.location.reload()}
-      />
-    );
-  }
-
+export function SorterView({
+  theme,
+  tournamentList,
+  currentMatchup,
+  voteCount,
+  leftItemMedia,
+  rightItemMedia,
+  currentLeftMediaUrl,
+  currentRightMediaUrl,
+  currentLeftFav,
+  currentRightFav,
+  leftMediaIndex,
+  rightMediaIndex,
+  hoveredAction,
+  setLeftMediaIndex,
+  setRightMediaIndex,
+  setHoveredAction,
+  onProcessVote,
+  onUndo,
+  canUndo,
+  onSave,
+  toggleFavorite,
+}: SorterViewProps) {
   const [leftItem, rightItem] = currentMatchup;
-  const leftItemMedia: string[] = extractMediaUrls(leftItem);
-  const rightItemMedia: string[] = extractMediaUrls(rightItem);
 
-  // Voortgang van de kalibratie ophalen
   const calibrationProgress = getCalibrationProgress(tournamentList);
-
-  // Bepaal de actuele toernooifase op basis van de status van de pool
   const currentStage = getSorterStageInfo(tournamentList);
 
-  // Verwerkt de klik van de gebruiker op de winnaar.
-  const handleProcessVote = (winner: 'A' | 'B'): void => {
-    const { newRatingA, newRatingB } = calculateElo(leftItem.elo, rightItem.elo, winner);
-
-    const updatedList = tournamentList.map(item => {
-      // Als dit het linker item is: update ELO, verhoog matches en voeg rechter ID toe aan geschiedenis
-      if (item.id === leftItem.id) {
-        return {
-          ...item,
-          elo: newRatingA,
-          matchesPlayed: item.matchesPlayed + 1,
-          playedAgainst: [...item.playedAgainst, rightItem.id]
-        };
-      }
-      // Als dit het rechter item is: update ELO, verhoog matches en voeg linker ID toe aan geschiedenis
-      if (item.id === rightItem.id) {
-        return {
-          ...item,
-          elo: newRatingB,
-          matchesPlayed: item.matchesPlayed + 1,
-          playedAgainst: [...item.playedAgainst, leftItem.id]
-        };
-      }
-      return item;
-    });
-
-    setTournamentList(updatedList);
-    setVoteCount(prev => prev + 1);
-    setCurrentMatchup(getNextMatch(updatedList));
-
-    // Reset de carrousel-indexen terug naar de eerste afbeelding voor de volgende ronde.
-    setLeftMediaIndex(0);
-    setRightMediaIndex(0);
-  };
-
-  // Genereert de juiste HTML-component op basis van het bestandstype.
   const renderMediaComponent = (url: string): React.JSX.Element => {
-    if (!url) {
-      return <div className={styles.mediaWrapper}>No media</div>;
-    }
-
-    const isVideoFile: boolean = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(url) || url.includes('mp4');
-
+    if (!url) return <div className={styles.mediaWrapper}><span className={styles.noMediaText}>Geen media beschikbaar</span></div>;
+    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(url) || url.includes('mp4');
     if (isVideoFile) {
-      return (
-        <video src={url} autoPlay loop muted playsInline className={styles.mediaAsset} />
-      );
+      return <video src={url} autoPlay loop muted playsInline className={styles.mediaAsset} />;
     }
-    return (
-      <img src={url} alt="Sorter choice asset" className={styles.mediaAsset} />
-    );
+    return <img src={url} alt="Sorter choice asset" className={styles.mediaAsset} />;
   };
 
-  // Haalt de naam van de bovenliggende groep op om te tonen als ondertitel.
-  const getItemSubtitle = (entity: HydratedEntity): string => {
-    const parentConnection = entity.targetConnections?.find(conn => conn.sourceEntity?.type === theme.orgLayer);
+  const getItemSubtitle = (entity: SorterEntity): string => {
+    const parentConnection = entity.targetConnections?.find((conn) => conn.sourceEntity?.type === theme.orgLayer);
     return parentConnection?.sourceEntity?.name || '';
   };
 
+  const liveTopThree = [...tournamentList]
+    .sort((a, b) => b.elo - a.elo)
+    .slice(0, 3);
+
+  const numpadKeys: KeyInfo[] = [
+    { key: '7', label: '7', action: 'Linker Asset: Vorige (Omhoog)' },
+    { key: '8', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6"/></svg>, action: 'Beide Assets: Vorige (Omhoog)' },
+    { key: '9', label: '9', action: 'Rechter Asset: Vorige (Omhoog)' },
+    { key: '4', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6"/></svg>, action: 'Stem Links (A) | Hold [0]: Favoriet | Hold [Enter]: Nieuw Tabblad' },
+    { key: '5', label: '5', action: 'Laatste stem ongedaan maken' },
+    { key: '6', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6"/></svg>, action: 'Stem Rechts (B) | Hold [0]: Favoriet | Hold [Enter]: Nieuw Tabblad' },
+    { key: '1', label: '1', action: 'Linker Asset: Volgende (Omlaag)' },
+    { key: '2', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>, action: 'Beide Assets: Volgende (Omlaag)' },
+    { key: '3', label: '3', action: 'Rechter Asset: Volgende (Omlaag)' },
+    { key: '0', label: '0', action: 'Modifier: Houd ingedrukt + [4] of [6] om media te favorieten' },
+    { key: '.', label: '•', action: 'Volledig scherm inschakelen / Video afspelen' },
+    { key: 'Enter', label: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 10l-5 5 5 5M20 4v7a4 4 0 0 1-4 4H4"/></svg>, action: 'Modifier: Houd ingedrukt + [4] of [6] om bron te openen' },
+  ];
+
   return (
     <div className={styles.sorterContainer}>
+      {/* LINKER KANDIDAAT */}
+      <div className={styles.mediaColumn} onClick={() => onProcessVote('A')}>
+        <div className={styles.vignetteOverlay} />
+        {renderMediaComponent(currentLeftMediaUrl)}
 
-      {/* LINKER KANDIDAAT PANEEL */}
-      <div className={styles.mediaColumn} onClick={() => handleProcessVote('A')}>
-        {renderMediaComponent(leftItemMedia[leftMediaIndex])}
+        {currentLeftMediaUrl && (
+          <button
+            type="button"
+            className={`${styles.favoriteStar} ${currentLeftFav === currentLeftMediaUrl ? styles.isFavorite : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite('left');
+            }}
+          >
+            <svg className={styles.starIcon} viewBox="0 0 24 24" fill={currentLeftFav === currentLeftMediaUrl ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+          </button>
+        )}
+
         <div className={`${styles.entityCard} ${styles.entityCardLeft}`}>
           <h3 className={styles.entityName}>{leftItem.name}</h3>
           <p className={styles.entitySubtitle}>{getItemSubtitle(leftItem)}</p>
         </div>
       </div>
 
-      {/* MIDDENSECTIE (CONSOLE & PROGRESS) */}
+      {/* MIDDENSECTIE */}
       <div className={styles.centerColumn}>
         <div className={styles.headerZone}>
-          
-          {/* Dynamische Stage Badge & Toelichting */}
           <div className={styles.stageWrapper}>
-            <span 
-              className={styles.stageBadge} 
-              style={{ borderColor: currentStage.color, color: currentStage.color }}
-            >
+            <span className={styles.stageBadge} style={{ borderColor: currentStage.color, color: currentStage.color, stroke: currentStage.color }}>
+              <span className={styles.badgePulse} style={{ backgroundColor: currentStage.color }} />
               {currentStage.title}
             </span>
-            <p className={styles.stageDescription}>
-              {currentStage.description}
-            </p>
+            <p className={styles.stageDescription}>{currentStage.description}</p>
           </div>
-
-          <h2 className={styles.matchTitle}>Vote #{voteCount + 1}</h2>
+          
+          <div className={styles.matchCounter}>
+            <span className={styles.matchTitle}>Matchup</span>
+            <span className={styles.matchNumber}>#{voteCount + 1}</span>
+          </div>
 
           <div className={styles.progressContainer}>
-            <div
-              className={styles.progressBar}
-              style={{ width: `${calibrationProgress}%` }}
-            />
+            <div className={styles.progressBar} style={{ width: `${calibrationProgress}%` }} />
           </div>
-          <p className={styles.progressLabel}>
-            Pool Calibration: {calibrationProgress}%
-          </p>
+          <div className={styles.progressTextWrapper}>
+            <span className={styles.progressLabel}>Pool Kalibratie</span>
+            <span className={styles.progressPercentage}>{calibrationProgress}%</span>
+          </div>
         </div>
 
-        {/* Media Carrousel Knoppen */}
+        <div className={styles.controlsArea}>
+          <button type="button" onClick={onUndo} disabled={!canUndo} className={styles.undoButton}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+            Undo
+          </button>
+          <button type="button" onClick={onSave} className={styles.saveButton}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Opslaan
+          </button>
+        </div>
+
+        {/* Handmatige Media Carrousel Knoppen */}
         <div className={styles.controlZone}>
           <div className={styles.carouselControls}>
-            <span className={styles.controlLabel}>Left Assets</span>
-            <button
-              disabled={leftMediaIndex === 0}
-              onClick={(e) => { e.stopPropagation(); setLeftMediaIndex(prev => prev - 1); }}
-              className={styles.arrowButton}
-            >
-              ▲
-            </button>
-            <button
-              disabled={leftMediaIndex >= leftItemMedia.length - 1}
-              onClick={(e) => { e.stopPropagation(); setLeftMediaIndex(prev => prev + 1); }}
-              className={styles.arrowButton}
-            >
-              ▼
-            </button>
+            <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
+            <div className={styles.carouselActionRow}>
+              <button
+                disabled={leftMediaIndex === 0}
+                onClick={(e) => { e.stopPropagation(); setLeftMediaIndex((prev) => prev - 1); }}
+                className={styles.arrowButton}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6"/></svg>
+              </button>
+              <button
+                disabled={leftMediaIndex >= leftItemMedia.length - 1}
+                onClick={(e) => { e.stopPropagation(); setLeftMediaIndex((prev) => prev + 1); }}
+                className={styles.arrowButton}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </div>
           </div>
 
           <div className={styles.vsBadge}>VS</div>
 
           <div className={styles.carouselControls}>
-            <span className={styles.controlLabel}>Right Assets</span>
-            <button
-              disabled={rightMediaIndex === 0}
-              onClick={(e) => { e.stopPropagation(); setRightMediaIndex(prev => prev - 1); }}
-              className={styles.arrowButton}
-            >
-              ▲
-            </button>
-            <button
-              disabled={rightMediaIndex >= rightItemMedia.length - 1}
-              onClick={(e) => { e.stopPropagation(); setRightMediaIndex(prev => prev + 1); }}
-              className={styles.arrowButton}
-            >
-              ▼
-            </button>
+            <span className={styles.controlLabel}>Rechts ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
+            <div className={styles.carouselActionRow}>
+              <button
+                disabled={rightMediaIndex === 0}
+                onClick={(e) => { e.stopPropagation(); setRightMediaIndex((prev) => prev - 1); }}
+                className={styles.arrowButton}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6"/></svg>
+              </button>
+              <button
+                disabled={rightMediaIndex >= rightItemMedia.length - 1}
+                onClick={(e) => { e.stopPropagation(); setRightMediaIndex((prev) => prev + 1); }}
+                className={styles.arrowButton}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Live Top 3 Tussenstand */}
-        <div className={styles.leaderboardZone}>
-          <h4 className={styles.leaderboardTitle}>Current Top 3</h4>
-          <ol className={styles.leaderboardList}>
-            {[...tournamentList].sort((a, b) => b.elo - a.elo).slice(0, 3).map((item) => (
-              <li key={item.id} className={styles.leaderboardItem}>
-                <strong>{item.name}</strong>
-                <span className={styles.leaderboardScore}>({item.elo})</span>
-              </li>
+        {/* Visuele Keybind Numpad Map */}
+        <div className={styles.keybindMapSection}>
+          <h4 className={styles.keybindTitle}>Numpad Sneltoetsen</h4>
+          <div className={styles.numpadGrid}>
+            {numpadKeys.map((k, idx) => (
+              <div
+                key={typeof k.label === 'string' ? k.key + idx : idx}
+                className={styles.numpadKey}
+                onMouseEnter={() => setHoveredAction(k.action)}
+                onMouseLeave={() => setHoveredAction('Hover over een toets voor de functie')}
+              >
+                {k.label}
+              </div>
             ))}
-          </ol>
+          </div>
+          <div className={styles.keybindInterpreter}>
+            <p>{hoveredAction}</p>
+          </div>
+        </div>
+
+        {/* Live Top 3 */}
+        <div className={styles.leaderboardZone}>
+          <h4 className={styles.leaderboardTitle}>Live Top 3</h4>
+          <div className={styles.topThreeContainer}>
+            {liveTopThree.map((item, index) => {
+              const isCurrent = item.id === leftItem.id || item.id === rightItem.id;
+              const medals = ['🥇', '🥈', '🥉'];
+
+              return (
+                <div
+                  key={item.id}
+                  className={`${styles.topThreeItem} ${isCurrent ? styles.topThreeItemActive : ''}`}
+                >
+                  <div className={styles.topThreeLayout}>
+                    <span className={styles.topThreeMedal}>{medals[index]}</span>
+                    <span className={styles.topThreeName}>{item.name}</span>
+                  </div>
+                  <span className={styles.topThreeElo}>
+                    {Math.round(item.elo)} <span className={styles.eloLabel}>ELO</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* RECHTER KANDIDAAT PANEEL */}
-      <div className={styles.mediaColumn} onClick={() => handleProcessVote('B')}>
-        {renderMediaComponent(rightItemMedia[rightMediaIndex])}
+      {/* RECHTER KANDIDAAT */}
+      <div className={styles.mediaColumn} onClick={() => onProcessVote('B')}>
+        <div className={styles.vignetteOverlay} />
+        {renderMediaComponent(currentRightMediaUrl)}
+
+        {currentRightMediaUrl && (
+          <button
+            type="button"
+            className={`${styles.favoriteStar} ${currentRightFav === currentRightMediaUrl ? styles.isFavorite : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite('right');
+            }}
+          >
+            <svg className={styles.starIcon} viewBox="0 0 24 24" fill={currentRightFav === currentRightMediaUrl ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+          </button>
+        )}
+
         <div className={`${styles.entityCard} ${styles.entityCardRight}`}>
           <h3 className={styles.entityName}>{rightItem.name}</h3>
           <p className={styles.entitySubtitle}>{getItemSubtitle(rightItem)}</p>
         </div>
       </div>
-
     </div>
   );
 }

@@ -1,13 +1,102 @@
 import type { HydratedEntity } from '../../../types';
 
-export const INITIAL_ELO: number = 1200;
-const K_FACTOR: number = 32;
+// ============================================================================
+// CONFIGUREERBARE INSTELLINGEN (SETTINGS)
+// ============================================================================
+export const SORTER_SETTINGS = {
+  /**
+   * De startscore voor elk item. Dit is het nulpunt van je ranglijst.
+   */
+  INITIAL_ELO: 1200,
 
+  /**
+   * De agressiviteit van de score-aanpassing. 
+   * Hoger (bijv. 40) = items stijgen en dalen sneller per stem (snelle kalibratie).
+   * Lager (bijv. 16) = stabielere, maar langzamere verschuivingen.
+   */
+  K_FACTOR: 32,
+
+  /**
+   * Grenzen voor de totale poolgrootte (hoeveel items doen er in totaal mee?).
+   * SMALL: Tot 6 items speelt iedereen simpelweg 1x tegen iedereen (Round Robin).
+   * MEDIUM: Tot 32 items schaalt de matchcount automatisch mee met de logaritme van de pool.
+   */
+  SMALL_POOL_LIMIT: 6,
+  MEDIUM_POOL_LIMIT: 32,
+
+  /**
+   * Percentielgrenzen om grotere pools op te splitsen in niveaus (tiers).
+   * 0.00 = de absolute bodem van de lijst, 1.00 = de absolute nummer 1 van de lijst.
+   * BOTTOM: De onderste 30% van de ranglijst.
+   * MIDDLE: De middenmoot (alles tussen de 30% en 50%). Everything boven 50% is de 'Elite'.
+   */
+  BOTTOM_TIER_PERCENTILE: 0.30,
+  MIDDLE_TIER_PERCENTILE: 0.50,
+
+  /**
+   * Target matches: Hoe vaak moet een individueel item minimaal vechten?
+   * BOTTOM: Weinig matches (3), want als iets onderaan bungelt hoeven we niet te verfijnen of het #98 of #99 is.
+   * MIDDLE: Gemiddeld (5) voor een redelijk stabiele positie in de middenmoot.
+   * ELITE: Hoog (8), omdat de top 50% loepzuiver tegen elkaar uitgevochten moet worden voor de perfecte top 10.
+   */
+  BOTTOM_TIER_MATCHES: 3,
+  MIDDLE_TIER_MATCHES: 5,
+  ELITE_TIER_MATCHES: 8,
+
+  /**
+   * Matchmaking: Voorkom oneerlijke matches.
+   * Als het Elo-verschil groter is dan dit getal, weigert de computer de match.
+   * Dit voorkomt dat je een absolute topfavoriet moet vergelijken met een kansloze verliezer.
+   */
+  MAX_ELO_DELTA: 350,
+
+  /**
+   * Matchmaking variatie: De grootte van de grabbelton.
+   * De computer berekent de beste tegenstanders, pakt de top 'N' en kiest er willekeurig één.
+   * 1 = Geen variatie, altijd de mathematisch perfecte match (kan saai/herhalend aanvoelen).
+   * 5 = Veel variatie, de matches voelen dynamischer, maar de wiskundige precisie zakt iets.
+   */
+  OPPONENT_POOL_SIZE: 3,
+
+  /**
+   * Matchmaking anti-lock: Een minieme willekeurige ruis (0 tot 5) bij het vergelijken.
+   * Dit breekt gelijke standen (zoals aan het begin van het toernooi als iedereen nog 1200 Elo heeft)
+   * zodat de computer niet in een oneindige loop vastloopt op identieke waardes.
+   */
+  JITTER_RANGE: 5,
+
+  /**
+   * Matchmaking prioriteit: De "laat-me-met-rust-boete".
+   * Als een item zijn target aantal matches al heeft gehaald, krijgt hij virtueel deze 
+   * punten opgeteld bij zijn Elo-verschil. Hierdoor kiest het algoritme hem minder snel,
+   * waardoor items die nog matches *nodig* hebben voorrang krijgen.
+   */
+  COMPLETED_TARGET_PENALTY: 50,
+};
+
+// Backwards compatibility voor andere componenten die INITIAL_ELO rechtstreeks importeren
+export const INITIAL_ELO = SORTER_SETTINGS.INITIAL_ELO;
+
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
 export type EloExtended<T> = T & {
   elo: number;
   matchesPlayed: number;
+  wins: number;
+  losses: number;
   playedAgainst: string[];
 };
+
+export interface SorterStage {
+  title: string;
+  description: string;
+  color: string;
+}
+
+// ============================================================================
+// FUNCTIES
+// ============================================================================
 
 export function calculateElo(ratingA: number, ratingB: number, outcome: 'A' | 'B') {
   const expectedA: number = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
@@ -17,14 +106,13 @@ export function calculateElo(ratingA: number, ratingB: number, outcome: 'A' | 'B
   const actualB: number = outcome === 'B' ? 1 : 0;
 
   return {
-    newRatingA: Math.round(ratingA + K_FACTOR * (actualA - expectedA)),
-    newRatingB: Math.round(ratingB + K_FACTOR * (actualB - expectedB)),
+    newRatingA: Math.round(ratingA + SORTER_SETTINGS.K_FACTOR * (actualA - expectedA)),
+    newRatingB: Math.round(ratingB + SORTER_SETTINGS.K_FACTOR * (actualB - expectedB)),
   };
 }
 
 /**
- * getIndividualTarget: Schakelt tussen Exact Sorteren en Swiss-System Ladder.
- * Voorkomt herhalende matches bij kleine pools door een harde 'N - 1' cap.
+ * Bepaalt dynamisch hoeveel matches een individueel item moet spelen op basis van de settings.
  */
 export function getIndividualTarget<T extends HydratedEntity>(
   item: EloExtended<T>,
@@ -32,38 +120,23 @@ export function getIndividualTarget<T extends HydratedEntity>(
 ): number {
   const N = sortedPool.length;
 
-  // CATCH 1: Hele kleine pools (3 tot 6 items).
-  if (N <= 6) {
-    return N - 1; 
-  }
+  if (N <= SORTER_SETTINGS.SMALL_POOL_LIMIT) return N - 1; 
+  if (N <= SORTER_SETTINGS.MEDIUM_POOL_LIMIT) return Math.min(Math.ceil(2 * Math.log2(N)), N - 1); 
 
-  // CATCH 2: Kleine tot middelgrote pools (7 tot 32 items).
-  if (N <= 32) {
-    return Math.min(Math.ceil(2 * Math.log2(N)), N - 1); 
-  }
-
-  // FASE 2: Grote pools (N > 32).
   const rankIndex = sortedPool.findIndex(e => e.id === item.id);
-  const percentile = 1 - (rankIndex / N); // 1.0 = nummer 1, 0.0 = laatste
+  const percentile = 1 - (rankIndex / N); // 1.0 = #1, 0.0 = laatste
 
-  // Onderste 40%: Snel lozen na 2 matches
-  if (percentile < 0.40) {
-    return 2;
+  if (percentile < SORTER_SETTINGS.BOTTOM_TIER_PERCENTILE) {
+    return SORTER_SETTINGS.BOTTOM_TIER_MATCHES;
   }
   
-  // Middenmoot (top 60% tot top 15%): Krijgt een stabiele basis
-  if (percentile < 0.85) {
-    return 4;
+  if (percentile < SORTER_SETTINGS.MIDDLE_TIER_PERCENTILE) {
+    return SORTER_SETTINGS.MIDDLE_TIER_MATCHES;
   }
 
-  // De Elite zone (Bovenste 15%): Moeten intensief strijden om de echte top 100 te finetunen
-  if (N > 500) return 6;
-  return 8;
+  return SORTER_SETTINGS.ELITE_TIER_MATCHES;
 }
 
-/**
- * getCalibrationProgress: Berekent de nauwkeurige voortgang op basis van de gekozen modus.
- */
 export function getCalibrationProgress<T extends HydratedEntity>(pool: EloExtended<T>[]): number {
   if (pool.length === 0) return 0;
 
@@ -80,66 +153,54 @@ export function getCalibrationProgress<T extends HydratedEntity>(pool: EloExtend
   return Math.round((totalCurrentMatches / totalTargetMatches) * 100);
 }
 
-/**
- * getNextMatch: Selecteert de ideale matchup op de ladder zonder herhalingen en grote ELO-gaten.
- */
 export function getNextMatch<T extends HydratedEntity>(
   pool: EloExtended<T>[]
 ): [EloExtended<T>, EloExtended<T>] | null {
   if (pool.length < 2) return null;
 
   const sortedPool = [...pool].sort((a, b) => b.elo - a.elo);
-
-  // Filter op items die hun persoonlijke target nog niet hebben bereikt
   let candidates = sortedPool.filter(e => e.matchesPlayed < getIndividualTarget(e, sortedPool));
 
-  if (candidates.length === 0) {
-    return null;
-  }
+  if (candidates.length === 0) return null;
 
   const minMatches = Math.min(...candidates.map(e => e.matchesPlayed));
   candidates = candidates.filter(e => e.matchesPlayed <= minMatches + 1);
 
-  // Schud de actieve uitdagers willekeurig om vooringenomenheid te voorkomen
   const shuffledChallengers = [...candidates].sort(() => Math.random() - 0.5);
 
-  // Zoek naar een uitdager die een kwalitatief goede match kan krijgen
   for (const challenger of shuffledChallengers) {
     const unplayedOpponents = pool.filter(e => 
       e.id !== challenger.id && 
-      !challenger.playedAgainst.includes(e.id) // Harde Swiss-regel: geen rematches
+      !challenger.playedAgainst.includes(e.id)
     );
 
     if (unplayedOpponents.length === 0) continue;
 
-    // Sorteer potentiële tegenstanders op basis van ELO-nabijheid
     const sortedOpponents = unplayedOpponents.sort((a, b) => {
       const eloDiffA = Math.abs(a.elo - challenger.elo);
       const eloDiffB = Math.abs(b.elo - challenger.elo);
 
       const targetA = getIndividualTarget(a, sortedPool);
       const targetB = getIndividualTarget(b, sortedPool);
-      const statusBonusA = a.matchesPlayed < targetA ? 0 : 50;
-      const statusBonusB = b.matchesPlayed < targetB ? 0 : 50;
+      const statusBonusA = a.matchesPlayed < targetA ? 0 : SORTER_SETTINGS.COMPLETED_TARGET_PENALTY;
+      const statusBonusB = b.matchesPlayed < targetB ? 0 : SORTER_SETTINGS.COMPLETED_TARGET_PENALTY;
 
-      return (eloDiffA + statusBonusA + Math.random() * 5) - (eloDiffB + statusBonusB + Math.random() * 5);
+      const weightA = eloDiffA + statusBonusA + Math.random() * SORTER_SETTINGS.JITTER_RANGE;
+      const weightB = eloDiffB + statusBonusB + Math.random() * SORTER_SETTINGS.JITTER_RANGE;
+
+      return weightA - weightB;
     });
 
     const bestOpponent = sortedOpponents[0];
     const eloDelta = Math.abs(challenger.elo - bestOpponent.elo);
 
-    // De Swiss Noodrem
-    // Als de dichtstbijzijnde vrije tegenstander een ELO-gat heeft van > 350 punten,
-    // dan weigeren we deze oneerlijke match (zoals Nr 1 vs Nr Laatst).
-    if (eloDelta > 350) {
-      // We markeren deze specifieke uitdager virtueel als 'klaar' voor deze ronde.
-      // Hierdoor slaat het algoritme hem nu over en zoekt direct een match voor de rest.
+    // Als het gat te groot is, vlaggen we deze challenger als 'klaar' voor deze ronde om oneindige loops te voorkomen
+    if (eloDelta > SORTER_SETTINGS.MAX_ELO_DELTA) {
       challenger.matchesPlayed = getIndividualTarget(challenger, sortedPool);
       return getNextMatch(pool); 
     }
 
-    // Kies uit de top 3 meest gelijkwaardige tegenstanders voor een beetje dynamiek
-    const poolSize = Math.min(sortedOpponents.length, 3);
+    const poolSize = Math.min(sortedOpponents.length, SORTER_SETTINGS.OPPONENT_POOL_SIZE);
     const chosenOpponent = sortedOpponents[Math.floor(Math.random() * poolSize)];
 
     return [challenger, chosenOpponent];
@@ -148,32 +209,15 @@ export function getNextMatch<T extends HydratedEntity>(
   return null;
 }
 
-export interface SorterStage {
-  title: string;
-  description: string;
-  color: string;
-}
-
-/**
- * getSorterStageInfo: Berekent in welke fase het toernooi zich globaal bevindt.
- */
 export function getSorterStageInfo<T extends HydratedEntity>(pool: EloExtended<T>[]): SorterStage {
   const N = pool.length;
-  if (N === 0) return { title: 'Laden...', description: '', color: '#666666' };
+  if (N === 0) return { title: 'Loading...', description: '', color: '#666666' };
 
-  if (N <= 6) {
+  if (N <= SORTER_SETTINGS.SMALL_POOL_LIMIT) {
     return {
-      title: "Volledige Competitie",
-      description: "Iedereen speelt exact één keer tegen elkaar voor een 100% sluitende ranglijst.",
+      title: "Full Round Robin",
+      description: "Every item plays each other exactly once.",
       color: "#3182ce"
-    };
-  }
-
-  if (N <= 32) {
-    return {
-      title: "Swiss Toernooifase",
-      description: "Items van gelijkwaardig niveau strijden tegen elkaar om de hiërarchie te bepalen.",
-      color: "#319795"
     };
   }
 
@@ -181,31 +225,31 @@ export function getSorterStageInfo<T extends HydratedEntity>(pool: EloExtended<T
   const activeItems = sortedPool.filter(e => e.matchesPlayed < getIndividualTarget(e, sortedPool));
 
   if (activeItems.length === 0) {
-    return { title: "Voltooid", description: "De ranglijst is opgesteld.", color: "#38a169" };
+    return { title: "Completed", description: "The definitive ranking has been generated.", color: "#38a169" };
   }
 
-  const heeftItemsInFase1 = activeItems.some(e => e.matchesPlayed < 2);
-  const heeftItemsInFase2 = activeItems.some(e => e.matchesPlayed < 4);
+  const hasItemsInStage1 = activeItems.some(e => e.matchesPlayed < SORTER_SETTINGS.BOTTOM_TIER_MATCHES);
+  const hasItemsInStage2 = activeItems.some(e => e.matchesPlayed < SORTER_SETTINGS.MIDDLE_TIER_MATCHES);
 
-  if (heeftItemsInFase1) {
+  if (hasItemsInStage1) {
     return {
-      title: "Fase 1: Globale Schifting",
-      description: "Alle opties krijgen een basisrating. Minder populaire keuzes worden snel naar de achtergrond gefilterd.",
+      title: "Stage 1: Global Screening",
+      description: "Trying to define bottom tier",
       color: "#dd6b20"
     };
   } 
   
-  if (heeftItemsInFase2) {
+  if (hasItemsInStage2) {
     return {
-      title: "F2: Positiebepaling",
-      description: "De ranglijst krijgt vorm. Het algoritme scheidt de stabiele middenmoot van de potentiële winnaars.",
+      title: "Stage 2: Position Seeding",
+      description: "Forming a top %",
       color: "#4a5568"
     };
   }
 
   return {
-    title: "Fase 3: De Elite Strijd",
-    description: "De absolute koplopers worden intensief tegen elkaar uitgespeeld om de definitieve Top 3/10 te finetunen.",
+    title: "Stage 3: Elite Championship",
+    description: "Battling out the ultimate top",
     color: "#e53e3e"
   };
 }
