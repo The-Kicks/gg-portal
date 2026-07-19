@@ -11,8 +11,8 @@ model Theme {
   id                  String   @id
   title               String
   description         String
-  orgLayer            String   
-  miniViewLayers      Json     
+  orgLayer            String
+  miniViewLayers      Json
   primaryColor        String
   secondaryColor      String
   backgroundColor     String
@@ -23,28 +23,31 @@ model Theme {
   darkBackgroundColor String?
   darkTextColor       String?
   darkNavbarColor     String?
-  games               Json     
-  navbarItems         Json     
-  labels              Json     
-  layerMetadata       Json     
+  games               Json
+  navbarItems         Json
+  labels              Json
+  layerMetadata       Json
   entities            Entity[]
+
+  @@map("theme")
 }
 
 model Entity {
   id                String             @id
   themeId           String
   name              String
-  type              String             
-  status            String            
-  isStandalone      Boolean            @default(false) 
-  image             Json               
-  metadata          Json               
+  type              String
+  status            String
+  isStandalone      Boolean            @default(false)
+  image             Json
+  metadata          Json
 
   theme             Theme              @relation(fields: [themeId], references: [id], onDelete: Cascade)
   connections       EntityConnection[] @relation("SourceEntity")
   targetConnections EntityConnection[] @relation("TargetEntity")
 
   @@index([themeId])
+  @@map("entity")
 }
 
 model EntityConnection {
@@ -52,20 +55,22 @@ model EntityConnection {
   themeId        String
   sourceEntityId String
   targetEntityId String
-  metadata       Json   
-  
+  metadata       Json
+
   sourceEntity   Entity @relation("SourceEntity", fields: [sourceEntityId], references: [id], onDelete: Cascade)
   targetEntity   Entity @relation("TargetEntity", fields: [targetEntityId], references: [id], onDelete: Cascade)
 
   @@index([sourceEntityId])
   @@index([targetEntityId])
+  @@map("entityconnection")
 }
 
 model GameSetting {
   id           String @id @default(cuid())
-  themeId      String 
+  themeId      String
   gameName     String @default("guesswho")
-  gameSettings Json     
+  gameSettings Json
 
-  @@unique([themeId, gameName]) 
+  @@unique([themeId, gameName])
+  @@map("gamesetting")
 }
