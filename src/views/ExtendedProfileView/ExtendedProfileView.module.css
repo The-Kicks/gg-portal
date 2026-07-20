@@ -277,7 +277,7 @@
   display: grid; 
   grid-template-columns: repeat(3, 1fr); 
   gap: 1.5rem; 
-  align-items: start; 
+  align-items: start;
   width: 100%;
 }
 
@@ -293,14 +293,22 @@
   overflow: hidden; 
   background: color-mix(in srgb, var(--text), transparent 95%);
   min-height: 0; 
+  height: auto;
 }
 
-.mediaItem img, .mediaItem video, .mediaItem iframe {
+.mediaItem img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.mediaItem video, 
+.mediaItem iframe {
   width: 100%;
   height: 100%;
-  object-fit: cover; 
-  object-position: center;
   display: block;
+  object-fit: cover;
 }
 
 /* Zorg dat de video in fullscreen de juiste verhouding behoudt */
@@ -314,10 +322,18 @@ video:fullscreen {
   background-color: black;
 }
 
-.horizontalImageItem, .videoItem { aspect-ratio: 16 / 9; }
-.verticalVideoItem { aspect-ratio: 9 / 16; }
-.imageItem { aspect-ratio: 8 / 9; }
-.tallImageItem { aspect-ratio: 3 / 4; }
+.videoItem { 
+  aspect-ratio: 16 / 9; 
+}
+.verticalVideoItem { 
+  aspect-ratio: 9 / 16; 
+}
+
+.horizontalImageItem, 
+.imageItem, 
+.tallImageItem { 
+  aspect-ratio: auto; 
+}
 
 .decorativePlaceholder {
   background: linear-gradient(135deg, color-mix(in srgb, var(--bg), #fff 2%), color-mix(in srgb, var(--bg), #000 2%));

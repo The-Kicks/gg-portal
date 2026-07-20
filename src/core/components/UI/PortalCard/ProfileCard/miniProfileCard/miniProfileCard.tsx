@@ -1,5 +1,5 @@
 import type { BaseEntity, Theme, MetaDataStandard } from '../../../../../../types';
-import styles from './MiniProfileCard.module.css';
+import styles from './miniProfileCard.module.css';
 
 interface MiniProps {
   entity: BaseEntity;
