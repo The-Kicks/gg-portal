@@ -97,9 +97,9 @@
   height: auto;
   object-fit: contain;
   border-radius: 12px;
-  box-shadow: 
-    0 24px 48px rgba(0, 0, 0, 0.7), 
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+  /* Tier colour is applied inline; transparent keeps the ring invisible until set */
+  border: 3px solid transparent;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
 /* ------------------------------------------ */
@@ -284,6 +284,7 @@
   padding: 16px;
   border-radius: 14px;
   width: 100%;
+  cursor: pointer;
 }
 
 .leaderboardTitle {
@@ -599,6 +600,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain; /* Zorgt voor het behoud van de verhouding (zijkanten of boven/onder raken) */
+  border: none;
   border-radius: 0;
   box-shadow: none; /* Geen schaduwen nodig als we het scherm vullen */
 }

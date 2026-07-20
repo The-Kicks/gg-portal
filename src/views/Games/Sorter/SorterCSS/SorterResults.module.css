@@ -2,6 +2,64 @@
   box-sizing: border-box;
 }
 
+.resultsOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  animation: overlayFadeIn 0.15s ease-out;
+}
+
+.resultsModal {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  height: 90vh;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  animation: modalPopIn 0.18s ease-out;
+}
+
+.resultsModalClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(24, 24, 27, 0.8);
+  color: #e4e4e7;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.resultsModalClose:hover {
+  background: rgba(39, 39, 42, 0.95);
+  transform: scale(1.05);
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalPopIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .resultsContainer {
   padding: 2.5rem;
   width: 100%;
@@ -82,6 +140,10 @@
   width: 100%;
   height: 100%;
   position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  /* Tier colour is applied inline; transparent keeps the ring invisible until set */
+  border: 3px solid transparent;
 }
 
 .photocardImage {
@@ -128,4 +190,18 @@
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, #141416 0%, #1c1c21 100%);
+}
+
+/* Tier abbreviation shown as a small coloured block in front of an entity name.
+   Shared by the Sorter view and the results view. Background colour is set inline. */
+.tierTag {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.65em;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #09090b;
 }

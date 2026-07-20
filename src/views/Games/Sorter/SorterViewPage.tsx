@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Theme, HydratedEntity, BaseEntity } from '../../../types';
 import type { EloExtended } from './eloUtils';
-import { INITIAL_ELO, calculateElo, getNextMatch } from './eloUtils';
-import { extractMediaUrls, shuffleArray, getGroupIdsFromTheme } from './sorterUtils';
+import { INITIAL_ELO, processMatch, getNextMatch } from './eloUtils';
+import { extractMediaUrls, getGroupIdsFromTheme } from './sorterUtils';
 import { SorterView } from './SorterView';
-import { SorterResultsView } from './SorterResultsView';
+import { SorterResultsOverlay } from './SorterResultsOverlay';
 import { useSorterKeybinds } from './useSorterKeybinds';
 import styles from './SorterCSS/SorterSetup.module.css';
 
@@ -14,19 +14,10 @@ interface SorterViewPageProps {
   theme: Theme;
 }
 
-interface SorterHistorySnapshot {
-  tournamentList: EloExtended<SorterEntity>[];
-  currentMatchup: [EloExtended<SorterEntity>, EloExtended<SorterEntity>];
-  voteCount: number;
-}
-
 interface SorterSaveData {
   includedGroupIds: string[];
-  isSorterActive: boolean;
   tournamentList: EloExtended<SorterEntity>[];
-  currentMatchup: [EloExtended<SorterEntity>, EloExtended<SorterEntity>] | null;
-  voteCount: number;
-  history: SorterHistorySnapshot[];
+  history: [EloExtended<SorterEntity>, EloExtended<SorterEntity>][];
 }
 
 export function SorterViewPage({ theme }: SorterViewPageProps) {
@@ -40,9 +31,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       ...entity,
       elo: INITIAL_ELO,
       matchesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      playedAgainst: [],
     }));
   }, [theme.entities]);
 
@@ -82,7 +70,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
   // --- UI STATES ---
   const [includedGroupIds, setIncludedGroupIds] = useState<string[]>(() => getGroupIdsFromTheme(theme));
-  const [isSorterActive, setIsSorterActive] = useState<boolean>(false);
 
   // --- GLOBAL PERMANENT FAVORITES ---
   const [globalFavorites, setGlobalFavorites] = useState<Record<string, string>>(() => {
@@ -92,22 +79,21 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
   // --- ACTIVE SORTER RUNTIME STATES ---
   const [tournamentList, setTournamentList] = useState<EloExtended<SorterEntity>[]>([]);
-  const [currentMatchup, setCurrentMatchup] = useState<[EloExtended<SorterEntity>, EloExtended<SorterEntity>] | null>(null);
-  const [voteCount, setVoteCount] = useState<number>(0);
-  const [history, setHistory] = useState<SorterHistorySnapshot[]>([]);
+  const [history, setHistory] = useState<[EloExtended<SorterEntity>, EloExtended<SorterEntity>][]>([]);
   const [hasSave, setHasSave] = useState<boolean>(() => localStorage.getItem(storageKey) !== null);
 
   // --- PRESENTATION & INTERACTION STATES ---
   const [leftMediaIndex, setLeftMediaIndex] = useState<number>(0);
   const [rightMediaIndex, setRightMediaIndex] = useState<number>(0);
   const [hoveredAction, setHoveredAction] = useState<string>('Hover over a key to see its function');
+  const [showResultsOverlay, setShowResultsOverlay] = useState<boolean>(false);
 
   // Reset indices & sync bij matchup wissel
   const [prevLeftId, setPrevLeftId] = useState<string>('');
   const [prevRightId, setPrevRightId] = useState<string>('');
 
-  if (currentMatchup) {
-    const [leftItem, rightItem] = currentMatchup;
+  if (history.length) {
+    const [leftItem, rightItem] = history.at(-1)!;
     if (leftItem.id !== prevLeftId) {
       setPrevLeftId(leftItem.id);
       setLeftMediaIndex(0);
@@ -163,10 +149,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
   const handleSave = (): void => {
     const saveData: SorterSaveData = {
       includedGroupIds,
-      isSorterActive,
       tournamentList,
-      currentMatchup,
-      voteCount,
       history,
     };
     localStorage.setItem(storageKey, JSON.stringify(saveData));
@@ -180,85 +163,61 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       const data = JSON.parse(savedRaw) as SorterSaveData;
       setIncludedGroupIds(data.includedGroupIds);
       setTournamentList(data.tournamentList);
-      setCurrentMatchup(data.currentMatchup);
-      setVoteCount(data.voteCount);
-      setHistory(data.history || []);
-      setIsSorterActive(data.isSorterActive);
+      setHistory(data.history);
     } catch (error) {
       console.error('Failed to parse sorter save game', error);
     }
   };
 
   const handleStartSorter = (): void => {
-    const scrambledSelection = shuffleArray(activeMatchCandidates);
-    setHistory([]);
-    setTournamentList(scrambledSelection);
-    setCurrentMatchup(getNextMatch(scrambledSelection));
-    setIsSorterActive(true);
+    setTournamentList(activeMatchCandidates);
+
+    const A: EloExtended<SorterEntity> = activeMatchCandidates.at(Math.floor(Math.random() * activeMatchCandidates.length))!;
+    const B: EloExtended<SorterEntity> = activeMatchCandidates.filter((e: EloExtended<SorterEntity>) => e !== A).at(Math.floor(Math.random() * (activeMatchCandidates.length - 1)))!;
+    setHistory([[A,B]]);
   };
 
   const handleProcessVote = (winner: 'A' | 'B'): void => {
-    if (!currentMatchup) return;
-    const [leftItem, rightItem] = currentMatchup;
+    if (!history.length) return;
 
-    setHistory((prevHistory) => [
-      ...prevHistory,
-      {
-        tournamentList,
-        currentMatchup: [...currentMatchup] as [EloExtended<SorterEntity>, EloExtended<SorterEntity>],
-        voteCount,
-      },
-    ]);
+    const [leftItem, rightItem] = history.at(-1)!;
+    // Snapshot the pre-vote entities so handleUndo can restore them later
+    const snapshot: [EloExtended<SorterEntity>, EloExtended<SorterEntity>] = [{ ...leftItem }, { ...rightItem }];
 
-    const { newRatingA, newRatingB } = calculateElo(leftItem.elo, rightItem.elo, winner);
+    processMatch(leftItem, rightItem, winner);
+    const nextMatch = getNextMatch(tournamentList)!;
 
-    const updatedList = tournamentList.map((item) => {
-      if (item.id === leftItem.id) {
-        return {
-          ...item,
-          elo: newRatingA,
-          matchesPlayed: item.matchesPlayed + 1,
-          wins: item.wins + (winner === 'A' ? 1 : 0),
-          losses: item.losses + (winner === 'A' ? 0 : 1),
-          playedAgainst: [...item.playedAgainst, rightItem.id],
-        };
-      }
-      if (item.id === rightItem.id) {
-        return {
-          ...item,
-          elo: newRatingB,
-          matchesPlayed: item.matchesPlayed + 1,
-          wins: item.wins + (winner === 'B' ? 1 : 0),
-          losses: item.losses + (winner === 'B' ? 0 : 1),
-          playedAgainst: [...item.playedAgainst, leftItem.id],
-        };
-      }
-      return item;
-    });
-
-    setTournamentList(updatedList);
-    setVoteCount((prev) => prev + 1);
-    setCurrentMatchup(getNextMatch(updatedList));
-  };
-
-  const handleUndo = (): void => {
-    if (history.length === 0) return;
     setHistory((prevHistory) => {
       const newHistory = [...prevHistory];
-      const previousState = newHistory.pop();
-      if (previousState) {
-        setTournamentList(previousState.tournamentList);
-        setCurrentMatchup(previousState.currentMatchup);
-        setVoteCount(previousState.voteCount);
-      }
+      newHistory[newHistory.length - 1] = snapshot;
+      newHistory.push(nextMatch);
       return newHistory;
     });
   };
 
+  const handleUndo = (): void => {
+    if (history.length <= 1) return;
+
+    // The matchup we're returning to still holds its pre-vote snapshot
+    const [leftItem, rightItem] = history.at(-2)!;
+
+    setHistory((prevHistory) => {
+      const newHistory = [...prevHistory];
+      newHistory.pop();
+      return newHistory;
+    });
+
+    setTournamentList((prevList) =>
+      prevList.map((e) =>
+        e.id === leftItem.id ? leftItem : e.id === rightItem.id ? rightItem : e
+      )
+    );
+  };
+
   // --- MEDIA COMPONENT GENERATION ---
   const mediaCalculation = useMemo(() => {
-    if (!currentMatchup) return null;
-    const [leftItem, rightItem] = currentMatchup;
+    if (!history.length) return null;
+    const [leftItem, rightItem] = history.at(-1)!;
 
     const currentLeftFav = globalFavorites[leftItem.id] || '';
     const currentRightFav = globalFavorites[rightItem.id] || '';
@@ -286,11 +245,11 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       currentLeftFav,
       currentRightFav,
     };
-  }, [currentMatchup, leftMediaIndex, rightMediaIndex, theme, globalFavorites]);
+  }, [history, leftMediaIndex, rightMediaIndex, theme, globalFavorites]);
 
   const toggleFavorite = (side: 'left' | 'right') => {
-    if (!currentMatchup || !mediaCalculation) return;
-    const [leftItem, rightItem] = currentMatchup;
+    if (!history.length || !mediaCalculation) return;
+    const [leftItem, rightItem] = history.at(-1)!;
     const { currentLeftMediaUrl, currentRightMediaUrl, currentLeftFav, currentRightFav } = mediaCalculation;
 
     const isLeft = side === 'left';
@@ -320,11 +279,21 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     }
   };
 
+  // Put the favorite first without removing it from the rest of the list
+  const extractMediaWithFavorite = (entity: SorterEntity): string[] => {
+    const rawMedia = extractMediaUrls(entity, theme);
+    const fav = globalFavorites[entity.id];
+    if (fav && rawMedia.includes(fav)) {
+      return [fav, ...rawMedia];
+    }
+    return rawMedia;
+  };
+
   // --- BIND CUSTOM KEYBOARD HOOK ---
   useSorterKeybinds({
     onProcessVote: handleProcessVote,
     onUndo: handleUndo,
-    canUndo: history.length > 0,
+    canUndo: history.length > 1,
     toggleFavorite,
     leftItemMedia: mediaCalculation?.leftItemMedia || [],
     rightItemMedia: mediaCalculation?.rightItemMedia || [],
@@ -332,10 +301,11 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     currentRightMediaUrl: mediaCalculation?.currentRightMediaUrl || '',
     setLeftMediaIndex,
     setRightMediaIndex,
+    enabled: !showResultsOverlay,
   });
 
   // --- RENDER ROUTING ---
-  if (!isSorterActive) {
+  if (!history.length) {
     return (
       <div className={styles.optionsContainer}>
         <h2 className={styles.title}>{theme.title} Sorter</h2>
@@ -389,49 +359,41 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     );
   }
 
-  if (isSorterActive && !currentMatchup) {
-    localStorage.removeItem(storageKey);
-    return (
-      <SorterResultsView
-        theme={theme}
-        finalPool={tournamentList}
-        // PASSED: Ook hier dupliceren we de favoriet naar plek 1 zonder hem uit de rest van de lijst te halen
-        extractMediaUrls={(entity: SorterEntity) => {
-          const rawMedia = extractMediaUrls(entity, theme);
-          const fav = globalFavorites[entity.id];
-          if (fav && rawMedia.includes(fav)) {
-            return [fav, ...rawMedia];
-          }
-          return rawMedia;
-        }}
-        onRestart={() => window.location.reload()}
-      />
-    );
-  }
-
   return (
-    <SorterView
-      theme={theme}
-      tournamentList={tournamentList}
-      currentMatchup={currentMatchup!}
-      voteCount={voteCount}
-      leftItemMedia={mediaCalculation!.leftItemMedia}
-      rightItemMedia={mediaCalculation!.rightItemMedia}
-      currentLeftMediaUrl={mediaCalculation!.currentLeftMediaUrl}
-      currentRightMediaUrl={mediaCalculation!.currentRightMediaUrl}
-      currentLeftFav={mediaCalculation!.currentLeftFav}
-      currentRightFav={mediaCalculation!.currentRightFav}
-      leftMediaIndex={leftMediaIndex}
-      rightMediaIndex={rightMediaIndex}
-      hoveredAction={hoveredAction}
-      setLeftMediaIndex={setLeftMediaIndex}
-      setRightMediaIndex={setRightMediaIndex}
-      setHoveredAction={setHoveredAction}
-      onProcessVote={handleProcessVote}
-      onUndo={handleUndo}
-      canUndo={history.length > 0}
-      onSave={handleSave}
-      toggleFavorite={toggleFavorite}
-    />
+    <>
+      <SorterView
+        theme={theme}
+        tournamentList={tournamentList}
+        currentMatchup={history.at(-1)!}
+        voteCount={history.length}
+        leftItemMedia={mediaCalculation!.leftItemMedia}
+        rightItemMedia={mediaCalculation!.rightItemMedia}
+        currentLeftMediaUrl={mediaCalculation!.currentLeftMediaUrl}
+        currentRightMediaUrl={mediaCalculation!.currentRightMediaUrl}
+        currentLeftFav={mediaCalculation!.currentLeftFav}
+        currentRightFav={mediaCalculation!.currentRightFav}
+        leftMediaIndex={leftMediaIndex}
+        rightMediaIndex={rightMediaIndex}
+        hoveredAction={hoveredAction}
+        setLeftMediaIndex={setLeftMediaIndex}
+        setRightMediaIndex={setRightMediaIndex}
+        setHoveredAction={setHoveredAction}
+        onProcessVote={handleProcessVote}
+        onUndo={handleUndo}
+        canUndo={history.length > 1}
+        onSave={handleSave}
+        toggleFavorite={toggleFavorite}
+        onOpenResults={() => setShowResultsOverlay(true)}
+      />
+
+      {showResultsOverlay && (
+        <SorterResultsOverlay
+          theme={theme}
+          finalPool={tournamentList}
+          extractMediaUrls={extractMediaWithFavorite}
+          onClose={() => setShowResultsOverlay(false)}
+        />
+      )}
+    </>
   );
 }

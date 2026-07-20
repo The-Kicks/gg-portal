@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { EloExtended } from './eloUtils';
+import { getTier } from './eloUtils';
 import styles from './SorterCSS/SorterResults.module.css';
 
 interface SorterResultsViewProps {
@@ -24,30 +25,34 @@ export function SorterResultsView({ theme, finalPool, extractMediaUrls, onRestar
 
       <div className={styles.photocardGrid}>
         {sortedResults.map((item, index) => {
-          const rank = index + 1;
+          const position = index + 1;
+          const tier = getTier(item);
           const mediaUrls = extractMediaUrls(item);
           const firstImageUrl = mediaUrls[0] || '';
 
           return (
             <div key={item.id} className={styles.photocard}>
-              <div className={`${styles.rankBadge} ${rank <= 3 ? styles.topRank : ''}`}>
-                #{rank}
+              <div className={`${styles.rankBadge} ${position <= 3 ? styles.topRank : ''}`}>
+                #{position}
               </div>
 
-              <div className={styles.photocardImageWrapper}>
+              <div className={styles.photocardImageWrapper} style={{ borderColor: tier.color }}>
                 {firstImageUrl ? (
-                  <img 
-                    src={firstImageUrl} 
-                    alt={item.name} 
-                    className={styles.photocardImage} 
+                  <img
+                    src={firstImageUrl}
+                    alt={item.name}
+                    className={styles.photocardImage}
                     loading="lazy"
                   />
                 ) : (
                   <div className={styles.photocardPlaceholder} />
                 )}
-                
+
                 <div className={styles.photocardOverlay}>
-                  <h4 className={styles.photocardName}>{item.name}</h4>
+                  <h4 className={styles.photocardName}>
+                    <span className={styles.tierTag} style={{ backgroundColor: tier.color }}>{tier.abbreviation}</span>
+                    {item.name}
+                  </h4>
                   <p className={styles.photocardScore}>Elo: {Math.round(item.elo)}</p>
                 </div>
               </div>

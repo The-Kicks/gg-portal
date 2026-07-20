@@ -11,6 +11,7 @@ interface UseSorterKeybindsProps {
   currentRightMediaUrl: string;
   setLeftMediaIndex: React.Dispatch<React.SetStateAction<number>>;
   setRightMediaIndex: React.Dispatch<React.SetStateAction<number>>;
+  enabled?: boolean;
 }
 
 export function useSorterKeybinds({
@@ -24,6 +25,7 @@ export function useSorterKeybinds({
   currentRightMediaUrl,
   setLeftMediaIndex,
   setRightMediaIndex,
+  enabled = true,
 }: UseSorterKeybindsProps) {
   const actionsRef = useRef({
     onProcessVote,
@@ -36,6 +38,7 @@ export function useSorterKeybinds({
     currentRightMediaUrl,
     setLeftMediaIndex,
     setRightMediaIndex,
+    enabled,
   });
 
   useEffect(() => {
@@ -50,6 +53,7 @@ export function useSorterKeybinds({
       currentRightMediaUrl,
       setLeftMediaIndex,
       setRightMediaIndex,
+      enabled,
     };
   });
 
@@ -74,6 +78,8 @@ export function useSorterKeybinds({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!actionsRef.current.enabled) return;
+
       heldKeys.current.add(e.key);
       heldKeys.current.add(e.code);
 

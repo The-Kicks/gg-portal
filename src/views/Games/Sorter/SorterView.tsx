@@ -1,8 +1,8 @@
 import React from 'react';
 import type { Theme } from '../../../types';
 import type { EloExtended } from './eloUtils';
+import { getTier } from './eloUtils';
 import type { SorterEntity } from './SorterViewPage';
-import { getCalibrationProgress, getSorterStageInfo } from './eloUtils';
 import game from './SorterCSS/SorterGame.module.css';
 import results from './SorterCSS/SorterResults.module.css';
 
@@ -33,6 +33,7 @@ interface SorterViewProps {
   canUndo: boolean;
   onSave: () => void;
   toggleFavorite: (side: 'left' | 'right') => void;
+  onOpenResults: () => void;
 }
 
 interface KeyInfo {
@@ -63,13 +64,13 @@ export function SorterView({
   canUndo,
   onSave,
   toggleFavorite,
+  onOpenResults,
 }: SorterViewProps) {
   const [leftItem, rightItem] = currentMatchup;
+  const leftTier = getTier(leftItem);
+  const rightTier = getTier(rightItem);
 
-  const calibrationProgress = getCalibrationProgress(tournamentList);
-  const currentStage = getSorterStageInfo(tournamentList);
-
-  const renderMediaComponent = (url: string): React.JSX.Element => {
+  const renderMediaComponent = (url: string, tierColor: string): React.JSX.Element => {
     if (!url) {
       return (
         <div className={styles.mediaWrapper}>
@@ -92,9 +93,9 @@ export function SorterView({
         {/* 2. Scherpe voorgrond die altijd volledig binnen het scherm past */}
         <div className={styles.mediaForegroundWrapper}>
           {isVideoFile ? (
-            <video src={url} autoPlay loop muted playsInline className={styles.mediaAssetContain} />
+            <video src={url} autoPlay loop muted playsInline className={styles.mediaAssetContain} style={{ borderColor: tierColor }} />
           ) : (
-            <img src={url} alt="Sorter choice asset" className={styles.mediaAssetContain} />
+            <img src={url} alt="Sorter choice asset" className={styles.mediaAssetContain} style={{ borderColor: tierColor }} />
           )}
         </div>
       </div>
@@ -130,7 +131,7 @@ export function SorterView({
       {/* LINKER KANDIDAAT */}
       <div className={styles.mediaColumn} onClick={() => onProcessVote('A')} data-side="left">
         <div className={styles.vignetteOverlay} />
-        {renderMediaComponent(currentLeftMediaUrl)}
+        {renderMediaComponent(currentLeftMediaUrl, leftTier.color)}
 
         {currentLeftMediaUrl && (
           <button
@@ -148,7 +149,10 @@ export function SorterView({
         )}
 
         <div className={`${styles.entityCard} ${styles.entityCardLeft}`}>
-          <h3 className={styles.entityName}>{leftItem.name}</h3>
+          <h3 className={styles.entityName}>
+            <span className={styles.tierTag} style={{ backgroundColor: leftTier.color }}>{leftTier.abbreviation}</span>
+            {leftItem.name}
+          </h3>
           <p className={styles.entitySubtitle}>{getItemSubtitle(leftItem)}</p>
         </div>
       </div>
@@ -156,25 +160,9 @@ export function SorterView({
       {/* MIDDENSECTIE */}
       <div className={styles.centerColumn}>
         <div className={styles.headerZone}>
-          <div className={styles.stageWrapper}>
-            <span className={styles.stageBadge} style={{ borderColor: currentStage.color, color: currentStage.color, stroke: currentStage.color }}>
-              <span className={styles.badgePulse} style={{ backgroundColor: currentStage.color }} />
-              {currentStage.title}
-            </span>
-            <p className={styles.stageDescription}>{currentStage.description}</p>
-          </div>
-
           <div className={styles.matchCounter}>
             <span className={styles.matchTitle}>Matchup</span>
-            <span className={styles.matchNumber}>#{voteCount + 1}</span>
-          </div>
-
-          <div className={styles.progressContainer}>
-            <div className={styles.progressBar} style={{ width: `${calibrationProgress}%` }} />
-          </div>
-          <div className={styles.progressTextWrapper}>
-            <span className={styles.progressLabel}>Sorter Progress</span>
-            <span className={styles.progressPercentage}>{calibrationProgress}%</span>
+            <span className={styles.matchNumber}>#{voteCount}</span>
           </div>
         </div>
 
@@ -267,8 +255,8 @@ export function SorterView({
         </div>
 
         {/* Live Top 3 */}
-        <div className={styles.leaderboardZone}>
-          <h4 className={styles.leaderboardTitle}>Live Top 3</h4>
+        <div className={styles.leaderboardZone} onClick={onOpenResults}>
+          <h4 className={styles.leaderboardTitle}>Standings</h4>
           <div className={styles.topThreeContainer}>
             {liveTopThree.map((item, index) => {
               const isCurrent = item.id === leftItem.id || item.id === rightItem.id;
@@ -296,7 +284,7 @@ export function SorterView({
       {/* RECHTER KANDIDAAT */}
       <div className={styles.mediaColumn} onClick={() => onProcessVote('B')} data-side="right">
         <div className={styles.vignetteOverlay} />
-        {renderMediaComponent(currentRightMediaUrl)}
+        {renderMediaComponent(currentRightMediaUrl, rightTier.color)}
 
         {currentRightMediaUrl && (
           <button
@@ -314,7 +302,10 @@ export function SorterView({
         )}
 
         <div className={`${styles.entityCard} ${styles.entityCardRight}`}>
-          <h3 className={styles.entityName}>{rightItem.name}</h3>
+          <h3 className={styles.entityName}>
+            <span className={styles.tierTag} style={{ backgroundColor: rightTier.color }}>{rightTier.abbreviation}</span>
+            {rightItem.name}
+          </h3>
           <p className={styles.entitySubtitle}>{getItemSubtitle(rightItem)}</p>
         </div>
       </div>
