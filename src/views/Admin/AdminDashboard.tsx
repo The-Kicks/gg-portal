@@ -34,6 +34,7 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
   const { themeName } = useParams<{ themeName: string }>();
   const navigate = useNavigate();
   const [filterType, setFilterType] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   /**
    * Recurses through the incoming and outgoing relational graph edge data models to resolve, 
@@ -115,7 +116,15 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
       }));
     });
 
-    return rows.sort((a, b) => {
+    const searchedRows = rows.filter(row => {
+      const query = searchQuery.toLowerCase().trim();
+      if (!query) return true;
+      const matchesEntityName = row.entity.name.toLowerCase().includes(query);
+      const matchesParentName = row.displayParent.toLowerCase().includes(query);
+      return matchesEntityName || matchesParentName;
+    });
+
+    return searchedRows.sort((a, b) => {
       const typeA = a.entity.type.toLowerCase();
       const typeB = b.entity.type.toLowerCase();
 
@@ -135,7 +144,7 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
 
       return a.entity.name.localeCompare(b.entity.name);
     });
-  }, [theme?.entities, filterType]);
+  }, [theme?.entities, filterType, searchQuery]);
 
   if (!theme) {
     return (
@@ -181,6 +190,17 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
         ))}
       </div>
 
+      {/* Zoekbalk met de nieuwe CSS Module klassen */}
+      <div className={styles.searchContainer}>
+        <input
+          type="text"
+          placeholder="Zoek op naam of parent context..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className={styles.searchInput}
+        />
+      </div>
+
       <table className={styles.table}>
         <thead>
           <tr className={styles.tableHeaderRow}>
@@ -194,8 +214,8 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
         <tbody>
           {sortedAndFilteredRows.length === 0 ? (
             <tr>
-              <td colSpan={5} className={`${styles.td} styles.textCenter ${styles.textMuted}`}>
-                No entities found matching the selected tier filter.
+              <td colSpan={5} className={`${styles.td} ${styles.textCenter} ${styles.textMuted}`}>
+                No entities found matching the selected filters.
               </td>
             </tr>
           ) : (

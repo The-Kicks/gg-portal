@@ -224,6 +224,36 @@
   background-color: #475569;
 }
 
+.searchContainer {
+  margin-bottom: 20px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 12px 18px;
+  font-size: 14px;
+  background-color: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.2s ease-in-out;
+}
+
+.searchInput::placeholder {
+  color: var(--text-dimmed);
+}
+
+.searchInput:hover {
+  border-color: var(--text-muted);
+}
+
+.searchInput:focus {
+  border-color: var(--adminprimary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
 /* Form Cards */
 .formCard {
   padding: 24px;
