@@ -1,0 +1,207 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+.resultsOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  animation: overlayFadeIn 0.15s ease-out;
+}
+
+.resultsModal {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  height: 90vh;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  animation: modalPopIn 0.18s ease-out;
+}
+
+.resultsModalClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(24, 24, 27, 0.8);
+  color: #e4e4e7;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.resultsModalClose:hover {
+  background: rgba(39, 39, 42, 0.95);
+  transform: scale(1.05);
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalPopIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.resultsContainer {
+  padding: 2.5rem;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: #09090b;
+}
+
+.resultsHeader {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.resultsTitle {
+  font-size: 2.75rem;
+  font-weight: 900;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #60a5fa 0%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.resultsSubtitle {
+  color: #71717a;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.photocardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto 4rem auto;
+}
+
+.photocard {
+  position: relative;
+  aspect-ratio: 2.5 / 3.5;
+  background-color: #141416;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #1e1e22;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.photocard:hover {
+  transform: translateY(-6px);
+  border-color:  var(--primary);
+  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.15);
+}
+
+.rankBadge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(10, 10, 12, 0.75);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  z-index: 3;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.topRank {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  border: none;
+}
+
+.photocardImageWrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  /* Tier colour is applied inline; transparent keeps the ring invisible until set */
+  border: 3px solid transparent;
+}
+
+.photocardImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photocardOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(to top, #09090b 0%, rgba(9, 9, 11, 0.5) 60%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+  z-index: 2;
+}
+
+.photocardName {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.photocardScore {
+  margin: 4px 0 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.photocardPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #141416 0%, #1c1c21 100%);
+}
+
+/* Tier abbreviation shown as a small coloured block in front of an entity name.
+   Shared by the Sorter view and the results view. Background colour is set inline. */
+.tierTag {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.65em;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #09090b;
+}

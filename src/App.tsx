@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { fetchThemes } from './core/api';
 import { Navbar } from "./core/components/Navbar/Navbar";
@@ -6,6 +6,7 @@ import { ScrollToTop } from './core/helpers/scrollToTop';
 import Home from "./views/Home/Home";
 import { GuessWhoViewPage } from './views/Games/GuessWho/GuessWhoViewPage';
 import { BlindRankingViewPage } from './views/Games/BlindRanking/BlindRankingViewPage';
+import { SorterViewPage }  from './views/Games/Sorter/SorterViewPage'
 import { L1View, L2View, L3View, L4View } from "./views/Layers/index";
 import { ExtendedProfileViewPage } from './views/ExtendedProfileView/ExtendedProfileViewPage';
 import { ExtendedStructureViewPage } from './views/ExtendedStructureView/ExtendedStructureViewPage';
@@ -89,6 +90,7 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
         <Route path="home" element={<Home theme={activeTheme} isDark={isDark} />} />
         <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} />} />
         <Route path="blindranking" element={<BlindRankingViewPage theme={activeTheme}/>} />
+        <Route path="sorter" element={<SorterViewPage theme={activeTheme}/>} />
 
         <Route path="l1" element={hasLayer('l1') ? <L1View theme={activeTheme} /> : <Navigate to="../home" replace />} />
         <Route path="l2" element={hasLayer('l2') ? <L2View theme={activeTheme} /> : <Navigate to="../l3" replace />} />
