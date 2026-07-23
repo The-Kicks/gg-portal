@@ -97,8 +97,32 @@ export const EntityCard: React.FC<EntityCardProps> = ({
     return badges;
   }, [triggers, safeMetadata, labels]);
 
-  const profileCardBadge = layerStandard?.badgeKey ? String(safeMetadata[layerStandard.badgeKey] || '') : undefined;
-  const subtitle = layerStandard?.subtitleKey ? String(safeMetadata[layerStandard.subtitleKey] || '') : undefined;
+  // Check welke keys er in het theme zijn meegegeven voor de badge
+  const badgeKey = layerStandard?.badgeKey ? String(layerStandard.badgeKey).trim() : '';
+  const subtitleKey = layerStandard?.subtitleKey ? String(layerStandard.subtitleKey).trim() : '';
+
+  // Bepaal of de badgeKey of subtitleKey zelf 'l3', 'l2' of 'l1' is
+  const isL3OrL2Key = (key: string) => ['l3', 'l2', 'l1'].includes(key.toLowerCase());
+
+  // Haal de ruwe waarde op uit metadata (of val terug op lege string)
+  const rawBadgeValue = badgeKey ? String(safeMetadata[badgeKey] || '').trim() : '';
+  const rawSubtitleValue = subtitleKey ? String(safeMetadata[subtitleKey] || '').trim() : '';
+
+  // Logica voor profileCardBadge (onderste regel of enige regel)
+  let profileCardBadge: string | undefined = undefined;
+  if (badgeKey && isL3OrL2Key(badgeKey) && organization?.name) {
+    profileCardBadge = organization.name;
+  } else if (rawBadgeValue) {
+    profileCardBadge = labels[rawBadgeValue] || labels[rawBadgeValue.toLowerCase()] || rawBadgeValue;
+  }
+
+  // Logica voor subtitle (bovenste regel van de badge)
+  let subtitle: string | undefined = undefined;
+  if (subtitleKey && isL3OrL2Key(subtitleKey) && organization?.name) {
+    subtitle = organization.name;
+  } else if (rawSubtitleValue) {
+    subtitle = labels[rawSubtitleValue] || labels[rawSubtitleValue.toLowerCase()] || rawSubtitleValue;
+  }
 
   const isFormer = activeBadges.some(b => b.key === 'former');
   const primaryStatusBadge = activeBadges.find(b => b.key !== 'former');

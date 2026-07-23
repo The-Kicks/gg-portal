@@ -1,3 +1,4 @@
+import React from 'react';
 import { ReactCountryFlag } from 'react-country-flag';
 import type { BaseEntity, EntityImages } from '../../../../../types';
 import { getEntityImage } from '../../../../helpers/getEntityImage';
@@ -14,7 +15,6 @@ interface ProfileCardProps {
 export const ProfileCard: React.FC<ProfileCardProps> = ({ 
   entity, 
   organization, 
-  label, 
   profileCardBadge, 
   subtitle 
 }) => {
@@ -23,11 +23,14 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   // Check of het om een video gaat (inclusief .gifv, .mp4, .webm, .mov)
   const isVideo = typeof mediaPath === 'string' && /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$/i.test(mediaPath);
 
-  const hasCustomBadgeData = Boolean(profileCardBadge || subtitle);
-  const shouldRenderBadgeContainer = hasCustomBadgeData || Boolean(organization);
+  // Als subtitle of profileCardBadge gelijk is aan 'L3' (of 'l3'), tonen we de organisatienaam als label. Anders gebruiken we de normale subtitle.
+  const isL3 = (subtitle && subtitle.toLowerCase() === 'l3') || (profileCardBadge && profileCardBadge.toLowerCase() === 'l3');
+  
+  const displayBadgeLabel = isL3 ? organization?.name : subtitle;
+  const displayBadgeValue = profileCardBadge;
 
-  const displayBadgeLabel = profileCardBadge || label;
-  const displayBadgeValue = subtitle || organization?.name;
+  // De container verschijnt alleen als er daadwerkelijk content is
+  const shouldRenderBadgeContainer = Boolean(displayBadgeLabel || displayBadgeValue);
 
   return (
     <div className={styles.card}>
@@ -49,28 +52,29 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           />
         )}
 
+        {/* Landvlag(gen) absoluut gepositioneerd in de linker bovenhoek (zonder achtergrond en niet rond) */}
+        {entity.metadata?.Nationality && Array.isArray(entity.metadata.Nationality) && entity.metadata.Nationality.length > 0 && (
+          <div className={styles.topLeftFlags}>
+            {entity.metadata.Nationality.map((code: string) => (
+              <span key={code} className={styles.countryBadge}>
+                <ReactCountryFlag 
+                  countryCode={code} 
+                  svg 
+                  style={{
+                    width: '1.5em',
+                    height: '1.1em',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                  title={code} 
+                />
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className={styles.overlay}>
           <div className={styles.info}>
-            
-            {entity.metadata?.Nationality && Array.isArray(entity.metadata.Nationality) && (
-              <div className={styles.metadata}>
-                {entity.metadata.Nationality.map((code: string) => (
-                  <span key={code} className={styles.countryBadge}>
-                    <ReactCountryFlag 
-                      countryCode={code} 
-                      svg 
-                      style={{
-                        width: '1.5em',
-                        height: '1.5em',
-                        borderRadius: '2px'
-                      }}
-                      title={code} 
-                    />
-                  </span>
-                ))}
-              </div>
-            )}
-
             <h2 className={styles.name}>{entity.name}</h2>
             
             {shouldRenderBadgeContainer && (
@@ -79,7 +83,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 {displayBadgeValue && <span className={styles.orgName}>{displayBadgeValue}</span>}
               </div>
             )}
-
           </div>
         </div>
       </div>
