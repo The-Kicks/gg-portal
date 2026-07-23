@@ -19,7 +19,7 @@ export const L1View: React.FC<Props> = ({ theme }) => {
 
   if (endpoints.length === 0) {
     return (
-      <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
+      <div className={styles.emptyState}>
         <h3>No data found for {theme.labels.l1 || 'Layer 1'}.</h3>
       </div>
     );
@@ -29,7 +29,7 @@ export const L1View: React.FC<Props> = ({ theme }) => {
    * Evaluates the operational lifecycle status flag of a given entity.
    */
   const isInactiveStatus = (status: string) =>
-    ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
+    ['disbanded', 'inactive', 'retired', 'historical', 'ex', 'former'].includes(status.toLowerCase().trim());
 
   const activeL1s = endpoints
     .filter((e) => !isInactiveStatus(e.status || ''))
@@ -42,39 +42,60 @@ export const L1View: React.FC<Props> = ({ theme }) => {
   return (
     <div className={styles.layerContainer}>
       {activeL1s.length > 0 && (
-        <div className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{theme.labels['l1_active'] ?? 'Active Global Alliances'}</h2>
+        <section className={styles.groupCard}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>{theme.labels['l1_active'] ?? 'Active Global Alliances'}</h2>
+            <div className={styles.groupBadge}>
+              <span className={styles.badgeDot} />
+              {activeL1s.length} items
+            </div>
+          </div>
           <div className={styles.cardGrid}>
             {activeL1s.map((conglomerate, idx) => (
               <div
                 key={`l1-active-${conglomerate.id}-${idx}`}
                 onClick={() => navigate(`/${theme.id}/structure/${conglomerate.id}`)}
                 className={styles.cardWrapper}
+                style={{ animationDelay: `${idx * 0.04}s` }}
               >
                 <EntityCard entity={conglomerate} activeKey="l1" theme={theme} labels={theme.labels} />
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {inactiveL1s.length > 0 && (
-        <div className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>
-            {theme.labels['l1_historical'] ?? 'Historical / Merged Entities'}
-          </h2>
-          <div className={styles.cardGrid}>
-            {inactiveL1s.map((conglomerate, idx) => (
-              <div
-                key={`l1-inactive-${conglomerate.id}-${idx}`}
-                onClick={() => navigate(`/${theme.id}/structure/${conglomerate.id}`)}
-                className={styles.cardWrapper}
-              >
-                <EntityCard entity={conglomerate} activeKey="l1" theme={theme} labels={theme.labels} />
-              </div>
-            ))}
+        <section className={`${styles.groupCard} ${styles.inactiveGroup}`}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>
+              {theme.labels['l1_historical'] ?? 'Historical / Merged Entities'}
+            </h2>
+            <div className={styles.groupBadgeInactive}>
+              {inactiveL1s.length} items
+            </div>
           </div>
-        </div>
+          <div className={styles.cardGrid}>
+            {inactiveL1s.map((conglomerate, idx) => {
+              const isFormer = isInactiveStatus(conglomerate.status || '') || !!conglomerate.metadata?.PassingDate;
+              const enrichedConglomerate = isFormer ? {
+                ...conglomerate,
+                metadata: { ...(conglomerate.metadata || {}), isFormer: true }
+              } : conglomerate;
+
+              return (
+                <div
+                  key={`l1-inactive-${conglomerate.id}-${idx}`}
+                  onClick={() => navigate(`/${theme.id}/structure/${conglomerate.id}`)}
+                  className={styles.cardWrapper}
+                  style={{ animationDelay: `${idx * 0.04}s` }}
+                >
+                  <EntityCard entity={enrichedConglomerate} activeKey="l1" theme={theme} labels={theme.labels} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
     </div>
   );

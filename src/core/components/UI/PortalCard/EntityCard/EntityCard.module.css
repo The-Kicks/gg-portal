@@ -16,16 +16,15 @@
 
 /* ==========================================================================
    Historical 'Former' Status Visual Overrides 
-   (SECURE LOCK: Left fully structurally intact as requested)
    ========================================================================== */
 .isFormer {
-  filter: grayscale(100%); /* Drains card structural saturation levels completely out into clean black and white lines */
-  opacity: 0.8; /* Dims brightness to indicate past status records profiles */
+  filter: grayscale(40%) contrast(90%); /* Minder rigide grijs, behoudt wat meer natuurlijke toon */
+  opacity: 0.85; /* Iets minder doorzichtig zodat de kaart goed leesbaar blijft */
 }
 
-/* Restores layout color hints slightly upon hover actions */
+/* Subtieler herstel bij hover acties */
 .isFormer:hover {
-  filter: grayscale(50%); 
+  filter: grayscale(10%) contrast(100%); 
   opacity: 1;
 }
 

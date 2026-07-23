@@ -13,9 +13,6 @@ interface Props {
   theme: Theme;
 }
 
-/**
- * Iterates through arbitrary metadata collections recursively to match search terms.
- */
 const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean => {
   if (!metadata || !term) return false;
   const lowerTerm = term.toLowerCase().trim();
@@ -36,10 +33,6 @@ const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean =
   return scan(metadata);
 };
 
-/**
- * L4View processes, filters, and displays leaf nodes representing Layer 4 individual entities.
- * Maps relational link parameters dynamically to evaluate hierarchy clusters and team rosters.
- */
 export const L4View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const parentMap = new Map<string, ParentBucket>();
@@ -62,7 +55,6 @@ export const L4View: React.FC<Props> = ({ theme }) => {
   }, [theme.layerMetadata]);
 
   const triggers = layerStandard?.statusTriggers;
-
   const standaloneLabel = theme.labels['l4_standalone'] ?? 'Solo Career / Standalone';
   const inactiveLabel = theme.labels['disbanded_tag'] ?? 'Inactive / Historical';
 
@@ -73,11 +65,10 @@ export const L4View: React.FC<Props> = ({ theme }) => {
 
   if (endpoints.length === 0) {
     return (
-      <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
-        <h3>No data found for {theme.labels.l4 || 'Layer 4'}.</h3>
-        <p style={{ opacity: 0.6, fontSize: '0.9rem', marginTop: '0.5rem' }}>
-          The dataset does not contain entities with type "l4" for "{theme.title}".
-        </p>
+      <div className={styles.emptyState}>
+        <div className={styles.emptyIcon}>✨</div>
+        <h3>Geen data gevonden voor {theme.labels.l4 || 'Layer 4'}.</h3>
+        <p>De dataset bevat geen entiteiten van het type "l4" voor "{theme.title}".</p>
       </div>
     );
   }
@@ -91,10 +82,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
       if (['retired', 'inactive'].includes(l4Status) || isDeceased) {
         return {
           ...entity,
-          metadata: {
-            ...(entity.metadata || {}),
-            isFormer: true
-          }
+          metadata: { ...(entity.metadata || {}), isFormer: true }
         };
       }
       return entity;
@@ -159,12 +147,8 @@ export const L4View: React.FC<Props> = ({ theme }) => {
               enrichedMetadata[String(triggerConfig.key)] = String(triggerConfig.value);
             }
 
-            if (triggerKey.toLowerCase() === 'hiatus') {
-              enrichedMetadata.isHiatus = true;
-            }
-            if (triggerKey.toLowerCase() === 'former' || triggerKey.toLowerCase() === 'ex') {
-              enrichedMetadata.isFormer = true;
-            }
+            if (triggerKey.toLowerCase() === 'hiatus') enrichedMetadata.isHiatus = true;
+            if (['former', 'ex'].includes(triggerKey.toLowerCase())) enrichedMetadata.isFormer = true;
           }
         }
 
@@ -187,20 +171,8 @@ export const L4View: React.FC<Props> = ({ theme }) => {
   const isInactiveStatus = (status: string) =>
     ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
 
-  /**
-   * Partitions and sorts sibling collections prioritizing core active roles over reserve or auxiliary positions.
-   */
   const sortGroupChildren = (children: HydratedEntity[]) => {
-    return [...children].sort((a, b) => {
-      const roleA = String(a.metadata?.role || '').toLowerCase();
-      const roleB = String(b.metadata?.role || '').toLowerCase();
-      const isReserveA = roleA.includes('reserve') || roleA.includes('test');
-      const isReserveB = roleB.includes('reserve') || roleB.includes('test');
-
-      if (isReserveA && !isReserveB) return 1;
-      if (!isReserveA && isReserveB) return -1;
-      return a.name.localeCompare(b.name);
-    });
+    return [...children].sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const activeBuckets = allBuckets
@@ -218,14 +190,21 @@ export const L4View: React.FC<Props> = ({ theme }) => {
   return (
     <div className={styles.layerContainer}>
       {activeBuckets.map(({ parent, children }) => (
-        <div key={parent.id} className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{parent.name}</h2>
+        <section key={parent.id} className={styles.groupCard}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>{parent.name}</h2>
+            <div className={styles.groupBadge}>
+              <span className={styles.badgeDot} />
+              {children.length} leden
+            </div>
+          </div>
           <div className={styles.cardGrid}>
             {children.map((child, idx) => (
               <div
                 key={`${parent.id}-${child.id}-${idx}`}
                 onClick={() => navigate(`/${theme.id}/profile/${child.id}`)}
                 className={styles.cardWrapper}
+                style={{ animationDelay: `${idx * 0.04}s` }}
               >
                 <EntityCard
                   entity={child}
@@ -238,18 +217,25 @@ export const L4View: React.FC<Props> = ({ theme }) => {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       ))}
 
       {standaloneEntities.length > 0 && (
-        <div className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{standaloneLabel}</h2>
+        <section className={styles.groupCard}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>{standaloneLabel}</h2>
+            <div className={styles.groupBadge}>
+              <span className={styles.badgeDot} />
+              {standaloneEntities.length} artiesten
+            </div>
+          </div>
           <div className={styles.cardGrid}>
             {standaloneEntities.map((standalone, idx) => (
               <div
                 key={`standalone-${standalone.id}-${idx}`}
                 onClick={() => navigate(`/${theme.id}/profile/${standalone.id}`)}
                 className={styles.cardWrapper}
+                style={{ animationDelay: `${idx * 0.04}s` }}
               >
                 <EntityCard
                   entity={standalone}
@@ -261,18 +247,26 @@ export const L4View: React.FC<Props> = ({ theme }) => {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {inactiveBuckets.map(({ parent, children }) => (
-        <div key={parent.id} className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{parent.name} ({inactiveLabel})</h2>
+        <section key={parent.id} className={`${styles.groupCard} ${styles.inactiveGroup}`}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>
+              {parent.name} <span className={styles.subTag}>({inactiveLabel})</span>
+            </h2>
+            <div className={styles.groupBadgeInactive}>
+              {children.length} leden
+            </div>
+          </div>
           <div className={styles.cardGrid}>
             {children.map((child, idx) => (
               <div
                 key={`${parent.id}-${child.id}-${idx}`}
                 onClick={() => navigate(`/${theme.id}/profile/${child.id}`)}
                 className={styles.cardWrapper}
+                style={{ animationDelay: `${idx * 0.04}s` }}
               >
                 <EntityCard
                   entity={child}
@@ -285,7 +279,7 @@ export const L4View: React.FC<Props> = ({ theme }) => {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       ))}
     </div>
   );
