@@ -11,10 +11,6 @@ interface ProfileCardProps {
   subtitle?: string;         
 }
 
-/**
- * Renders a detailed visual profile showcase layout, resolving dynamic background asset paths, 
- * embedding multi-national country flag badges, and applying context label overrides with high precedence.
- */
 export const ProfileCard: React.FC<ProfileCardProps> = ({ 
   entity, 
   organization, 
@@ -22,7 +18,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   profileCardBadge, 
   subtitle 
 }) => {
-  const imagePath = getEntityImage(entity.image as EntityImages, 'profileCard');
+  const mediaPath = getEntityImage(entity.image as EntityImages, 'profileCard');
+
+  // Check of het om een video gaat (inclusief .gifv, .mp4, .webm, .mov)
+  const isVideo = typeof mediaPath === 'string' && /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$/i.test(mediaPath);
 
   const hasCustomBadgeData = Boolean(profileCardBadge || subtitle);
   const shouldRenderBadgeContainer = hasCustomBadgeData || Boolean(organization);
@@ -32,10 +31,24 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
   return (
     <div className={styles.card}>
-      <div
-        className={styles.imageContainer}
-        style={{ backgroundImage: `url(${imagePath})` }}
-      >
+      <div className={styles.imageContainer}>
+        {/* Render een video-element bij video's/gifv, anders de achtergrondafbeelding */}
+        {isVideo ? (
+          <video 
+            className={styles.backgroundVideo} 
+            src={mediaPath} 
+            autoPlay 
+            loop 
+            muted 
+            playsInline 
+          />
+        ) : (
+          <div
+            className={styles.backgroundImage}
+            style={{ backgroundImage: `url(${mediaPath})` }}
+          />
+        )}
+
         <div className={styles.overlay}>
           <div className={styles.info}>
             

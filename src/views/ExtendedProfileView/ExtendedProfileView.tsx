@@ -70,6 +70,11 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
 
   const hasMedia = gallerySectionKeys.length > 0;
 
+  // Helper check of een URL of pad verwijst naar een video (inclusief Imgur .gifv en andere formaten)
+  const isVideoFile = (url: string) => {
+    return /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$/i.test(url);
+  };
+
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>, fileUrl: string) => {
     const img = e.currentTarget;
     const isHorizontal = img.naturalWidth > img.naturalHeight;
@@ -206,7 +211,18 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
           <div className={`${styles.heroContent} ${isHeroScrolledPast ? styles.hidden : ''}`}>
             {hasProfileCard && (
               <div className={styles.avatarContainer}>
-                <img src={profileCardImageUrl} className={styles.floatingAvatar} onError={() => setProfileImageError(true)} alt="" />
+                {isVideoFile(profileCardImageUrl) ? (
+                  <video
+                    src={profileCardImageUrl.startsWith('http') ? profileCardImageUrl : `/${profileCardImageUrl}`}
+                    className={styles.floatingAvatar}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img src={profileCardImageUrl} className={styles.floatingAvatar} onError={() => setProfileImageError(true)} alt="" />
+                )}
               </div>
             )}
             {renderTitleBox()}
@@ -222,7 +238,20 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
         <aside className={styles.sidebar}>
           <div className={`${styles.stickyContainer} ${isHeroScrolledPast ? styles.isSticky : styles.isStatic}`}>
             <div className={`${styles.compactHeader} ${isHeroScrolledPast ? styles.visible : ''}`}>
-              {hasProfileCard && <img src={profileCardImageUrl} className={styles.miniAvatar} alt="" />}
+              {hasProfileCard && (
+                isVideoFile(profileCardImageUrl) ? (
+                  <video
+                    src={profileCardImageUrl.startsWith('http') ? profileCardImageUrl : `/${profileCardImageUrl}`}
+                    className={styles.miniAvatar}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img src={profileCardImageUrl} className={styles.miniAvatar} alt="" />
+                )
+              )}
               <h2 className={styles.compactName}>{entity.name}</h2>
               <span className={styles.compactLabel}>{sidebarSubLabel}</span>
             </div>
@@ -382,12 +411,11 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                               if (item.itemClassKey === 'tallImageItem') itemLayoutClass = styles.tallImageItem;
 
                               const mediaSourcePath = item.file.startsWith('http') ? item.file : `/${item.file}`;
+                              const isVideo = item.type === 'video-file' || isVideoFile(item.file);
 
                               return (
                                 <div key={item.file} className={`${styles.mediaItem} ${itemLayoutClass}`}>
-                                  {item.type === 'image' ? (
-                                    <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
-                                  ) : item.type === 'video-file' ? (
+                                  {isVideo ? (
                                     <video
                                       src={mediaSourcePath}
                                       autoPlay={true}
@@ -398,6 +426,8 @@ export const ExtendedProfileView: React.FC<ExtendedProfileViewProps> = ({
                                       preload="metadata"
                                       onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)}
                                     />
+                                  ) : item.type === 'image' ? (
+                                    <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
                                   ) : (
                                     <iframe src={mediaSourcePath} title={`${sectionKey}-${item.file}`} allowFullScreen />
                                   )}
