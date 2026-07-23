@@ -33,8 +33,6 @@
 
 .groupCard {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   border-radius: 28px;
@@ -118,27 +116,27 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  /* Extra gap gecompenseerd omdat de kaartjes nu visueel groter worden ingeschaald */
-  gap: 48px; 
+  gap: 48px;
   padding: 24px 0;
+  overflow: hidden;
 }
 
-/* De EntityCard wordt hier nu echt fysiek 1.2x vergroot via transform */
+/* Kaarten-deck schuif-effect vanaf rechts naar links met behoud van formaat (scale 1.2) */
 .cardWrapper {
   cursor: pointer;
   display: flex;
   flex-direction: column;
   flex: 0 1 310px;
-  transform: scale(1.2) translateY(15px);
   transform-origin: center center;
   opacity: 0;
-  animation: popIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: deckDealRightToLeft 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
   margin: 20px 0;
 }
 
 .cardWrapper:hover {
-  transform: scale(1.25) translateY(10px);
+  transform: scale(1.25) translateY(10px) rotate(0deg) !important;
+  z-index: 10;
 }
 
 .formerCard {
@@ -152,14 +150,18 @@
   filter: grayscale(0%);
 }
 
-@keyframes popIn {
+/* Keyframes: Schuiven vanaf rechts en eindigen op je originele scale(1.2) en translateY(15px) */
+@keyframes deckDealRightToLeft {
   0% {
     opacity: 0;
-    transform: scale(1.1) translateY(25px);
+    transform: translateX(400px) translateY(15px) scale(1.0) rotate(6deg);
+  }
+  60% {
+    opacity: 1;
   }
   100% {
     opacity: 1;
-    transform: scale(1.2) translateY(0);
+    transform: translateX(0) translateY(15px) scale(1.2) rotate(0deg);
   }
 }
 

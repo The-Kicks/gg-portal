@@ -1,24 +1,24 @@
 /* ==========================================================================
-   Main Profile Card Container
+   Main Profile Card Container (K-pop Photocard Style - Borderless & Responsive)
    ========================================================================== */
 .card {
   width: 100%;
-  max-width: 300px;
-  aspect-ratio: 5 / 7.1;
-  border-radius: 15px;
+  max-width: 280px; /* Groter gemaakt voor schermen met hogere resoluties */
+  aspect-ratio: 1 / 1.42;
+  border-radius: 14px;
   position: relative;
-  margin: 1rem auto;
-  background-color: #fff;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  margin: 1.5rem auto;
+  background-color: #000;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28), 0 5px 12px rgba(0, 0, 0, 0.16);
   overflow: hidden;
   will-change: transform;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  border: 1px solid rgba(0,0,0,0.05);
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .card:hover {
-  transform: translateY(-5px) scale(1.02);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(-6px) scale(1.02) rotate(1deg);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.38), 0 7px 16px rgba(0, 0, 0, 0.22);
 }
 
 /* ==========================================================================
@@ -51,7 +51,7 @@
 }
 
 /* ==========================================================================
-   Top Left Country Flags (Zonder border of achtergrond)
+   Top Left Country Flags (Zonder borders of achtergrond)
    ========================================================================== */
 .topLeftFlags {
   position: absolute;
@@ -66,8 +66,9 @@
   display: inline-flex;
   background: transparent;
   padding: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); /* Subtiele schaduw voor leesbaarheid op de foto */
-  border-radius: 2px;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -79,11 +80,11 @@
   bottom: 0; 
   left: 0; 
   right: 0;
-  height: 50%;
-  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+  height: 45%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
   display: flex;
   align-items: flex-end;
-  padding: 15px 15px 5px 15px;
+  padding: 14px;
   z-index: 3;
 }
 
@@ -93,37 +94,47 @@
 }
 
 .name {
-  margin: 0 0 4px 0;
+  margin: 0 0 3px 0;
   font-size: 1.4rem;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1.1;
   color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
   letter-spacing: -0.01em;
 }
 
 /* ==========================================================================
-   Organization Badge
+   Organization Badge (Solide achtergrond, geen blur)
    ========================================================================== */
 .orgBadge {
   margin-top: 4px;
   display: inline-flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 5px 9px;
   border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .label {
   font-size: 0.6rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #a0a0a0;
+  letter-spacing: 0.8px;
+  color: #b0b0b0;
   font-weight: 700;
 }
 
 .orgName {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #ffffff;
+}
+
+/* ==========================================================================
+   Media Query voor 4K / Grote schermen
+   ========================================================================== */
+@media (min-width: 1920px) {
+  .card {
+    max-width: 340px; /* Nog een slag groter op breedbeeld/4K schermen */
+  }
 }
