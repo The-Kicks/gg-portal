@@ -259,12 +259,19 @@
   padding: 28px 24px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between; /* Duwt de standings naar de onderkant */
+  justify-content: space-between;
   align-items: center;
   border-left: 1px solid #18181b;
   border-right: 1px solid #18181b;
   z-index: 10;
-  height: 100%; /* Zorgt dat de kolom de volledige hoogte pakt voor de ruimteverdeling */
+  height: 100%;
+}
+
+.centerTopSection {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 12px;
 }
 
 .headerZone {
@@ -284,6 +291,12 @@
   margin-bottom: 0;
 }
 
+.matchCounterRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .matchTitle {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -298,6 +311,31 @@
   color: var(--text);
 }
 
+.keybindToggleButton {
+  background: transparent;
+  border: 1px solid #2d2d34;
+  color: #a1a1aa;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.keybindToggleButton:hover {
+  background: #27272a;
+  color: #fff;
+  border-color: #52525b;
+}
+
+.keybindToggleActive {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
 .controlsArea {
   display: flex;
   width: 100%;
@@ -305,6 +343,12 @@
   justify-content: center;
   margin-top: 4px;
   margin-bottom: 12px;
+}
+
+.actionButtonsRow {
+  display: flex;
+  gap: 8px;
+  width: 100%;
 }
 
 .undoButton,
@@ -344,7 +388,7 @@
 
 
 /* ==========================================================================
-   6. CAROUSEL CONTROLS & MEDIA CATEGORY CHIPS
+   6. CAROUSEL CONTROLS, MEDIA CATEGORY CHIPS & VOLUME SLIDERS
    ========================================================================== */
 
 .controlZone {
@@ -354,6 +398,7 @@
   gap: 12px;
   width: 100%;
   margin: 16px 0;
+  position: relative; /* Cruciaal voor het positioneren van de losse volume-sliders */
 }
 
 .carouselControls {
@@ -456,7 +501,6 @@
   border-color: #52525b;
 }
 
-/* 1. Actief aangeklikt: VOLLE LIJN */
 .mediaCategoryChipActive {
   background: color-mix(in srgb, var(--primary) 20%, transparent);
   border: 1px solid var(--primary);
@@ -471,7 +515,6 @@
   font-weight: 600;
 }
 
-/* 2. Bevat de afbeelding (niet actief): STIPPELTIJN */
 .mediaCategoryChipContains {
   background: color-mix(in srgb, var(--primary) 6%, transparent);
   border: 1px dashed color-mix(in srgb, var(--primary) 40%, transparent);
@@ -491,6 +534,77 @@
 
 .emptyFavoriteChip:hover {
   opacity: 1;
+}
+
+/* Volume Sliders - Alleen rondom het slider/carrousel-gedeelte uitgelijnd */
+.volumeSliderWrapperLeft,
+.volumeSliderWrapperRight {
+  position: absolute;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  background: rgba(14, 14, 18, 0.9);
+  border: 1px solid #2d2d34;
+  border-radius: 8px;
+  padding: 8px 2px;
+  z-index: 15;
+}
+
+.volumeSliderWrapperLeft {
+  left: -38px;
+}
+
+.volumeSliderWrapperRight {
+  right: -38px;
+}
+
+.volumeLabelLeft {
+  font-size: 9px;
+  color: #3b82f6;
+  font-weight: bold;
+}
+
+.volumeLabelRight {
+  font-size: 9px;
+  color: #ec4899;
+  font-weight: bold;
+}
+
+.volumeMuteButton {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  cursor: pointer;
+  display: flex;
+  padding: 2px;
+}
+
+.volumeMuteButton:hover {
+  color: #fff;
+}
+
+.volumeRangeContainer {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px 0;
+}
+
+.volumeRangeInput {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 4px;
+  height: 75px;
+  cursor: pointer;
+}
+
+.volumePercentText {
+  font-size: 8px;
+  color: #71717a;
 }
 
 

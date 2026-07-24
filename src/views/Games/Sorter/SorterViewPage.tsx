@@ -185,7 +185,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
     const A: EloExtended<SorterEntity> = activeMatchCandidates.at(Math.floor(Math.random() * activeMatchCandidates.length))!;
     const B: EloExtended<SorterEntity> = activeMatchCandidates.filter((e: EloExtended<SorterEntity>) => e !== A).at(Math.floor(Math.random() * (activeMatchCandidates.length - 1)))!;
-    setHistory([[A,B]]);
+    setHistory([[A, B]]);
   };
 
   const handleProcessVote = (winner: 'A' | 'B'): void => {

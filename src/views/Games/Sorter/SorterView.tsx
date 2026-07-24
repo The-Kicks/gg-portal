@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, type SyntheticEvent } from 'react';
 import type { Theme } from '../../../types';
 import type { EloExtended } from './eloUtils';
 import { getTier } from './eloUtils';
@@ -8,7 +8,7 @@ import results from './SorterCSS/SorterResults.module.css';
 
 const styles = {
   ...game,
-  ...results
+  ...results,
 };
 
 interface SorterViewProps {
@@ -46,6 +46,12 @@ interface KeyInfo {
   action: string;
 }
 
+interface ExtendedHTMLVideoElement extends HTMLVideoElement {
+  mozHasAudio?: boolean;
+  webkitAudioDecodedByteCount?: number;
+  audioTracks?: { length: number };
+}
+
 export function SorterView({
   theme,
   tournamentList,
@@ -78,15 +84,65 @@ export function SorterView({
   const leftTier = getTier(leftItem);
   const rightTier = getTier(rightItem);
 
-  // State om de numpad sneltoetsen sectie in/uit te schakelen
   const [showKeybinds, setShowKeybinds] = useState<boolean>(false);
+  
+  const [leftVolume, setLeftVolume] = useState<number>(0);
+  const [rightVolume, setRightVolume] = useState<number>(0);
+  
+  const [leftHasAudio, setLeftHasAudio] = useState<boolean>(false);
+  const [rightHasAudio, setRightHasAudio] = useState<boolean>(false);
+
+  const leftVideoRef = useRef<HTMLVideoElement | null>(null);
+  const leftBgVideoRef = useRef<HTMLVideoElement | null>(null);
+  const rightVideoRef = useRef<HTMLVideoElement | null>(null);
+  const rightBgVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // URL state tracking tijdens render om synchronisatie en resets te garanderen zonder useEffect cascading renders
+  const [prevLeftUrl, setPrevLeftUrl] = useState<string>(currentLeftMediaUrl);
+  if (currentLeftMediaUrl !== prevLeftUrl) {
+    setPrevLeftUrl(currentLeftMediaUrl);
+    setLeftVolume(0);
+    setLeftHasAudio(false);
+  }
+
+  const [prevRightUrl, setPrevRightUrl] = useState<string>(currentRightMediaUrl);
+  if (currentRightMediaUrl !== prevRightUrl) {
+    setPrevRightUrl(currentRightMediaUrl);
+    setRightVolume(0);
+    setRightHasAudio(false);
+  }
+
+  useEffect(() => {
+    if (leftVideoRef.current) leftVideoRef.current.volume = leftVolume;
+    if (leftBgVideoRef.current) leftBgVideoRef.current.volume = leftVolume;
+  }, [leftVolume]);
+
+  useEffect(() => {
+    if (rightVideoRef.current) rightVideoRef.current.volume = rightVolume;
+    if (rightBgVideoRef.current) rightBgVideoRef.current.volume = rightVolume;
+  }, [rightVolume]);
+
+  const handleLoadedData = (e: SyntheticEvent<HTMLVideoElement>, side: 'left' | 'right') => {
+    const video = e.currentTarget as ExtendedHTMLVideoElement;
+    
+    const hasAudio = 
+      Boolean(video.mozHasAudio) ||
+      Boolean(video.webkitAudioDecodedByteCount && video.webkitAudioDecodedByteCount > 0) ||
+      Boolean(video.audioTracks && video.audioTracks.length > 0);
+    
+    if (side === 'left') {
+      setLeftHasAudio(hasAudio);
+    } else {
+      setRightHasAudio(hasAudio);
+    }
+  };
 
   const currentLeftFavs = leftCategories.find(c => c.key === 'favorites')?.urls || [];
   const currentRightFavs = rightCategories.find(c => c.key === 'favorites')?.urls || [];
   const isLeftFav = currentLeftFavs.includes(currentLeftMediaUrl);
   const isRightFav = currentRightFavs.includes(currentRightMediaUrl);
 
-  const renderMediaComponent = (url: string, tierColor: string): React.JSX.Element => {
+  const renderMediaComponent = (url: string, tierColor: string, side: 'left' | 'right'): React.JSX.Element => {
     if (!url) {
       return (
         <div className={styles.mediaWrapper}>
@@ -95,19 +151,38 @@ export function SorterView({
       );
     }
 
-    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(url) || url.includes('mp4');
+    const isVideoFile = /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url) || url.includes('mp4') || url.includes('video');
+    const currentVol = side === 'left' ? leftVolume : rightVolume;
 
     return (
       <div className={styles.mediaContainer} data-fullscreen-target>
         {isVideoFile ? (
-          <video src={url} autoPlay loop muted playsInline className={styles.mediaBgBlur} />
+          <video
+            ref={side === 'left' ? leftBgVideoRef : rightBgVideoRef}
+            src={url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className={styles.mediaBgBlur}
+          />
         ) : (
           <img src={url} alt="" className={styles.mediaBgBlur} />
         )}
 
         <div className={styles.mediaForegroundWrapper}>
           {isVideoFile ? (
-            <video src={url} autoPlay loop muted playsInline className={styles.mediaAssetContain} style={{ borderColor: tierColor }} />
+            <video
+              ref={side === 'left' ? leftVideoRef : rightVideoRef}
+              src={url}
+              autoPlay
+              loop
+              muted={currentVol === 0}
+              playsInline
+              onLoadedData={(e) => handleLoadedData(e, side)}
+              className={styles.mediaAssetContain}
+              style={{ borderColor: tierColor }}
+            />
           ) : (
             <img src={url} alt="Sorter choice asset" className={styles.mediaAssetContain} style={{ borderColor: tierColor }} />
           )}
@@ -145,7 +220,7 @@ export function SorterView({
       {/* LINKER KANDIDAAT */}
       <div className={styles.mediaColumn} onClick={() => onProcessVote('A')} data-side="left">
         <div className={styles.vignetteOverlay} />
-        {renderMediaComponent(currentLeftMediaUrl, leftTier.color)}
+        {renderMediaComponent(currentLeftMediaUrl, leftTier.color, 'left')}
 
         {currentLeftMediaUrl && (
           <button
@@ -173,30 +248,17 @@ export function SorterView({
 
       {/* MIDDENSECTIE */}
       <div className={styles.centerColumn}>
-        {/* Bovenste groep: Matchcounter én Undo/Opslaan knoppen netjes bij elkaar */}
-        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '12px' }}>
+        <div className={styles.centerTopSection}>
           <div className={styles.headerZone}>
             <div className={styles.matchCounter}>
               <span className={styles.matchTitle}>Matchup</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className={styles.matchCounterRight}>
                 <span className={styles.matchNumber}>#{voteCount}</span>
                 <button
                   type="button"
                   onClick={() => setShowKeybinds(!showKeybinds)}
                   title={showKeybinds ? 'Verberg sneltoetsen' : 'Toon sneltoetsen'}
-                  style={{
-                    background: showKeybinds ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-                    border: '1px solid',
-                    borderColor: showKeybinds ? 'rgba(59, 130, 246, 0.4)' : '#2d2d34',
-                    color: showKeybinds ? '#60a5fa' : '#a1a1aa',
-                    borderRadius: '6px',
-                    padding: '4px 6px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease',
-                  }}
+                  className={`${styles.keybindToggleButton} ${showKeybinds ? styles.keybindToggleActive : ''}`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
@@ -207,20 +269,89 @@ export function SorterView({
             </div>
           </div>
 
-          {/* CONTROLS AREA DIRECT ONDER MATCHCOUNTER */}
           <div className={styles.controlsArea}>
-            <button type="button" onClick={onUndo} disabled={!canUndo} className={styles.undoButton}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
-              Undo
-            </button>
-            <button type="button" onClick={onSave} className={styles.saveButton}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
-              Opslaan
-            </button>
+            <div className={styles.actionButtonsRow}>
+              <button type="button" onClick={onUndo} disabled={!canUndo} className={styles.undoButton}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+                Undo
+              </button>
+              <button type="button" onClick={onSave} className={styles.saveButton}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
+                Opslaan
+              </button>
+            </div>
           </div>
         </div>
 
         <div className={styles.controlZone}>
+          {/* LINKER VOLUME SLIDER */}
+          {leftHasAudio && (
+            <div className={styles.volumeSliderWrapperLeft}>
+              <span className={styles.volumeLabelLeft}>L</span>
+              <button
+                type="button"
+                onClick={() => setLeftVolume(prev => prev > 0 ? 0 : 0.5)}
+                title={leftVolume === 0 ? 'Unmute Links' : 'Mute Links'}
+                className={styles.volumeMuteButton}
+              >
+                {leftVolume === 0 ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" /></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+                )}
+              </button>
+              <div className={styles.volumeRangeContainer}>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={leftVolume}
+                  onChange={(e) => setLeftVolume(parseFloat(e.target.value))}
+                  className={styles.volumeRangeInput}
+                  style={{ accentColor: '#3b82f6' }}
+                />
+              </div>
+              <span className={styles.volumePercentText}>
+                {Math.round(leftVolume * 100)}
+              </span>
+            </div>
+          )}
+
+          {/* RECHTER VOLUME SLIDER */}
+          {rightHasAudio && (
+            <div className={styles.volumeSliderWrapperRight}>
+              <span className={styles.volumeLabelRight}>R</span>
+              <button
+                type="button"
+                onClick={() => setRightVolume(prev => prev > 0 ? 0 : 0.5)}
+                title={rightVolume === 0 ? 'Unmute Rechts' : 'Mute Rechts'}
+                className={styles.volumeMuteButton}
+              >
+                {rightVolume === 0 ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" /></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+                )}
+              </button>
+              <div className={styles.volumeRangeContainer}>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={rightVolume}
+                  onChange={(e) => setRightVolume(parseFloat(e.target.value))}
+                  className={styles.volumeRangeInput}
+                  style={{ accentColor: '#ec4899' }}
+                />
+              </div>
+              <span className={styles.volumePercentText}>
+                {Math.round(rightVolume * 100)}
+              </span>
+            </div>
+          )}
+
           {/* Linker Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls}>
             <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
@@ -238,12 +369,12 @@ export function SorterView({
                       key={cat.key}
                       type="button"
                       className={`
-                  ${styles.mediaCategoryChip} 
-                  ${isSelected ? styles.mediaCategoryChipActive : ''} 
-                  ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
-                  ${isFavCat ? styles.favoriteChip : ''} 
-                  ${isEmptyFav ? styles.emptyFavoriteChip : ''}
-                `}
+                        ${styles.mediaCategoryChip} 
+                        ${isSelected ? styles.mediaCategoryChipActive : ''} 
+                        ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
+                        ${isFavCat ? styles.favoriteChip : ''} 
+                        ${isEmptyFav ? styles.emptyFavoriteChip : ''}
+                      `}
                       title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -306,12 +437,12 @@ export function SorterView({
                       key={cat.key}
                       type="button"
                       className={`
-                  ${styles.mediaCategoryChip} 
-                  ${isSelected ? styles.mediaCategoryChipActive : ''} 
-                  ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
-                  ${isFavCat ? styles.favoriteChip : ''} 
-                  ${isEmptyFav ? styles.emptyFavoriteChip : ''}
-                `}
+                        ${styles.mediaCategoryChip} 
+                        ${isSelected ? styles.mediaCategoryChipActive : ''} 
+                        ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
+                        ${isFavCat ? styles.favoriteChip : ''} 
+                        ${isEmptyFav ? styles.emptyFavoriteChip : ''}
+                      `}
                       title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -378,7 +509,7 @@ export function SorterView({
           </div>
         )}
 
-        {/* Live Top 3 (Wordt door space-between onderaan gedrukt) */}
+        {/* Live Top 3 */}
         <div className={styles.leaderboardZone} onClick={onOpenResults}>
           <h4 className={styles.leaderboardTitle}>Standings</h4>
           <div className={styles.topThreeContainer}>
@@ -408,7 +539,7 @@ export function SorterView({
       {/* RECHTER KANDIDAAT */}
       <div className={styles.mediaColumn} onClick={() => onProcessVote('B')} data-side="right">
         <div className={styles.vignetteOverlay} />
-        {renderMediaComponent(currentRightMediaUrl, rightTier.color)}
+        {renderMediaComponent(currentRightMediaUrl, rightTier.color, 'right')}
 
         {currentRightMediaUrl && (
           <button
