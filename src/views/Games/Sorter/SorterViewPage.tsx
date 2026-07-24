@@ -172,7 +172,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     }
   };
 
-  // --- CLEAR FAVORITES MET BEVESTIGING ---
   const handleClearFavorites = (): void => {
     const confirmed = window.confirm('Are you sure you want to delete all favorites?');
     if (!confirmed) return;
@@ -224,60 +223,58 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     );
   };
 
-  // --- ALTIJD FAVORITES ZICHTBAAR MAKEN (LOSGEKOPPELD VAN REGULIER MEDIA) ---
-  const getMediaCategoriesForEntity = (entity: SorterEntity): MediaCategoryGroup[] => {
-    const groups: MediaCategoryGroup[] = [];
+  const getMediaCategoriesForEntity = useMemo(() => {
+    return (entity: SorterEntity): MediaCategoryGroup[] => {
+      const groups: MediaCategoryGroup[] = [];
 
-    // 1. Favorites album (altijd als eerste getoond, puur op basis van globalFavorites)
-    const favs = globalFavorites[entity.id] || [];
-    groups.push({
-      key: 'favorites',
-      label: '⭐',
-      urls: favs,
-    });
-
-    // 2. Samengevoegde Profile Categorie (profileCard + heroBanner)
-    const profileUrls: string[] = [];
-    if (entity.image?.profileCard) {
-      profileUrls.push(entity.image.profileCard.trim());
-    }
-    if (entity.image?.heroBanner) {
-      profileUrls.push(entity.image.heroBanner.trim());
-    }
-
-    if (profileUrls.length > 0) {
+      const favs = globalFavorites[entity.id] || [];
       groups.push({
-        key: 'profile',
-        label: theme.labels?.profileCard || 'Profile',
-        urls: profileUrls,
+        key: 'favorites',
+        label: '⭐',
+        urls: favs,
       });
-    }
 
-    // 3. Overige dynamische media keys
-    const layerMetadata = theme.layerMetadata[entity.type];
-    if (layerMetadata && layerMetadata.mediaKeys) {
-      layerMetadata.mediaKeys.forEach((key) => {
-        if (key === 'profileCard' || key === 'heroBanner') return;
-        const dynamicData = entity.image[key];
-        const urls: string[] = [];
-        if (typeof dynamicData === 'string') {
-          urls.push(...dynamicData.split(' ').map((u) => u.trim()).filter(Boolean));
-        } else if (Array.isArray(dynamicData)) {
-          urls.push(...dynamicData.filter((u): u is string => typeof u === 'string').map((u) => u.trim()));
-        }
+      const profileUrls: string[] = [];
+      if (entity.image?.profileCard) {
+        profileUrls.push(entity.image.profileCard.trim());
+      }
+      if (entity.image?.heroBanner) {
+        profileUrls.push(entity.image.heroBanner.trim());
+      }
 
-        if (urls.length > 0) {
-          groups.push({
-            key,
-            label: theme.labels?.[key] || key,
-            urls,
-          });
-        }
-      });
-    }
+      if (profileUrls.length > 0) {
+        groups.push({
+          key: 'profile',
+          label: theme.labels?.profileCard || 'Profile',
+          urls: profileUrls,
+        });
+      }
 
-    return groups;
-  };
+      const layerMetadata = theme.layerMetadata[entity.type];
+      if (layerMetadata && layerMetadata.mediaKeys) {
+        layerMetadata.mediaKeys.forEach((key) => {
+          if (key === 'profileCard' || key === 'heroBanner') return;
+          const dynamicData = entity.image[key];
+          const urls: string[] = [];
+          if (typeof dynamicData === 'string') {
+            urls.push(...dynamicData.split(' ').map((u) => u.trim()).filter(Boolean));
+          } else if (Array.isArray(dynamicData)) {
+            urls.push(...dynamicData.filter((u): u is string => typeof u === 'string').map((u) => u.trim()));
+          }
+
+          if (urls.length > 0) {
+            groups.push({
+              key,
+              label: theme.labels?.[key] || key,
+              urls,
+            });
+          }
+        });
+      }
+
+      return groups;
+    };
+  }, [globalFavorites, theme]);
 
   const mediaCalculation = useMemo(() => {
     if (!history.length) return null;
@@ -308,7 +305,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       currentLeftMediaUrl,
       currentRightMediaUrl,
     };
-  }, [history, leftMediaIndex, rightMediaIndex, activeLeftMediaCategory, activeRightMediaCategory, theme, globalFavorites]);
+  }, [history, leftMediaIndex, rightMediaIndex, activeLeftMediaCategory, activeRightMediaCategory, getMediaCategoriesForEntity]);
 
   const toggleFavorite = (side: 'left' | 'right') => {
     if (!history.length || !mediaCalculation) return;

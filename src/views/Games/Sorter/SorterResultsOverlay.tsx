@@ -12,7 +12,6 @@ interface SorterResultsOverlayProps {
 }
 
 export function SorterResultsOverlay({ theme, finalPool, extractMediaUrls, onClose }: SorterResultsOverlayProps) {
-  // Close the pane on Escape without touching the sorter behind it
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
