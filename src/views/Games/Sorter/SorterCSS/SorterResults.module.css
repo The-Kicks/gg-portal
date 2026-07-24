@@ -104,7 +104,6 @@
   aspect-ratio: 2.5 / 3.5;
   background-color: #141416;
   border-radius: 16px;
-  overflow: hidden;
   border: 1px solid #1e1e22;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -140,9 +139,8 @@
   width: 100%;
   height: 100%;
   position: relative;
-  overflow: hidden;
   border-radius: 16px;
-  /* Tier colour is applied inline; transparent keeps the ring invisible until set */
+  overflow: hidden; /* Hier mag het wel, zodat de foto de hoeken volgt, maar de absolute knop erbovenop kan vallen als we die erbuiten plaatsen of goed z-indexen */
   border: 3px solid transparent;
 }
 
@@ -204,4 +202,62 @@
   font-weight: 800;
   letter-spacing: 0.03em;
   color: #09090b;
+}
+
+.favoriteToggleBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 30;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  transition: transform 0.1s ease;
+}
+
+.favoriteToggleBtn:hover {
+  transform: scale(1.1);
+}
+
+.scrollControls {
+  position: absolute;
+  bottom: 80px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.scrollButton {
+  pointer-events: auto;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid #fff;
+  color: #fff;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.scrollIndicator {
+  background: rgba(0,0,0,0.8);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
 }

@@ -10,6 +10,12 @@ import styles from './SorterCSS/SorterSetup.module.css';
 
 export type SorterEntity = HydratedEntity;
 
+export interface MediaCategoryGroup {
+  key: string;
+  label: string;
+  urls: string[];
+}
+
 interface SorterViewPageProps {
   theme: Theme;
 }
@@ -24,7 +30,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
   const storageKey = `sorter_save_${theme.id}`;
   const favoritesStorageKey = `sorter_favorites_${theme.id}`;
 
-  // --- BASE STATES & MEMOS ---
   const entitiesWithEloState = useMemo<EloExtended<SorterEntity>[]>(() => {
     const allEntities = theme.entities || [];
     return allEntities.map((entity: HydratedEntity) => ({
@@ -68,27 +73,26 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     ].map((group) => group.id);
   }, [filterCategories]);
 
-  // --- UI STATES ---
   const [includedGroupIds, setIncludedGroupIds] = useState<string[]>(() => getGroupIdsFromTheme(theme));
 
-  // --- GLOBAL PERMANENT FAVORITES ---
-  const [globalFavorites, setGlobalFavorites] = useState<Record<string, string>>(() => {
+  const [globalFavorites, setGlobalFavorites] = useState<Record<string, string[]>>(() => {
     const saved = localStorage.getItem(favoritesStorageKey);
     return saved ? JSON.parse(saved) : {};
   });
 
-  // --- ACTIVE SORTER RUNTIME STATES ---
   const [tournamentList, setTournamentList] = useState<EloExtended<SorterEntity>[]>([]);
   const [history, setHistory] = useState<[EloExtended<SorterEntity>, EloExtended<SorterEntity>][]>([]);
   const [hasSave, setHasSave] = useState<boolean>(() => localStorage.getItem(storageKey) !== null);
 
-  // --- PRESENTATION & INTERACTION STATES ---
   const [leftMediaIndex, setLeftMediaIndex] = useState<number>(0);
   const [rightMediaIndex, setRightMediaIndex] = useState<number>(0);
+  
+  const [activeLeftMediaCategory, setActiveLeftMediaCategory] = useState<string | null>(null);
+  const [activeRightMediaCategory, setActiveRightMediaCategory] = useState<string | null>(null);
+
   const [hoveredAction, setHoveredAction] = useState<string>('Hover over a key to see its function');
   const [showResultsOverlay, setShowResultsOverlay] = useState<boolean>(false);
 
-  // Reset indices & sync bij matchup wissel
   const [prevLeftId, setPrevLeftId] = useState<string>('');
   const [prevRightId, setPrevRightId] = useState<string>('');
 
@@ -97,14 +101,15 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     if (leftItem.id !== prevLeftId) {
       setPrevLeftId(leftItem.id);
       setLeftMediaIndex(0);
+      setActiveLeftMediaCategory(null);
     }
     if (rightItem.id !== prevRightId) {
       setPrevRightId(rightItem.id);
       setRightMediaIndex(0);
+      setActiveRightMediaCategory(null);
     }
   }
 
-  // Synchroniseer state als het thema verandert
   const [prevTheme, setPrevTheme] = useState<Theme>(theme);
   if (theme !== prevTheme) {
     setPrevTheme(theme);
@@ -115,7 +120,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     setGlobalFavorites(savedFavs ? JSON.parse(savedFavs) : {});
   }
 
-  // SCROLL LOCK
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
     if (appContainerEl) {
@@ -132,7 +136,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     };
   }, []);
 
-  // --- HANDLERS ---
   const handleToggleInclusion = (id: string): void => {
     setIncludedGroupIds((prevIds) =>
       prevIds.includes(id) ? prevIds.filter((itemId) => itemId !== id) : [...prevIds, id]
@@ -169,6 +172,15 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     }
   };
 
+  // --- CLEAR FAVORITES MET BEVESTIGING ---
+  const handleClearFavorites = (): void => {
+    const confirmed = window.confirm('Are you sure you want to delete all favorites?');
+    if (!confirmed) return;
+
+    setGlobalFavorites({});
+    localStorage.removeItem(favoritesStorageKey);
+  };
+
   const handleStartSorter = (): void => {
     setTournamentList(activeMatchCandidates);
 
@@ -181,7 +193,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     if (!history.length) return;
 
     const [leftItem, rightItem] = history.at(-1)!;
-    // Snapshot the pre-vote entities so handleUndo can restore them later
     const snapshot: [EloExtended<SorterEntity>, EloExtended<SorterEntity>] = [{ ...leftItem }, { ...rightItem }];
 
     processMatch(leftItem, rightItem, winner);
@@ -198,7 +209,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
   const handleUndo = (): void => {
     if (history.length <= 1) return;
 
-    // The matchup we're returning to still holds its pre-vote snapshot
     const [leftItem, rightItem] = history.at(-2)!;
 
     setHistory((prevHistory) => {
@@ -214,82 +224,159 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     );
   };
 
-  // --- MEDIA COMPONENT GENERATION ---
+  // --- ALTIJD FAVORITES ZICHTBAAR MAKEN (LOSGEKOPPELD VAN REGULIER MEDIA) ---
+  const getMediaCategoriesForEntity = (entity: SorterEntity): MediaCategoryGroup[] => {
+    const groups: MediaCategoryGroup[] = [];
+
+    // 1. Favorites album (altijd als eerste getoond, puur op basis van globalFavorites)
+    const favs = globalFavorites[entity.id] || [];
+    groups.push({
+      key: 'favorites',
+      label: '⭐',
+      urls: favs,
+    });
+
+    // 2. Samengevoegde Profile Categorie (profileCard + heroBanner)
+    const profileUrls: string[] = [];
+    if (entity.image?.profileCard) {
+      profileUrls.push(entity.image.profileCard.trim());
+    }
+    if (entity.image?.heroBanner) {
+      profileUrls.push(entity.image.heroBanner.trim());
+    }
+
+    if (profileUrls.length > 0) {
+      groups.push({
+        key: 'profile',
+        label: theme.labels?.profileCard || 'Profile',
+        urls: profileUrls,
+      });
+    }
+
+    // 3. Overige dynamische media keys
+    const layerMetadata = theme.layerMetadata[entity.type];
+    if (layerMetadata && layerMetadata.mediaKeys) {
+      layerMetadata.mediaKeys.forEach((key) => {
+        if (key === 'profileCard' || key === 'heroBanner') return;
+        const dynamicData = entity.image[key];
+        const urls: string[] = [];
+        if (typeof dynamicData === 'string') {
+          urls.push(...dynamicData.split(' ').map((u) => u.trim()).filter(Boolean));
+        } else if (Array.isArray(dynamicData)) {
+          urls.push(...dynamicData.filter((u): u is string => typeof u === 'string').map((u) => u.trim()));
+        }
+
+        if (urls.length > 0) {
+          groups.push({
+            key,
+            label: theme.labels?.[key] || key,
+            urls,
+          });
+        }
+      });
+    }
+
+    return groups;
+  };
+
   const mediaCalculation = useMemo(() => {
     if (!history.length) return null;
     const [leftItem, rightItem] = history.at(-1)!;
 
-    const currentLeftFav = globalFavorites[leftItem.id] || '';
-    const currentRightFav = globalFavorites[rightItem.id] || '';
+    const leftCategories = getMediaCategoriesForEntity(leftItem);
+    const rightCategories = getMediaCategoriesForEntity(rightItem);
 
-    const rawLeftMedia = extractMediaUrls(leftItem, theme);
-    const rawRightMedia = extractMediaUrls(rightItem, theme);
+    const getFilteredUrls = (categories: MediaCategoryGroup[], activeCat: string | null) => {
+      if (activeCat) {
+        const found = categories.find((c) => c.key === activeCat);
+        return found ? found.urls : [];
+      }
+      return categories.flatMap((c) => c.urls);
+    };
 
-    // PASSED: We voegen de favoriet toe aan het begin zónder hem uit de originele lijst te filteren (Dupliceren)
-    const leftItemMedia = currentLeftFav && rawLeftMedia.includes(currentLeftFav)
-      ? [currentLeftFav, ...rawLeftMedia]
-      : rawLeftMedia;
-
-    const rightItemMedia = currentRightFav && rawRightMedia.includes(currentRightFav)
-      ? [currentRightFav, ...rawRightMedia]
-      : rawRightMedia;
+    const leftItemMedia = getFilteredUrls(leftCategories, activeLeftMediaCategory);
+    const rightItemMedia = getFilteredUrls(rightCategories, activeRightMediaCategory);
 
     const currentLeftMediaUrl = leftItemMedia[leftMediaIndex] || '';
     const currentRightMediaUrl = rightItemMedia[rightMediaIndex] || '';
 
     return {
+      leftCategories,
+      rightCategories,
       leftItemMedia,
       rightItemMedia,
       currentLeftMediaUrl,
       currentRightMediaUrl,
-      currentLeftFav,
-      currentRightFav,
     };
-  }, [history, leftMediaIndex, rightMediaIndex, theme, globalFavorites]);
+  }, [history, leftMediaIndex, rightMediaIndex, activeLeftMediaCategory, activeRightMediaCategory, theme, globalFavorites]);
 
   const toggleFavorite = (side: 'left' | 'right') => {
     if (!history.length || !mediaCalculation) return;
     const [leftItem, rightItem] = history.at(-1)!;
-    const { currentLeftMediaUrl, currentRightMediaUrl, currentLeftFav, currentRightFav } = mediaCalculation;
+    const { currentLeftMediaUrl, currentRightMediaUrl } = mediaCalculation;
 
     const isLeft = side === 'left';
     const targetItem = isLeft ? leftItem : rightItem;
     const currentMediaUrl = isLeft ? currentLeftMediaUrl : currentRightMediaUrl;
-    const currentFav = isLeft ? currentLeftFav : currentRightFav;
 
     if (!currentMediaUrl) return;
 
-    const nextFav = currentFav === currentMediaUrl ? '' : currentMediaUrl;
+    const currentFavs = globalFavorites[targetItem.id] || [];
+    const isCurrentlyFav = currentFavs.includes(currentMediaUrl);
+
+    let nextFavs: string[];
+    if (isCurrentlyFav) {
+      nextFavs = currentFavs.filter((url) => url !== currentMediaUrl);
+    } else {
+      nextFavs = [...currentFavs, currentMediaUrl];
+    }
 
     setGlobalFavorites((prev) => {
       const updated = { ...prev };
-      if (nextFav) {
-        updated[targetItem.id] = nextFav;
+      if (nextFavs.length > 0) {
+        updated[targetItem.id] = nextFavs;
       } else {
         delete updated[targetItem.id];
       }
+
       localStorage.setItem(favoritesStorageKey, JSON.stringify(updated));
       return updated;
     });
 
+    const categories = getMediaCategoriesForEntity(targetItem);
+    const targetCatKey = isLeft ? activeLeftMediaCategory : activeRightMediaCategory;
+    
+    const getFilteredUrlsForCount = (cats: MediaCategoryGroup[], activeCat: string | null, favOverride: string[]) => {
+      const updatedCats = cats.map(c => c.key === 'favorites' ? { ...c, urls: favOverride } : c);
+      if (activeCat) {
+        const found = updatedCats.find((c) => c.key === activeCat);
+        return found ? found.urls : [];
+      }
+      return updatedCats.flatMap((c) => c.urls);
+    };
+
+    const updatedMediaList = getFilteredUrlsForCount(categories, targetCatKey, nextFavs);
+    const newMaxLen = updatedMediaList.length;
+
     if (isLeft) {
-      setLeftMediaIndex(0);
+      const currentIndex = leftMediaIndex;
+      const nextIndex = isCurrentlyFav 
+        ? Math.max(0, Math.min(currentIndex, newMaxLen - 1)) 
+        : Math.min(currentIndex + 1, newMaxLen - 1);
+      setLeftMediaIndex(Math.max(0, nextIndex));
     } else {
-      setRightMediaIndex(0);
+      const currentIndex = rightMediaIndex;
+      const nextIndex = isCurrentlyFav 
+        ? Math.max(0, Math.min(currentIndex, newMaxLen - 1)) 
+        : Math.min(currentIndex + 1, newMaxLen - 1);
+      setRightMediaIndex(Math.max(0, nextIndex));
     }
   };
 
-  // Put the favorite first without removing it from the rest of the list
   const extractMediaWithFavorite = (entity: SorterEntity): string[] => {
-    const rawMedia = extractMediaUrls(entity, theme);
-    const fav = globalFavorites[entity.id];
-    if (fav && rawMedia.includes(fav)) {
-      return [fav, ...rawMedia];
-    }
-    return rawMedia;
+    return extractMediaUrls(entity, theme);
   };
 
-  // --- BIND CUSTOM KEYBOARD HOOK ---
   useSorterKeybinds({
     onProcessVote: handleProcessVote,
     onUndo: handleUndo,
@@ -304,8 +391,9 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     enabled: !showResultsOverlay,
   });
 
-  // --- RENDER ROUTING ---
   if (!history.length) {
+    const hasFavorites = Object.keys(globalFavorites).length > 0;
+
     return (
       <div className={styles.optionsContainer}>
         <h2 className={styles.title}>{theme.title} Sorter</h2>
@@ -321,6 +409,11 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
           {hasSave && (
             <button type="button" onClick={handleLoad} className={`${styles.actionButton} ${styles.resumeButton}`}>
               📂 Resume Saved Session
+            </button>
+          )}
+          {hasFavorites && (
+            <button type="button" onClick={handleClearFavorites} className={`${styles.actionButton} ${styles.clearFavsButton}`}>
+              🗑️ Clear Favorites
             </button>
           )}
         </div>
@@ -370,8 +463,12 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
         rightItemMedia={mediaCalculation!.rightItemMedia}
         currentLeftMediaUrl={mediaCalculation!.currentLeftMediaUrl}
         currentRightMediaUrl={mediaCalculation!.currentRightMediaUrl}
-        currentLeftFav={mediaCalculation!.currentLeftFav}
-        currentRightFav={mediaCalculation!.currentRightFav}
+        leftCategories={mediaCalculation!.leftCategories}
+        rightCategories={mediaCalculation!.rightCategories}
+        activeLeftMediaCategory={activeLeftMediaCategory}
+        activeRightMediaCategory={activeRightMediaCategory}
+        setActiveLeftMediaCategory={(cat) => { setActiveLeftMediaCategory(cat); setLeftMediaIndex(0); }}
+        setActiveRightMediaCategory={(cat) => { setActiveRightMediaCategory(cat); setRightMediaIndex(0); }}
         leftMediaIndex={leftMediaIndex}
         rightMediaIndex={rightMediaIndex}
         hoveredAction={hoveredAction}

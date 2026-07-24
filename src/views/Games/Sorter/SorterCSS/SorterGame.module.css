@@ -1,4 +1,10 @@
-*, *::before, *::after {
+/* ==========================================================================
+   1. GLOBAL RESET & LAYOUT CONTAINER
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -15,6 +21,11 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+
+/* ==========================================================================
+   2. MEDIA COLUMNS & VIGNETTE OVERLAY
+   ========================================================================== */
+
 .mediaColumn {
   position: relative;
   overflow: hidden;
@@ -23,22 +34,21 @@
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Vignette overlay ligt tussen de blur-laag en de scherpe voorgrond-media in */
+.mediaColumn:hover {
+  transform: scale(1.005);
+}
+
 .vignetteOverlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 40%, rgba(0,0,0,0.85) 100%);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0%, transparent 40%, rgba(0, 0, 0, 0.85) 100%);
   z-index: 2;
   pointer-events: none;
   transition: background 0.3s ease;
 }
 
 .mediaColumn:hover .vignetteOverlay {
-  background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, transparent 40%, rgba(0,0,0,0.7) 100%);
-}
-
-.mediaColumn:hover {
-  transform: scale(1.005);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 0%, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
 }
 
 .mediaWrapper {
@@ -56,7 +66,11 @@
   letter-spacing: 0.05em;
 }
 
-/* --- THEATER MODE EN BLUR EFFECT STYLES --- */
+
+/* ==========================================================================
+   3. MEDIA DISPLAY & BLUR EFFECTS (THEATER MODE)
+   ========================================================================== */
+
 .mediaContainer {
   position: relative;
   width: 100%;
@@ -97,12 +111,56 @@
   height: auto;
   object-fit: contain;
   border-radius: 12px;
-  /* Tier colour is applied inline; transparent keeps the ring invisible until set */
   border: 3px solid transparent;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
-/* ------------------------------------------ */
+
+/* Native Fullscreen Theater Mode */
+.mediaContainer:fullscreen {
+  background-color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.mediaContainer:fullscreen .mediaBgBlur {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  transform: scale(1.1);
+}
+
+.mediaContainer:fullscreen .mediaForegroundWrapper {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.mediaContainer:fullscreen .mediaAssetContain {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+
+/* ==========================================================================
+   4. ENTITY CARDS & FAVORITES STAR BUTTON
+   ========================================================================== */
 
 .entityCard {
   position: absolute;
@@ -119,8 +177,14 @@
   z-index: 3;
 }
 
-.entityCardLeft { left: 40px; }
-.entityCardRight { right: 40px; text-align: right; }
+.entityCardLeft {
+  left: 40px;
+}
+
+.entityCardRight {
+  right: 40px;
+  text-align: right;
+}
 
 .entityName {
   margin: 0;
@@ -140,27 +204,84 @@
   letter-spacing: 0.05em;
 }
 
+.favoriteStar {
+  position: absolute;
+  top: 32px;
+  background: rgba(10, 10, 12, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 50;
+}
+
+.mediaColumn:first-of-type .favoriteStar {
+  left: 32px;
+}
+
+.mediaColumn:last-of-type .favoriteStar {
+  right: 32px;
+}
+
+.favoriteStar:hover {
+  transform: scale(1.08);
+  background: rgba(10, 10, 12, 0.8);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.starIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.favoriteStar.isFavorite {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+
+/* ==========================================================================
+   5. CENTER COLUMN, HEADER ZONE & ACTION BUTTONS (UNDO/SAVE)
+   ========================================================================== */
+
 .centerColumn {
   background: #09090b;
   padding: 28px 24px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: space-between; /* Duwt de standings naar de onderkant */
   align-items: center;
   border-left: 1px solid #18181b;
   border-right: 1px solid #18181b;
   z-index: 10;
+  height: 100%; /* Zorgt dat de kolom de volledige hoogte pakt voor de ruimteverdeling */
 }
 
 .headerZone {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .matchCounter {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 4px;
+  width: 100%;
+  margin-bottom: 0;
 }
 
 .matchTitle {
@@ -177,33 +298,54 @@
   color: var(--text);
 }
 
-.progressContainer {
-  width: 100%;
-  background: #18181b;
-  height: 4px;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 8px;
-}
-
-.progressBar {
-  height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--primary), var(--secondary));
-  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.progressTextWrapper {
+.controlsArea {
   display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
+  width: 100%;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+  margin-bottom: 12px;
 }
 
-.progressLabel, .progressPercentage {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #52525b;
+.undoButton,
+.saveButton {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #141416;
+  border: 1px solid #202024;
+  color: #a1a1aa;
 }
+
+.undoButton:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.undoButton:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.saveButton:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+
+/* ==========================================================================
+   6. CAROUSEL CONTROLS & MEDIA CATEGORY CHIPS
+   ========================================================================== */
 
 .controlZone {
   display: flex;
@@ -277,6 +419,159 @@
   border-radius: 8px;
   border: 1px solid var(--secondary);
 }
+
+.mediaCategoryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0;
+  justify-content: center;
+  width: 100%;
+}
+
+.mediaCategoryChip {
+  flex: 1 1 calc(50% - 5px);
+  min-width: 90px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1c1c21;
+  border: 1px solid #2d2d34;
+  color: #a1a1aa;
+  padding: 0 8px;
+  font-size: 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+}
+
+.mediaCategoryChip:hover {
+  background: #27272a;
+  color: #ffffff;
+  border-color: #52525b;
+}
+
+/* 1. Actief aangeklikt: VOLLE LIJN */
+.mediaCategoryChipActive {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.mediaCategoryChipActive.favoriteChip {
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid #fbbf24;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+/* 2. Bevat de afbeelding (niet actief): STIPPELTIJN */
+.mediaCategoryChipContains {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--primary) 40%, transparent);
+  color: color-mix(in srgb, var(--text) 80%, var(--primary));
+}
+
+.mediaCategoryChipContains.favoriteChip {
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px dashed rgba(251, 191, 36, 0.4);
+  color: #fcd34d;
+}
+
+.emptyFavoriteChip {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.emptyFavoriteChip:hover {
+  opacity: 1;
+}
+
+
+/* ==========================================================================
+   7. KEYBIND MAP SECTION (NUMPAD)
+   ========================================================================== */
+
+.keybindMapSection {
+  background: #141416;
+  border: 1px solid #1e1e22;
+  border-radius: 14px;
+  padding: 16px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.keybindTitle {
+  margin: 0 0 14px 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #52525b;
+  font-weight: 700;
+}
+
+.numpadGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  gap: 6px;
+  justify-content: center;
+}
+
+.numpadKey {
+  background: #1c1c21;
+  border: 1px solid #2d2d34;
+  color: #d4d4d8;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: help;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.numpadKey:hover {
+  background: #27272a;
+  border-color: #52525b;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.keybindInterpreter {
+  margin-top: 14px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  padding: 0 4px;
+}
+
+.keybindInterpreter p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #f59e0b;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+
+/* ==========================================================================
+   8. LEADERBOARD (STANDINGS) & MISC SECTIONS
+   ========================================================================== */
 
 .leaderboardZone {
   background: #141416;
@@ -352,166 +647,6 @@
   font-weight: 500;
 }
 
-.controlsArea {
-  display: flex;
-  width: 100%;
-  gap: 10px;
-  margin: 12px 0;
-}
-
-.undoButton, .saveButton {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  font-size: 0.85rem;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.undoButton {
-  background: #141416;
-  border: 1px solid #202024;
-  color: #a1a1aa;
-}
-
-.undoButton:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #f87171;
-}
-
-.undoButton:disabled {
-  opacity: 0.2;
-  cursor: not-allowed;
-}
-
-.saveButton {
-  background: #141416;
-  border: 1px solid #202024;
-  color: #a1a1aa;
-}
-
-.saveButton:hover {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #60a5fa;
-}
-
-.keybindMapSection {
-  background: #141416;
-  border: 1px solid #1e1e22;
-  border-radius: 14px;
-  padding: 16px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.keybindTitle {
-  margin: 0 0 14px 0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #52525b;
-  font-weight: 700;
-}
-
-.numpadGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 44px);
-  gap: 6px;
-  justify-content: center;
-}
-
-.numpadKey {
-  background: #1c1c21;
-  border: 1px solid #2d2d34;
-  color: #d4d4d8;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: help;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-}
-
-.numpadKey:hover {
-  background: #27272a;
-  border-color: #52525b;
-  color: #fff;
-  transform: translateY(-1px);
-}
-
-.keybindInterpreter {
-  margin-top: 14px;
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  width: 100%;
-  padding: 0 4px;
-}
-
-.keybindInterpreter p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #f59e0b;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.favoriteStar {
-  position: absolute;
-  top: 32px;
-  background: rgba(10, 10, 12, 0.5);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.4);
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  z-index: 50;
-}
-
-.mediaColumn:first-of-type .favoriteStar { left: 32px; }
-.mediaColumn:last-of-type .favoriteStar { right: 32px; }
-
-.favoriteStar:hover {
-  transform: scale(1.08);
-  background: rgba(10, 10, 12, 0.8);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.starIcon {
-  width: 20px;
-  height: 20px;
-}
-
-.favoriteStar.isFavorite {
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.3);
-  background: rgba(251, 191, 36, 0.08);
-}
-
 .stageWrapper {
   display: flex;
   flex-direction: column;
@@ -544,9 +679,17 @@
 }
 
 @keyframes pulse {
-  0% { opacity: 0.4; }
-  50% { opacity: 1; }
-  100% { opacity: 0.4; }
+  0% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.4;
+  }
 }
 
 .stageDescription {
@@ -555,52 +698,4 @@
   line-height: 1.4;
   max-width: 280px;
   margin: 0;
-}
-
-/* ==========================================================================
-   CLEAN FULLSCREEN THEATER MODE
-   ========================================================================== */
-
-/* Wordt actief zodra de container fullscreen gaat */
-.mediaContainer:fullscreen {
-  background-color: #000; /* Zwarte achtergrond achter de blur */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 0; /* Weg met de ronde hoeken op een plat scherm */
-}
-
-/* De wazige achtergrond vult de volledige container */
-.mediaContainer:fullscreen .mediaBgBlur {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  transform: scale(1.1); /* Voorkomt witte randjes door de blur filter */
-}
-
-/* De wrapper voor de scherpe voorgrond */
-.mediaContainer:fullscreen .mediaForegroundWrapper {
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0; /* Geen padding nodig in fullscreen, we willen maximaal beeld */
-}
-
-/* De scherpe afbeelding of video zelf */
-.mediaContainer:fullscreen .mediaAssetContain {
-  width: 100%;
-  height: 100%;
-  object-fit: contain; /* Zorgt voor het behoud van de verhouding (zijkanten of boven/onder raken) */
-  border: none;
-  border-radius: 0;
-  box-shadow: none; /* Geen schaduwen nodig als we het scherm vullen */
 }

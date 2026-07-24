@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Theme } from '../../../types';
 import type { EloExtended } from './eloUtils';
 import { getTier } from './eloUtils';
-import type { SorterEntity } from './SorterViewPage';
+import type { SorterEntity, MediaCategoryGroup } from './SorterViewPage';
 import game from './SorterCSS/SorterGame.module.css';
 import results from './SorterCSS/SorterResults.module.css';
 
@@ -20,8 +20,12 @@ interface SorterViewProps {
   rightItemMedia: string[];
   currentLeftMediaUrl: string;
   currentRightMediaUrl: string;
-  currentLeftFav: string;
-  currentRightFav: string;
+  leftCategories: MediaCategoryGroup[];
+  rightCategories: MediaCategoryGroup[];
+  activeLeftMediaCategory: string | null;
+  activeRightMediaCategory: string | null;
+  setActiveLeftMediaCategory: (cat: string | null) => void;
+  setActiveRightMediaCategory: (cat: string | null) => void;
   leftMediaIndex: number;
   rightMediaIndex: number;
   hoveredAction: string;
@@ -51,8 +55,12 @@ export function SorterView({
   rightItemMedia,
   currentLeftMediaUrl,
   currentRightMediaUrl,
-  currentLeftFav,
-  currentRightFav,
+  leftCategories,
+  rightCategories,
+  activeLeftMediaCategory,
+  activeRightMediaCategory,
+  setActiveLeftMediaCategory,
+  setActiveRightMediaCategory,
   leftMediaIndex,
   rightMediaIndex,
   hoveredAction,
@@ -70,6 +78,14 @@ export function SorterView({
   const leftTier = getTier(leftItem);
   const rightTier = getTier(rightItem);
 
+  // State om de numpad sneltoetsen sectie in/uit te schakelen
+  const [showKeybinds, setShowKeybinds] = useState<boolean>(false);
+
+  const currentLeftFavs = leftCategories.find(c => c.key === 'favorites')?.urls || [];
+  const currentRightFavs = rightCategories.find(c => c.key === 'favorites')?.urls || [];
+  const isLeftFav = currentLeftFavs.includes(currentLeftMediaUrl);
+  const isRightFav = currentRightFavs.includes(currentRightMediaUrl);
+
   const renderMediaComponent = (url: string, tierColor: string): React.JSX.Element => {
     if (!url) {
       return (
@@ -83,14 +99,12 @@ export function SorterView({
 
     return (
       <div className={styles.mediaContainer} data-fullscreen-target>
-        {/* 1. Wazige achtergrond om lege ruimtes op te vullen */}
         {isVideoFile ? (
           <video src={url} autoPlay loop muted playsInline className={styles.mediaBgBlur} />
         ) : (
           <img src={url} alt="" className={styles.mediaBgBlur} />
         )}
 
-        {/* 2. Scherpe voorgrond die altijd volledig binnen het scherm past */}
         <div className={styles.mediaForegroundWrapper}>
           {isVideoFile ? (
             <video src={url} autoPlay loop muted playsInline className={styles.mediaAssetContain} style={{ borderColor: tierColor }} />
@@ -115,13 +129,13 @@ export function SorterView({
     { key: '7', label: '7', action: 'Linker Asset: Vorige (Omhoog)' },
     { key: '8', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6" /></svg>, action: 'Beide Assets: Vorige (Omhoog)' },
     { key: '9', label: '9', action: 'Rechter Asset: Vorige (Omhoog)' },
-    { key: '4', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6" /></svg>, action: 'Stem Links (A) | Hold [0]: Favoriet | Hold [Enter]: Nieuw Tabblad' },
+    { key: '4', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6" /></svg>, action: 'Stem Links (A) | Hold [0]: Favoriet album | Hold [Enter]: Nieuw Tabblad' },
     { key: '5', label: '5', action: 'Laatste stem ongedaan maken' },
-    { key: '6', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6" /></svg>, action: 'Stem Rechts (B) | Hold [0]: Favoriet | Hold [Enter]: Nieuw Tabblad' },
+    { key: '6', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6" /></svg>, action: 'Stem Rechts (B) | Hold [0]: Favoriet album | Hold [Enter]: Nieuw Tabblad' },
     { key: '1', label: '1', action: 'Linker Asset: Volgende (Omlaag)' },
     { key: '2', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>, action: 'Beide Assets: Volgende (Omlaag)' },
     { key: '3', label: '3', action: 'Rechter Asset: Volgende (Omlaag)' },
-    { key: '0', label: '0', action: 'Modifier: Houd ingedrukt + [4] of [6] om media te favorieten' },
+    { key: '0', label: '0', action: 'Modifier: Houd ingedrukt + [4] of [6] om media aan favorieten toe te voegen' },
     { key: '.', label: '•', action: 'Volledig scherm inschakelen / Video afspelen' },
     { key: 'Enter', label: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 10l-5 5 5 5M20 4v7a4 4 0 0 1-4 4H4" /></svg>, action: 'Modifier: Houd ingedrukt + [4] of [6] om bron te openen' },
   ];
@@ -136,13 +150,13 @@ export function SorterView({
         {currentLeftMediaUrl && (
           <button
             type="button"
-            className={`${styles.favoriteStar} ${currentLeftFav === currentLeftMediaUrl ? styles.isFavorite : ''}`}
+            className={`${styles.favoriteStar} ${isLeftFav ? styles.isFavorite : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite('left');
             }}
           >
-            <svg className={styles.starIcon} viewBox="0 0 24 24" fill={currentLeftFav === currentLeftMediaUrl ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+            <svg className={styles.starIcon} viewBox="0 0 24 24" fill={isLeftFav ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
           </button>
@@ -159,28 +173,96 @@ export function SorterView({
 
       {/* MIDDENSECTIE */}
       <div className={styles.centerColumn}>
-        <div className={styles.headerZone}>
-          <div className={styles.matchCounter}>
-            <span className={styles.matchTitle}>Matchup</span>
-            <span className={styles.matchNumber}>#{voteCount}</span>
+        {/* Bovenste groep: Matchcounter én Undo/Opslaan knoppen netjes bij elkaar */}
+        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '12px' }}>
+          <div className={styles.headerZone}>
+            <div className={styles.matchCounter}>
+              <span className={styles.matchTitle}>Matchup</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className={styles.matchNumber}>#{voteCount}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowKeybinds(!showKeybinds)}
+                  title={showKeybinds ? 'Verberg sneltoetsen' : 'Toon sneltoetsen'}
+                  style={{
+                    background: showKeybinds ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                    border: '1px solid',
+                    borderColor: showKeybinds ? 'rgba(59, 130, 246, 0.4)' : '#2d2d34',
+                    color: showKeybinds ? '#60a5fa' : '#a1a1aa',
+                    borderRadius: '6px',
+                    padding: '4px 6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                    <path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M8 12h.001M12 12h.001M16 12h.001M7 16h10" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* CONTROLS AREA DIRECT ONDER MATCHCOUNTER */}
+          <div className={styles.controlsArea}>
+            <button type="button" onClick={onUndo} disabled={!canUndo} className={styles.undoButton}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+              Undo
+            </button>
+            <button type="button" onClick={onSave} className={styles.saveButton}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
+              Opslaan
+            </button>
           </div>
         </div>
 
-        <div className={styles.controlsArea}>
-          <button type="button" onClick={onUndo} disabled={!canUndo} className={styles.undoButton}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
-            Undo
-          </button>
-          <button type="button" onClick={onSave} className={styles.saveButton}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
-            Opslaan
-          </button>
-        </div>
-
-        {/* Handmatige Media Carrousel Knoppen met Wrap-Around Loop */}
         <div className={styles.controlZone}>
+          {/* Linker Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls}>
             <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
+
+            {leftCategories.length > 0 && (
+              <div className={styles.mediaCategoryChips}>
+                {leftCategories.map((cat) => {
+                  const isSelected = activeLeftMediaCategory === cat.key;
+                  const containsMedia = currentLeftMediaUrl ? cat.urls.includes(currentLeftMediaUrl) : false;
+                  const isEmptyFav = cat.key === 'favorites' && cat.urls.length === 0;
+                  const isFavCat = cat.key === 'favorites';
+
+                  return (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      className={`
+                  ${styles.mediaCategoryChip} 
+                  ${isSelected ? styles.mediaCategoryChipActive : ''} 
+                  ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
+                  ${isFavCat ? styles.favoriteChip : ''} 
+                  ${isEmptyFav ? styles.emptyFavoriteChip : ''}
+                `}
+                      title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveLeftMediaCategory(isSelected ? null : cat.key);
+                      }}
+                    >
+                      {isFavCat ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill={containsMedia || isSelected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                      ) : (
+                        cat.label
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className={styles.carouselActionRow}>
               <button
                 disabled={leftItemMedia.length <= 1}
@@ -207,8 +289,48 @@ export function SorterView({
 
           <div className={styles.vsBadge}>VS</div>
 
+          {/* Rechter Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls}>
             <span className={styles.controlLabel}>Rechts ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
+
+            {rightCategories.length > 0 && (
+              <div className={styles.mediaCategoryChips}>
+                {rightCategories.map((cat) => {
+                  const isSelected = activeRightMediaCategory === cat.key;
+                  const containsMedia = currentRightMediaUrl ? cat.urls.includes(currentRightMediaUrl) : false;
+                  const isEmptyFav = cat.key === 'favorites' && cat.urls.length === 0;
+                  const isFavCat = cat.key === 'favorites';
+
+                  return (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      className={`
+                  ${styles.mediaCategoryChip} 
+                  ${isSelected ? styles.mediaCategoryChipActive : ''} 
+                  ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
+                  ${isFavCat ? styles.favoriteChip : ''} 
+                  ${isEmptyFav ? styles.emptyFavoriteChip : ''}
+                `}
+                      title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveRightMediaCategory(isSelected ? null : cat.key);
+                      }}
+                    >
+                      {isFavCat ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill={containsMedia || isSelected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                      ) : (
+                        cat.label
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className={styles.carouselActionRow}>
               <button
                 disabled={rightItemMedia.length <= 1}
@@ -235,26 +357,28 @@ export function SorterView({
         </div>
 
         {/* Visuele Keybind Numpad Map */}
-        <div className={styles.keybindMapSection}>
-          <h4 className={styles.keybindTitle}>Numpad Sneltoetsen</h4>
-          <div className={styles.numpadGrid}>
-            {numpadKeys.map((k, idx) => (
-              <div
-                key={typeof k.label === 'string' ? k.key + idx : idx}
-                className={styles.numpadKey}
-                onMouseEnter={() => setHoveredAction(k.action)}
-                onMouseLeave={() => setHoveredAction('Hover over een toets voor de functie')}
-              >
-                {k.label}
-              </div>
-            ))}
+        {showKeybinds && (
+          <div className={styles.keybindMapSection}>
+            <h4 className={styles.keybindTitle}>Numpad Sneltoetsen</h4>
+            <div className={styles.numpadGrid}>
+              {numpadKeys.map((k, idx) => (
+                <div
+                  key={typeof k.label === 'string' ? k.key + idx : idx}
+                  className={styles.numpadKey}
+                  onMouseEnter={() => setHoveredAction(k.action)}
+                  onMouseLeave={() => setHoveredAction('Hover over een toets voor de functie')}
+                >
+                  {k.label}
+                </div>
+              ))}
+            </div>
+            <div className={styles.keybindInterpreter}>
+              <p>{hoveredAction}</p>
+            </div>
           </div>
-          <div className={styles.keybindInterpreter}>
-            <p>{hoveredAction}</p>
-          </div>
-        </div>
+        )}
 
-        {/* Live Top 3 */}
+        {/* Live Top 3 (Wordt door space-between onderaan gedrukt) */}
         <div className={styles.leaderboardZone} onClick={onOpenResults}>
           <h4 className={styles.leaderboardTitle}>Standings</h4>
           <div className={styles.topThreeContainer}>
@@ -289,13 +413,13 @@ export function SorterView({
         {currentRightMediaUrl && (
           <button
             type="button"
-            className={`${styles.favoriteStar} ${currentRightFav === currentRightMediaUrl ? styles.isFavorite : ''}`}
+            className={`${styles.favoriteStar} ${isRightFav ? styles.isFavorite : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite('right');
             }}
           >
-            <svg className={styles.starIcon} viewBox="0 0 24 24" fill={currentRightFav === currentRightMediaUrl ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+            <svg className={styles.starIcon} viewBox="0 0 24 24" fill={isRightFav ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
           </button>
