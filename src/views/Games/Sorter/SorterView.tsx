@@ -8,7 +8,7 @@ import results from './SorterCSS/SorterResults.module.css';
 
 const styles = {
   ...game,
-  ...results,
+  ...results
 };
 
 interface SorterViewProps {
@@ -97,7 +97,6 @@ export function SorterView({
   const rightVideoRef = useRef<HTMLVideoElement | null>(null);
   const rightBgVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // URL state tracking tijdens render om synchronisatie en resets te garanderen zonder useEffect cascading renders
   const [prevLeftUrl, setPrevLeftUrl] = useState<string>(currentLeftMediaUrl);
   if (currentLeftMediaUrl !== prevLeftUrl) {
     setPrevLeftUrl(currentLeftMediaUrl);

@@ -288,7 +288,19 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
         const found = categories.find((c) => c.key === activeCat);
         return found ? found.urls : [];
       }
-      return categories.flatMap((c) => c.urls);
+      const seenUrls = new Set<string>();
+      const combinedUrls: string[] = [];
+
+      categories.forEach((cat) => {
+        cat.urls.forEach((url) => {
+          if (!seenUrls.has(url)) {
+            seenUrls.add(url);
+            combinedUrls.push(url);
+          }
+        });
+      });
+
+      return combinedUrls;
     };
 
     const leftItemMedia = getFilteredUrls(leftCategories, activeLeftMediaCategory);
@@ -328,6 +340,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       nextFavs = [...currentFavs, currentMediaUrl];
     }
 
+    // 1. Sla direct de nieuwe favorieten op in state en localStorage
     setGlobalFavorites((prev) => {
       const updated = { ...prev };
       if (nextFavs.length > 0) {
@@ -340,33 +353,34 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       return updated;
     });
 
-    const categories = getMediaCategoriesForEntity(targetItem);
-    const targetCatKey = isLeft ? activeLeftMediaCategory : activeRightMediaCategory;
-    
-    const getFilteredUrlsForCount = (cats: MediaCategoryGroup[], activeCat: string | null, favOverride: string[]) => {
-      const updatedCats = cats.map(c => c.key === 'favorites' ? { ...c, urls: favOverride } : c);
-      if (activeCat) {
-        const found = updatedCats.find((c) => c.key === activeCat);
-        return found ? found.urls : [];
-      }
-      return updatedCats.flatMap((c) => c.urls);
-    };
-
-    const updatedMediaList = getFilteredUrlsForCount(categories, targetCatKey, nextFavs);
-    const newMaxLen = updatedMediaList.length;
-
+    // 2. Pas de index direct aan op basis van de huidige index (zonder +1 of geforceerde sprongen)
     if (isLeft) {
-      const currentIndex = leftMediaIndex;
-      const nextIndex = isCurrentlyFav 
-        ? Math.max(0, Math.min(currentIndex, newMaxLen - 1)) 
-        : Math.min(currentIndex + 1, newMaxLen - 1);
-      setLeftMediaIndex(Math.max(0, nextIndex));
+      setLeftMediaIndex((currentIndex) => {
+        const categories = getMediaCategoriesForEntity(targetItem);
+        // Overschrijf tijdelijk de favorites met nextFavs voor een juiste berekening
+        const targetCatKey = activeLeftMediaCategory;
+        const updatedCats = categories.map(c => c.key === 'favorites' ? { ...c, urls: nextFavs } : c);
+        const filteredUrls = targetCatKey 
+          ? (updatedCats.find((c) => c.key === targetCatKey)?.urls || [])
+          : updatedCats.flatMap((c) => c.urls);
+        
+        const maxLen = filteredUrls.length;
+        if (maxLen === 0) return 0;
+        return Math.min(currentIndex, maxLen - 1);
+      });
     } else {
-      const currentIndex = rightMediaIndex;
-      const nextIndex = isCurrentlyFav 
-        ? Math.max(0, Math.min(currentIndex, newMaxLen - 1)) 
-        : Math.min(currentIndex + 1, newMaxLen - 1);
-      setRightMediaIndex(Math.max(0, nextIndex));
+      setRightMediaIndex((currentIndex) => {
+        const categories = getMediaCategoriesForEntity(targetItem);
+        const targetCatKey = activeRightMediaCategory;
+        const updatedCats = categories.map(c => c.key === 'favorites' ? { ...c, urls: nextFavs } : c);
+        const filteredUrls = targetCatKey 
+          ? (updatedCats.find((c) => c.key === targetCatKey)?.urls || [])
+          : updatedCats.flatMap((c) => c.urls);
+        
+        const maxLen = filteredUrls.length;
+        if (maxLen === 0) return 0;
+        return Math.min(currentIndex, maxLen - 1);
+      });
     }
   };
 
