@@ -227,13 +227,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     return (entity: SorterEntity): MediaCategoryGroup[] => {
       const groups: MediaCategoryGroup[] = [];
 
-      const favs = globalFavorites[entity.id] || [];
-      groups.push({
-        key: 'favorites',
-        label: '⭐',
-        urls: favs,
-      });
-
       const profileUrls: string[] = [];
       if (entity.image?.profileCard) {
         profileUrls.push(entity.image.profileCard.trim());
@@ -271,6 +264,14 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
           }
         });
       }
+
+      // Zet de favorites ALTIJD achteraan de groepen-lijst
+      const favs = globalFavorites[entity.id] || [];
+      groups.push({
+        key: 'favorites',
+        label: '⭐',
+        urls: favs,
+      });
 
       return groups;
     };
