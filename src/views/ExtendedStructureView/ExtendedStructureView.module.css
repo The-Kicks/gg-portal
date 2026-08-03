@@ -477,15 +477,23 @@
   border-radius: 1.5rem;
   padding: 1.5rem;
   box-sizing: border-box;
+  overflow: hidden; 
 }
 
 .timelineHeaderRow {
   display: grid;
   grid-template-columns: 240px 1fr;
-  align-items: flex-end; /* Aangepast voor uitlijning van labels */
+  align-items: flex-end; 
   border-bottom: 2px solid color-mix(in srgb, var(--text), transparent 90%);
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
+  /* Verwijder padding-left/right zodat hij exact uitlijnt met de rijen */
+}
+
+.timelineBarsArea {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 /* Nieuwe stijlen voor Ticks en Labels */
@@ -516,11 +524,6 @@
   opacity: 0.5;
 }
 
-.timelineBarsArea {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
 
 .timelineRowsStack {
   display: flex;

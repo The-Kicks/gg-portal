@@ -170,12 +170,11 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
           {activeLayer === 'l3' && memberTimeline && hasChildren && (
             <section className={styles.teammatesSection} style={{ marginBottom: '2.5rem' }}>
               <h2 className={styles.sectionHeading}>{'Roster Timeline'}</h2>
-
-              <div className={styles.timelineContainer}>
+              <div className={styles.timelineContainer} style={{ overflow: 'hidden' }}>
                 {/* Tijdlijn Jaren Header met Ticks en Labels */}
                 <div className={styles.timelineHeaderRow}>
                   <div className={styles.timelineMemberStickyLabel} />
-                  <div className={styles.timelineBarsArea} style={{ height: '30px' }}>
+                  <div className={styles.timelineBarsArea} style={{ height: '30px', position: 'relative' }}>
                     {memberTimeline.yearsScale.map((year, index) => {
                       const offsetPercent = memberTimeline.totalTimeRange > 0
                         ? ((year - memberTimeline.minTimelineStart) / memberTimeline.totalTimeRange) * 100
@@ -184,9 +183,23 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                       const showLabel = index % 5 === 0 || index === 0 || index === memberTimeline.yearsScale.length - 1;
 
                       return (
-                        <div key={year} style={{ position: 'absolute', left: `${offsetPercent}%`, transform: 'translateX(-50%)' }}>
+                        <div
+                          key={year}
+                          style={{
+                            position: 'absolute',
+                            left: `${offsetPercent}%`,
+                            transform: 'translateX(-50%)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center'
+                          }}
+                        >
                           <div className={styles.timelineTick} />
-                          {showLabel && <div className={styles.timelineYearLabel}>{year}</div>}
+                          {showLabel && (
+                            <div className={styles.timelineYearLabel}>
+                              {year}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
