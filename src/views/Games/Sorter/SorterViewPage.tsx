@@ -122,19 +122,35 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
+    const optionsContainerEl = document.querySelector(`.${styles.optionsContainer}`);
+    const isSetup = history.length === 0;
+
     if (appContainerEl) {
-      (appContainerEl as HTMLElement).style.height = '100vh';
-      (appContainerEl as HTMLElement).style.overflow = 'hidden';
-      document.body.style.overflow = 'hidden';
+      (appContainerEl as HTMLElement).style.height = isSetup ? 'auto' : '100vh';
+      (appContainerEl as HTMLElement).style.overflow = isSetup ? 'auto' : 'hidden';
     }
+
+    if (optionsContainerEl) {
+      (optionsContainerEl as HTMLElement).style.height = isSetup ? 'auto' : '100vh';
+      (optionsContainerEl as HTMLElement).style.maxHeight = isSetup ? 'none' : '100vh';
+      (optionsContainerEl as HTMLElement).style.overflowY = isSetup ? 'auto' : 'hidden';
+    }
+
+    document.body.style.overflow = isSetup ? 'auto' : 'hidden';
+
     return () => {
       if (appContainerEl) {
         (appContainerEl as HTMLElement).style.height = '';
         (appContainerEl as HTMLElement).style.overflow = '';
       }
+      if (optionsContainerEl) {
+        (appContainerEl as HTMLElement).style.height = '';
+        (appContainerEl as HTMLElement).style.maxHeight = '';
+        (appContainerEl as HTMLElement).style.overflowY = '';
+      }
       document.body.style.overflow = '';
     };
-  }, []);
+  }, [history.length]);
 
   const handleToggleInclusion = (id: string): void => {
     setIncludedGroupIds((prevIds) =>
