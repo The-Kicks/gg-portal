@@ -488,7 +488,17 @@ export const AdminEntityEdit: React.FC<AdminEntityEditProps> = ({ theme, entityI
           {unifiedConnections.length === 0 ? (
             <p className={styles.textMuted}>This new record is currently isolated. Connect it to map it into the timeline graph engine.</p>
           ) : (
-            unifiedConnections.map(conn => {
+            [...unifiedConnections].sort((a, b) => {
+              const getDisplayName = (conn: typeof a) => {
+                const isNonRelational = conn.metadata?.isNonRelational || conn.relatedEntityId.startsWith('virtual-track:');
+                return isNonRelational
+                  ? (typeof conn.metadata?.customTargetName === 'object'
+                    ? 'Custom Track (Foutief Object)'
+                    : conn.metadata?.customTargetName || 'Custom Shared Track')
+                  : (conn.relatedEntity?.name || conn.relatedEntityId);
+              };
+              return getDisplayName(a).localeCompare(getDisplayName(b), undefined, { numeric: true, sensitivity: 'base' });
+            }).map(conn => {
               const uniqueConnKey = `${conn.direction}-${conn.id}-${conn.relatedEntityId}`;
               const isNonRelational = conn.metadata?.isNonRelational || conn.relatedEntityId.startsWith('virtual-track:');
               const isIncoming = conn.direction === 'incoming';

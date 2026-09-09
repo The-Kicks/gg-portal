@@ -33,6 +33,49 @@ const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean =
   return scan(metadata);
 };
 
+const smartAlphanumericSort = (aName: string, bName: string) => {
+  const parsePrefix = (str: string) => {
+    const match = str.trim().match(/^([A-Za-z]*)(\d+)(.*)$/);
+    if (match) {
+      return {
+        prefix: match[1].toLowerCase(),
+        num: parseInt(match[2], 10),
+        rest: match[3]
+      };
+    }
+    const matchOnlyNum = str.trim().match(/^(\d+)(.*)$/);
+    if (matchOnlyNum) {
+      return {
+        prefix: '',
+        num: parseInt(matchOnlyNum[1], 10),
+        rest: matchOnlyNum[2]
+      };
+    }
+    return null;
+  };
+
+  const parsedA = parsePrefix(aName);
+  const parsedB = parsePrefix(bName);
+
+  // Als beide een prefix/getal structuur hebben (bijv. S1, S2, S10)
+  if (parsedA && parsedB) {
+    if (parsedA.prefix !== parsedB.prefix) {
+      return parsedA.prefix.localeCompare(parsedB.prefix);
+    }
+    if (parsedA.num !== parsedB.num) {
+      return parsedA.num - parsedB.num;
+    }
+    return parsedA.rest.localeCompare(parsedB.rest, undefined, { sensitivity: 'base' });
+  }
+
+  // Als eentje wel een nummer heeft en de ander niet, krijgt de genummerde voorrang
+  if (parsedA && !parsedB) return -1;
+  if (!parsedA && parsedB) return 1;
+
+  // Standaard alfabetische sortering als geen van beide een nummer bevat
+  return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base', ignorePunctuation: true });
+};
+
 export const L4View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const parentMap = new Map<string, ParentBucket>();
@@ -172,20 +215,20 @@ export const L4View: React.FC<Props> = ({ theme }) => {
     ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
 
   const sortGroupChildren = (children: HydratedEntity[]) => {
-    return [...children].sort((a, b) => a.name.localeCompare(b.name));
+    return [...children].sort((a, b) => smartAlphanumericSort(a.name, b.name));
   };
 
   const activeBuckets = allBuckets
     .filter((b) => !isInactiveStatus(b.parent.status || ''))
-    .sort((a, b) => a.parent.name.localeCompare(b.parent.name))
+    .sort((a, b) => smartAlphanumericSort(a.parent.name, b.parent.name))
     .map(bucket => ({ ...bucket, children: sortGroupChildren(bucket.children) }));
 
   const inactiveBuckets = allBuckets
     .filter((b) => isInactiveStatus(b.parent.status || ''))
-    .sort((a, b) => a.parent.name.localeCompare(b.parent.name))
+    .sort((a, b) => smartAlphanumericSort(a.parent.name, b.parent.name))
     .map(bucket => ({ ...bucket, children: sortGroupChildren(bucket.children) }));
 
-  standaloneEntities.sort((a, b) => a.name.localeCompare(b.name));
+  standaloneEntities.sort((a, b) => smartAlphanumericSort(a.name, b.name));
 
   return (
     <div className={styles.layerContainer}>
