@@ -87,12 +87,25 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
     }
   };
 
+  // Helper functie voor MP4 / video ondersteuning
+  const isVideoFile = (filePath: string) => {
+    return typeof filePath === 'string' && /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$/i.test(filePath);
+  };
+
   const visibleMembersCount = 9;
-  const targetMembersList = relatedL4s;
+
+  // Alfanumeriek gesorteerde ledenlijst voor de tijdlijn en weergave
+  const targetMembersList = useMemo(() => {
+    return [...relatedL4s].sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [relatedL4s]);
+
   const hasMoreThanMax = targetMembersList.length > visibleMembersCount;
   const displayedMembers = isExpanded ? targetMembersList : targetMembersList.slice(0, visibleMembersCount);
 
   const globalTodayMarker = memberTimeline?.globalTodayMarker ?? null;
+  const isProfileVideo = isVideoFile(profileCardImageUrl);
 
   return (
     <div className={styles.pageWrapper}>
@@ -110,12 +123,24 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
           <div className={styles.heroContent}>
             {hasProfileCard && (
               <div className={styles.avatarContainer}>
-                <img
-                  src={profileCardImageUrl}
-                  alt={entity.name}
-                  className={styles.floatingAvatar}
-                  onError={() => setProfileImageError(true)}
-                />
+                {isProfileVideo ? (
+                  <video
+                    src={profileCardImageUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className={styles.floatingAvatar}
+                    onError={() => setProfileImageError(true)}
+                  />
+                ) : (
+                  <img
+                    src={profileCardImageUrl}
+                    alt={entity.name}
+                    className={styles.floatingAvatar}
+                    onError={() => setProfileImageError(true)}
+                  />
+                )}
               </div>
             )}
             <div className={styles.titleBox}>
@@ -221,6 +246,8 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                     const rowData = memberTimeline.rows.find(r => r.memberId === member.id);
                     if (!rowData) return null;
 
+                    const isMemberVideo = isVideoFile(rowData.memberImage);
+
                     return (
                       <div
                         key={member.id}
@@ -229,7 +256,18 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                         style={{ cursor: 'pointer' }}
                       >
                         <div className={styles.timelineMemberMeta}>
-                          <img src={rowData.memberImage} alt="" className={styles.timelineMiniThumb} />
+                          {isMemberVideo ? (
+                            <video
+                              src={rowData.memberImage}
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                              className={styles.timelineMiniThumb}
+                            />
+                          ) : (
+                            <img src={rowData.memberImage} alt="" className={styles.timelineMiniThumb} />
+                          )}
                           <div className={styles.timelineMemberInfo}>
                             <span className={styles.timelineMemberName}>{rowData.memberName}</span>
                             <span className={styles.timelineMemberDuration}>
@@ -300,7 +338,7 @@ export const ExtendedStructureView: React.FC<ExtendedStructureViewProps> = ({
                           <div key={item.file} className={`${styles.mediaItem} ${itemLayoutClass}`}>
                             {item.type === 'image' ? (
                               <img src={mediaSourcePath} alt="" loading="lazy" onLoad={(e) => handleImageLoad(e, item.file)} />
-                            ) : item.type === 'video-file' ? (
+                            ) : item.type === 'video-file' || isVideoFile(item.file) ? (
                               <video src={mediaSourcePath} controls preload="metadata" onLoadedMetadata={(e) => handleVideoMetadata(e, item.file)} />
                             ) : (
                               <iframe src={mediaSourcePath} title={`${sectionKey}-${item.file}`} allowFullScreen />

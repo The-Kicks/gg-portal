@@ -21,18 +21,26 @@ export type GuessWhoTheme = Theme & {
   };
 };
 
+export interface DropdownOption {
+  entity: HydratedEntity;
+  displayOrg: string;
+}
+
 interface GuessWhoViewProps {
   theme: GuessWhoTheme;
   secretEntity: HydratedEntity;
   searchQuery: string;
   guesses: GuessRow[];
+  bestGuessedRow: GuessRow | null;
   gameOver: boolean;
   showDropdown: boolean;
-  filteredDropdownOptions: HydratedEntity[];
+  filteredDropdownOptions: DropdownOption[];
   setSearchQuery: (query: string) => void;
   setShowDropdown: (show: boolean) => void;
   startNewGame: () => void;
   handleSelectGuess: (entity: HydratedEntity) => void;
+  handleGiveUp: () => void;
+  handleUseHint: () => void;
   getAgeFromDateString: (birthDateStr?: unknown, passingDateStr?: unknown) => number;
 }
 
@@ -41,6 +49,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   secretEntity,
   searchQuery,
   guesses,
+  bestGuessedRow,
   gameOver,
   showDropdown,
   filteredDropdownOptions,
@@ -48,6 +57,8 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   setShowDropdown,
   startNewGame,
   handleSelectGuess,
+  handleGiveUp,
+  handleUseHint,
   getAgeFromDateString
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,10 +77,14 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (filteredDropdownOptions.length > 0) {
         e.preventDefault();
-        handleSelectGuess(filteredDropdownOptions[0]);
+        handleSelectGuess(filteredDropdownOptions[0].entity);
         setShowDropdown(false);
       }
     }
+  };
+
+  const isVideoFile = (filePath: string): boolean => {
+    return typeof filePath === 'string' && /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$|data:image\/svg\+xml/i.test(filePath);
   };
 
   const renderNationalityCell = (entity: HydratedEntity): React.ReactNode => {
@@ -85,16 +100,16 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
       nationalities = [String(rawValue).trim()];
     }
 
-    if (nationalities.length === 0) return '-';
+    if (nationalities.length === 0 || nationalities.includes('---')) return '---';
 
     return (
-      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div className={styles.nationalityFlex}>
         {nationalities.map((nat, i) => (
-          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }} title={nat}>
+          <span key={i} className={styles.nationalityItem} title={nat}>
             <ReactCountryFlag
               countryCode={nat.toUpperCase()}
               svg
-              style={{ width: '1.4em', height: '1em', borderRadius: '2px', objectFit: 'cover' }}
+              className={styles.flagIcon}
             />
             <span>{nat}</span>
           </span>
@@ -111,6 +126,7 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   };
 
   const renderNumericDisplay = (value: unknown, suffix = ''): string => {
+    if (value === '---') return '---';
     const num = Number(value || 0);
     if (!num || isNaN(num)) return '-';
     return `${num}${suffix}`;
@@ -119,6 +135,30 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
   const getProfileImage = (entity: HydratedEntity): string => {
     const imgObj = entity.image as Record<string, unknown> | null;
     return (imgObj && typeof imgObj.profileCard === 'string') ? imgObj.profileCard : 'https://via.placeholder.com/50';
+  };
+
+  const renderProfileMedia = (entity: HydratedEntity, className: string): React.ReactNode => {
+    const profileUrl = getProfileImage(entity);
+    if (profileUrl === 'inline-lightbulb-svg') {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#eab308" className={className}>
+          <path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9v1z"/>
+        </svg>
+      );
+    }
+    if (isVideoFile(profileUrl)) {
+      return (
+        <video
+          src={profileUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className={className}
+        />
+      );
+    }
+    return <img src={profileUrl} alt="" className={className} />;
   };
 
   const activeColumns = useMemo(() => {
@@ -137,6 +177,8 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
     return allColumns.filter(col => !disabledList.includes(col.id.toLowerCase()));
   }, [theme]);
 
+  const isHintPlaceholder = (entity: HydratedEntity) => entity.id === 'hint-placeholder';
+
   return (
     <div className={styles.container}>
       <div className={styles.headerBox}>
@@ -148,89 +190,243 @@ export const GuessWhoView: React.FC<GuessWhoViewProps> = ({
 
       {gameOver ? (
         <div className={styles.victoryCard}>
-          <h2>🎉 Congratulations!</h2>
-          <p>You correctly guessed <strong>{secretEntity.name}</strong>!</p>
+          {renderProfileMedia(secretEntity, styles.victoryAvatar)}
+          <h2>🎉 Game Over</h2>
+          <p>The hidden {theme.labels?.l4 || 'individual'} was <strong>{secretEntity.name}</strong>!</p>
           <button className={styles.actionBtn} onClick={startNewGame}>Play Again</button>
         </div>
-      ) : (
-        <div className={styles.searchWrapper} ref={containerRef}>
-          <input
-            type="text"
-            className={styles.searchBar}
-            placeholder={`Search and guess ${theme.labels?.l4 || 'individuals'}...`}
-            value={searchQuery}
-            onFocus={() => setShowDropdown(true)}
-            onChange={e => {
-              setSearchQuery(e.target.value);
-              setShowDropdown(true);
-            }}
-            onKeyDown={handleKeyDown}
-          />
-          {showDropdown && filteredDropdownOptions.length > 0 && (
-            <ul className={styles.dropdown}>
-              {filteredDropdownOptions.map((e, index) => (
-                <li key={e.id} className={styles.dropdownItem} onClick={() => {
-                  handleSelectGuess(e);
-                  setShowDropdown(false);
-                }}>
-                  <img src={getProfileImage(e)} alt="" className={styles.avatarMini} />
-                  <div>
-                    <div className={styles.dropName}>
-                      {e.name}
-                      {index === 0 && searchQuery && (
-                        <span style={{ opacity: 0.4, fontSize: '11px', fontStyle: 'italic', marginLeft: '8px' }}>
-                          (Press Enter/Tab)
-                        </span>
-                      )}
+      ) : null}
+
+      {/* ACCUMULATED HINTS ROW */}
+      {bestGuessedRow && guesses.length > 0 && (
+        <div className={styles.bestRowContainer}>
+          <div className={styles.bestRowTitle}>🎯 Accumulated Correct Hints:</div>
+          <div className={styles.tableResponsive}>
+            <table className={`${styles.gameTable} ${styles.bestRowTable}`}>
+              <colgroup>
+                {activeColumns.map(col => (
+                  <col key={col.id} className={styles[`col_${col.id}`]} />
+                ))}
+              </colgroup>
+              <tbody>
+                <tr className={styles.highlightRow}>
+                  {activeColumns.map(col => {
+                    const sMeta = secretEntity.metadata as Record<string, unknown> | undefined;
+                    switch (col.id) {
+                      case 'profile': return <td key={col.id} className={styles.cellProfile}>-</td>;
+                      case 'name': {
+                        const isCorrect = bestGuessedRow.checks.name === 'correct';
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect ? secretEntity.name : '-'}
+                          </td>
+                        );
+                      }
+                      case 'org': {
+                        const isCorrect = bestGuessedRow.checks.org === 'correct';
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect ? bestGuessedRow.displayOrg : '-'}
+                          </td>
+                        );
+                      }
+                      case 'nationality': {
+                        const isCorrect = bestGuessedRow.checks.nationality === 'correct';
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect ? renderNationalityCell(secretEntity) : '-'}
+                          </td>
+                        );
+                      }
+                      case 'role': {
+                        const isCorrect = bestGuessedRow.checks.role === 'correct';
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect ? renderMetadataString(secretEntity, 'Role') : '-'}
+                          </td>
+                        );
+                      }
+                      case 'debut': {
+                        const isCorrect = bestGuessedRow.checks.debut === 'correct';
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect ? renderNumericDisplay(sMeta?.DebutYear) : '-'}
+                          </td>
+                        );
+                      }
+                      case 'age': { 
+                        const isCorrect = bestGuessedRow.checks.age === 'correct';
+                        const ageVal = getAgeFromDateString(sMeta?.Birthday, sMeta?.PassingDate);
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect && sMeta?.Birthday ? `${ageVal}` : '-'}
+                          </td>
+                        );
+                      }
+                      case 'height': {
+                        const isCorrect = bestGuessedRow.checks.height === 'correct';
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${isCorrect ? styles.correct : styles.hintCell}`}>
+                            {isCorrect ? renderNumericDisplay(sMeta?.Height, 'cm') : '-'}
+                          </td>
+                        );
+                      }
+                      default: return null;
+                    }
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* SEARCH, DROPDOWN & ACTION BUTTONS IN ONE FLEX ROW */}
+      {!gameOver && (
+        <div className={styles.searchAndButtonsContainer}>
+          <div className={styles.searchWrapper} ref={containerRef}>
+            <input
+              type="text"
+              className={styles.searchBar}
+              placeholder={`Search and guess ${theme.labels?.l4 || 'individuals'}...`}
+              value={searchQuery}
+              onFocus={() => setShowDropdown(true)}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setShowDropdown(true);
+              }}
+              onKeyDown={handleKeyDown}
+            />
+            {showDropdown && filteredDropdownOptions.length > 0 && (
+              <ul className={styles.dropdown}>
+                {filteredDropdownOptions.map((item, index) => (
+                  <li key={item.entity.id} className={styles.dropdownItem} onClick={() => {
+                    handleSelectGuess(item.entity);
+                    setShowDropdown(false);
+                  }}>
+                    {renderProfileMedia(item.entity, styles.avatarDropdown)}
+                    <div className={styles.dropInfo}>
+                      <div className={styles.dropName}>
+                        {item.entity.name} <span className={styles.dropOrg}>({item.displayOrg})</span>
+                        {index === 0 && searchQuery && (
+                          <span className={styles.enterTabHint}>
+                            (Press Enter/Tab)
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className={styles.actionButtonsWrapper}>
+            <button className={`${styles.actionBtn} ${styles.hintBtnColor}`} onClick={handleUseHint}>
+              💡 Hint
+            </button>
+            <button className={`${styles.actionBtn} ${styles.giveUpBtnColor}`} onClick={handleGiveUp}>
+              🏳️ Give up
+            </button>
+          </div>
         </div>
       )}
 
       <div className={styles.tableResponsive}>
         <table className={styles.gameTable}>
+          <colgroup>
+            {activeColumns.map(col => (
+              <col key={col.id} className={styles[`col_${col.id}`]} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               {activeColumns.map(col => <th key={col.id}>{col.label}</th>)}
             </tr>
           </thead>
           <tbody>
-            {guesses.map((row, idx) => (
-              <tr key={idx}>
-                {activeColumns.map(col => {
-                  const meta = row.entity.metadata as Record<string, unknown> | undefined;
-                  switch (col.id) {
-                    case 'profile': return <td key={col.id} className={styles.cellProfile}><img src={getProfileImage(row.entity)} alt="" className={styles.tableAvatar} /></td>;
-                    case 'name': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.name]}`}>{row.entity.name || '-'}</td>;
-                    case 'org': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.org]}`}>{row.displayOrg || '-'}</td>;
-                    case 'nationality': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.nationality]}`}>{renderNationalityCell(row.entity)}</td>;
-                    case 'role': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.role]}`}>{renderMetadataString(row.entity, 'Role')}</td>;
-                    case 'debut': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.debut]}`}>{renderNumericDisplay(meta?.DebutYear)} {row.arrows.debut}</td>;
-                    case 'age': { 
-                      const ageVal = getAgeFromDateString(meta?.Birthday, meta?.PassingDate);
-                      const hasPassingDate = !!meta?.PassingDate;
+            {guesses.map((row, idx) => {
+              const isHint = isHintPlaceholder(row.entity);
 
-                      return (
-                        <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.age]}`}>
-                          {meta?.Birthday ? (
-                            <>
-                              {ageVal} {row.arrows.age}
-                              {hasPassingDate && <span title="Deceased"> 🕊️</span>}
-                            </>
-                          ) : '-'}
-                        </td>
-                      );
+              return (
+                <tr key={idx}>
+                  {activeColumns.map(col => {
+                    const meta = row.entity.metadata as Record<string, unknown> | undefined;
+                    
+                    switch (col.id) {
+                      case 'profile': 
+                        return (
+                          <td key={col.id} className={styles.cellProfile}>
+                            {renderProfileMedia(row.entity, styles.tableAvatar)}
+                          </td>
+                        );
+                      case 'name': {
+                        const val = row.entity.name || '-';
+                        const cls = isHint 
+                          ? (row.checks.name === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.name];
+                        return <td key={col.id} className={`${styles.cellBox} ${cls}`}>{val}</td>;
+                      }
+                      case 'org': {
+                        const val = row.displayOrg || '-';
+                        const cls = isHint 
+                          ? (row.checks.org === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.org];
+                        return <td key={col.id} className={`${styles.cellBox} ${cls}`}>{val}</td>;
+                      }
+                      case 'nationality': {
+                        const cellContent = renderNationalityCell(row.entity);
+                        const cls = isHint 
+                          ? (row.checks.nationality === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.nationality];
+                        return <td key={col.id} className={`${styles.cellBox} ${cls}`}>{cellContent}</td>;
+                      }
+                      case 'role': {
+                        const val = renderMetadataString(row.entity, 'Role');
+                        const cls = isHint 
+                          ? (row.checks.role === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.role];
+                        return <td key={col.id} className={`${styles.cellBox} ${cls}`}>{val}</td>;
+                      }
+                      case 'debut': {
+                        const val = renderNumericDisplay(meta?.DebutYear);
+                        const cls = isHint 
+                          ? (row.checks.debut === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.debut];
+                        return <td key={col.id} className={`${styles.cellBox} ${cls}`}>{val} {row.arrows.debut}</td>;
+                      }
+                      case 'age': { 
+                        const ageVal = getAgeFromDateString(meta?.Birthday, meta?.PassingDate);
+                        const hasPassingDate = !!meta?.PassingDate;
+                        const hasValidBday = meta?.Birthday && meta.Birthday !== '---';
+                        const cls = isHint 
+                          ? (row.checks.age === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.age];
+
+                        return (
+                          <td key={col.id} className={`${styles.cellBox} ${cls}`}>
+                            {hasValidBday ? (
+                              <>
+                                {ageVal} {row.arrows.age}
+                                {hasPassingDate && <span title="Deceased"> 🕊️</span>}
+                              </>
+                            ) : '---'}
+                          </td>
+                        );
+                      }
+                      case 'height': {
+                        const val = renderNumericDisplay(meta?.Height, 'cm');
+                        const cls = isHint 
+                          ? (row.checks.height === 'correct' ? styles.correct : styles.hintCell) 
+                          : styles[row.checks.height];
+                        return <td key={col.id} className={`${styles.cellBox} ${cls}`}>{val} {row.arrows.height}</td>;
+                      }
+                      default: return null;
                     }
-                    case 'height': return <td key={col.id} className={`${styles.cellBox} ${styles[row.checks.height]}`}>{renderNumericDisplay(meta?.Height, 'cm')} {row.arrows.height}</td>;
-                    default: return null;
-                  }
-                })}
-              </tr>
-            ))}
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
