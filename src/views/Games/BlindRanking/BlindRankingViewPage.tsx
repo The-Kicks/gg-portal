@@ -11,8 +11,9 @@ interface GameSettingsConfig {
   blindranking?: BlindRankingSettings;
 }
 
-export interface BlindRankingTheme extends Omit<Theme, 'gameSettings'> {
+export interface BlindRankingTheme extends Omit<Theme, 'gameSettings' | 'orgLayer'> {
   gameSettings?: GameSettingsConfig;
+  orgLayer?: string;
 }
 
 interface Props {
@@ -22,11 +23,6 @@ interface Props {
 /**
  * Checks if a target entity ID is a parent or ancestor of a given entity
  * by searching top-down through the connections defined on the parent entities.
- *
- * @param currentEntityId The ID of the entity we want to trace upwards (e.g. an L4 ID)
- * @param targetL1Id The ID of the L1 category we want to match against
- * @param allEntities The entire hydrated graph from the theme dataset
- * @param depth Safety guard to prevent infinite traversal loops
  */
 const checkL1ConnectionTopDown = (
   currentEntityId: string,
@@ -83,7 +79,6 @@ interface EngineProps {
 }
 
 const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, availableEntities }) => {
-  
   const availableCategories = useMemo<string[]>(() => {
     const adminCategories = theme.gameSettings?.blindranking?.availableCategories;
     if (Array.isArray(adminCategories) && adminCategories.length > 0) {
@@ -105,6 +100,14 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
 
   const maxSlots = shuffledEntities.length;
   const currentEntity = shuffledEntities[currentIndex] as HydratedEntity | undefined;
+
+  const organizationName = useMemo<string | undefined>(() => {
+    if (!currentEntity || !theme.orgLayer) return undefined;
+    const orgConnection = currentEntity.targetConnections?.find(
+      (conn) => conn.sourceEntity?.type === theme.orgLayer
+    );
+    return orgConnection?.sourceEntity?.name;
+  }, [currentEntity, theme.orgLayer]);
 
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
@@ -313,6 +316,7 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
       maxSlots={maxSlots}
       leftSlots={leftSlots}
       rightSlots={rightSlots}
+      organizationName={organizationName}
       setIsPlaying={setIsPlaying}
       handleStartGame={handleStartGame}
       handlePlaceEntity={handlePlaceEntity}
