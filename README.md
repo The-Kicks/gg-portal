@@ -29,7 +29,7 @@ npm install
 ```
 
 ### 2. Backend Setup (Prisma & Database)
-Make sure your database connection is configured in your `.env` file.
+Make sure your database connection is configured in your `.env` file. Front- and Back-end
 
 **First-time setup (empty database):** run the following commands to push the schema and load the starter dataset:
 
