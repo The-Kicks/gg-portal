@@ -4,6 +4,8 @@ import { PortalCard } from "../../core/components/UI/PortalCard/PortalCard.tsx";
 import { PortalGroup } from '../../core/components/UI/PortalCard/PortalGroup.tsx';
 import { useNavigate } from 'react-router-dom';
 import { useGuessWhoStats } from './useGuessWhoStats';
+import { useBlindRankingStats } from './useBlindRankingStats';
+import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/EntityCard.tsx'
 
 interface HomeProps {
   theme: Theme;
@@ -16,15 +18,10 @@ interface SorterEntity {
   elo: number;
 }
 
-interface BlindRankingEntity {
-  id: string;
-  name: string;
-  rank: number;
-}
-
 export const Home = ({ theme, isDark }: HomeProps) => {
   const navigate = useNavigate();
   const { username, guessWhoStats } = useGuessWhoStats(theme.id);
+  const { topBlindRankingItems } = useBlindRankingStats(theme.id);
 
   const availableGames = theme.games.map(g => g.toLowerCase());
   const hasSorter = availableGames.includes('sorter');
@@ -37,12 +34,6 @@ export const Home = ({ theme, isDark }: HomeProps) => {
     { id: '3', name: 'Elden Ring', elo: 1720 },
     { id: '4', name: 'The Witcher 3', elo: 1650 },
     { id: '5', name: 'Hades II', elo: 1590 },
-  ];
-
-  const placeholderBlindRankingTop3: BlindRankingEntity[] = [
-    { id: '1', name: 'Elden Ring', rank: 1 },
-    { id: '2', name: 'Baldur’s Gate 3', rank: 2 },
-    { id: '3', name: 'Cyberpunk 2077', rank: 3 },
   ];
 
   const numGames = theme.games.length;
@@ -136,7 +127,6 @@ export const Home = ({ theme, isDark }: HomeProps) => {
                   </div>
                 </div>
 
-                {/* Extra sectie: Vaakst correct geraden item */}
                 <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <span style={{ fontSize: '0.8rem', opacity: 0.7, display: 'block' }}>Vaakst correct geraden:</span>
@@ -152,44 +142,79 @@ export const Home = ({ theme, isDark }: HomeProps) => {
             )}
 
             {/* 3. BLIND RANKING STATS KAARTJE */}
-            {hasBlindRanking && (
-              <div className={styles.statCard}>
-                <div className={styles.statCardHeader}>
-                  <h3>Blind Ranking Top 3 (Gemiddeld)</h3>
-                  <span className={styles.badge}>Blind Ranking</span>
-                </div>
+{hasBlindRanking && (
+  <div className={styles.statCard}>
+    <div className={styles.statCardHeader}>
+      <h3>Blind Ranking Top 3 (Gemiddeld)</h3>
+      <span className={styles.badge}>Blind Ranking</span>
+    </div>
 
-                <div className={styles.podiumContainer}>
-                  {placeholderBlindRankingTop3[1] && (
-                    <div className={`${styles.podiumItem} ${styles.podiumSecond}`}>
-                      <div className={styles.podiumCard}>
-                        <span className={styles.podiumRank}>#2</span>
-                        <span className={styles.podiumName}>{placeholderBlindRankingTop3[1].name}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {placeholderBlindRankingTop3[0] && (
-                    <div className={`${styles.podiumItem} ${styles.podiumFirst}`}>
-                      <div className={`${styles.podiumCard} ${styles.podiumCardFirst}`}>
-                        <span className={styles.podiumCrown}>👑</span>
-                        <span className={styles.podiumRank}>#1</span>
-                        <span className={styles.podiumName}>{placeholderBlindRankingTop3[0].name}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {placeholderBlindRankingTop3[2] && (
-                    <div className={`${styles.podiumItem} ${styles.podiumThird}`}>
-                      <div className={styles.podiumCard}>
-                        <span className={styles.podiumRank}>#3</span>
-                        <span className={styles.podiumName}>{placeholderBlindRankingTop3[2].name}</span>
-                      </div>
-                    </div>
-                  )}
+    <div className={styles.podiumContainer}>
+      {topBlindRankingItems.length > 0 ? (
+        <>
+          {/* #2 plek (Zilver) */}
+          {topBlindRankingItems[1] && (() => {
+            const entity = theme.entities?.find(e => e.id === topBlindRankingItems[1].id);
+            return entity ? (
+              <div className={`${styles.podiumItem} ${styles.podiumSecond}`}>
+                <span className={styles.podiumRank}>#2</span>
+                <div className={`${styles.entityCardScaleWrapper} ${styles.podiumEntityBorderSilver}`}>
+                  <EntityCard
+                    entity={entity}
+                    activeKey="l4"
+                    theme={theme}
+                    labels={theme.labels || {}}
+                  />
                 </div>
               </div>
-            )}
+            ) : null;
+          })()}
+
+          {/* #1 plek (Goud) */}
+          {topBlindRankingItems[0] && (() => {
+            const entity = theme.entities?.find(e => e.id === topBlindRankingItems[0].id);
+            return entity ? (
+              <div className={`${styles.podiumItem} ${styles.podiumFirst}`}>
+                <span className={styles.podiumCrown}>👑</span>
+                <span className={styles.podiumRank}>#1</span>
+                <div className={`${styles.entityCardScaleWrapper} ${styles.podiumEntityBorderFirst}`}>
+                  <EntityCard
+                    entity={entity}
+                    activeKey="l4"
+                    theme={theme}
+                    labels={theme.labels || {}}
+                  />
+                </div>
+              </div>
+            ) : null;
+          })()}
+
+          {/* #3 plek (Brons) */}
+          {topBlindRankingItems[2] && (() => {
+            const entity = theme.entities?.find(e => e.id === topBlindRankingItems[2].id);
+            return entity ? (
+              <div className={`${styles.podiumItem} ${styles.podiumThird}`}>
+                <span className={styles.podiumRank}>#3</span>
+                <div className={`${styles.entityCardScaleWrapper} ${styles.podiumEntityBorderBronze}`}>
+                  <EntityCard
+                    entity={entity}
+                    activeKey="l4"
+                    theme={theme}
+                    labels={theme.labels || {}}
+                  />
+                </div>
+              </div>
+            ) : null;
+           })()}
+        </>
+      ) : (
+        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem 0', opacity: 0.6, fontSize: '0.9rem' }}>
+          Nog geen Blind Ranking gespeeld.
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
           </div>
         </div>

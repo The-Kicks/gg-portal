@@ -279,62 +279,64 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 0.75rem;
-  height: 200px;
-  padding-top: 1rem;
+  padding-top: 0.2rem;
 }
 
 .podiumItem {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .podiumFirst {
-  transform: translateY(-15px);
-  /* Nummer 1 staat hoger */
-}
-
-.podiumCard {
-  background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
-  padding: 1rem 0.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  height: 100px;
-  justify-content: center;
-  position: relative;
-}
-
-.podiumCardFirst {
-  background: linear-gradient(to bottom, rgba(234, 179, 8, 0.15), rgba(12, 12, 15, 0.9));
-  border-color: rgba(234, 179, 8, 0.4);
-  height: 120px;
+  transform: translateY(-12px);
+  /* Nummer 1 staat visueel hoger */
 }
 
 .podiumCrown {
-  font-size: 1.1rem;
-  margin-bottom: 0.2rem;
+  font-size: 1rem;
+  margin-bottom: 0.05rem;
+  line-height: 1;
 }
 
 .podiumRank {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: #a1a1aa;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.15rem;
 }
 
-.podiumName {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #ffffff;
+/* Schaal-wrapper: compenseert zowel de boven- als onderruimte van de geschaalde EntityCard */
+.entityCardScaleWrapper {
+  width: 100%;
+  transform: scale(0.7);
+  transform-origin: top center;
+  margin-top: -4px;
+  margin-bottom: -150px; /* Trekt alle lege onderruimte volledig weg */
+  border-radius: 0.75rem;
   overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  background-color: #0c0c0f;
+}
+
+/* #1 Goud / Gold Styling */
+.podiumEntityBorderFirst {
+  border: 2px solid rgba(234, 179, 8, 0.6);
+  box-shadow: 0 4px 20px rgba(234, 179, 8, 0.25);
+  background: linear-gradient(to bottom, rgba(234, 179, 8, 0.12), rgba(12, 12, 15, 0.95));
+}
+
+/* #2 Zilver / Silver Styling */
+.podiumEntityBorderSilver {
+  border: 2px solid rgba(203, 213, 225, 0.5);
+  box-shadow: 0 4px 16px rgba(203, 213, 225, 0.15);
+  background: linear-gradient(to bottom, rgba(203, 213, 225, 0.1), rgba(12, 12, 15, 0.95));
+}
+
+/* #3 Brons / Bronze Styling */
+.podiumEntityBorderBronze {
+  border: 2px solid rgba(217, 119, 6, 0.5);
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.15);
+  background: linear-gradient(to bottom, rgba(217, 119, 6, 0.1), rgba(12, 12, 15, 0.95));
 }
