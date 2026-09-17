@@ -1,15 +1,20 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from './prisma';
+import authRouter from './auth';
+import savedItemsRouter from './savedItems';
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+app.use('/api/auth', authRouter);
+app.use('/api/saved-items', savedItemsRouter);
 
 interface EntityImages {
     profileCard: string;

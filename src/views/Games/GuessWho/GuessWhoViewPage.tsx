@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import type { HydratedEntity } from '../../../types';
 import { GuessWhoView } from './GuessWhoView';
 import type { GuessWhoTheme } from './GuessWhoView';
+import { saveGameResult } from './../../../core/api';
 
 export interface GuessRow {
   entity: HydratedEntity;
@@ -37,7 +38,7 @@ const ensureSpaceAfterComma = (value: unknown): string => {
   if (!value) return '-';
   const str = Array.isArray(value) ? value.join(', ') : String(value);
   if (!str.trim()) return '-';
-  
+
   return str
     .split(',')
     .map(part => part.trimStart())
@@ -49,15 +50,14 @@ const evaluateArrayMatch = (guessArr: string[], secretArr: string[]): 'correct' 
     return guessArr.length === secretArr.length ? 'correct' : 'incorrect';
   }
 
-  // Sorteer beide arrays alfabetisch zodat de volgorde niet uitmaakt
   const sortedGuess = [...guessArr].sort();
   const sortedSecret = [...secretArr].sort();
 
-  const isExact = sortedGuess.length === sortedSecret.length && 
+  const isExact = sortedGuess.length === sortedSecret.length &&
     sortedGuess.every((item, index) => item === sortedSecret[index]);
 
   if (isExact) return 'correct';
-  
+
   const hasAnyMatch = guessArr.some(guessItem => {
     if (secretArr.includes(guessItem)) return true;
     const guessSubTokens = guessItem.split(/\s+/);
@@ -80,16 +80,27 @@ const evaluateNumericMetric = (guessNum: number, secretNum: number, invertLogic 
   };
 };
 
-export const GuessWhoViewPage: React.FC<{ theme: GuessWhoTheme }> = ({ theme }) => {
+interface GuessWhoViewPageProps {
+  theme: GuessWhoTheme;
+  userId: string;
+}
+
+export const GuessWhoViewPage: React.FC<GuessWhoViewPageProps> = ({ theme, userId }) => {
   const playableEntities = useMemo<HydratedEntity[]>(() => {
     if (!theme.entities) return [];
     return theme.entities.filter(e => e.type.toLowerCase() === 'l4');
   }, [theme.entities]);
 
-  return <GuessWhoGameEngine key={theme.id} theme={theme} availableEntities={playableEntities} />;
+  return <GuessWhoGameEngine key={theme.id} theme={theme} availableEntities={playableEntities} userId={userId} />;
 };
 
-const GuessWhoGameEngine: React.FC<{ theme: GuessWhoTheme; availableEntities: HydratedEntity[] }> = ({ theme, availableEntities }) => {
+interface GuessWhoGameEngineProps {
+  theme: GuessWhoTheme;
+  availableEntities: HydratedEntity[];
+  userId: string;
+}
+
+const GuessWhoGameEngine: React.FC<GuessWhoGameEngineProps> = ({ theme, availableEntities, userId }) => {
   const [secretEntity, setSecretEntity] = useState<HydratedEntity | null>(() =>
     availableEntities.length > 0 ? availableEntities[Math.floor(Math.random() * availableEntities.length)] : null
   );
@@ -98,12 +109,15 @@ const GuessWhoGameEngine: React.FC<{ theme: GuessWhoTheme; availableEntities: Hy
   const [guesses, setGuesses] = useState<GuessRow[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  
+  const hasSavedRef = useRef(false);
 
   const startNewGame = useCallback(() => {
     setSecretEntity(availableEntities[Math.floor(Math.random() * availableEntities.length)]);
     setGuesses([]);
     setGameOver(false);
     setSearchQuery('');
+    hasSavedRef.current = false;
   }, [availableEntities]);
 
   const getOrganizationDetails = useCallback((entity: HydratedEntity): { names: string[], hasEndDate: boolean[] } => {
@@ -146,7 +160,7 @@ const GuessWhoGameEngine: React.FC<{ theme: GuessWhoTheme; availableEntities: Hy
     return age;
   }, []);
 
-const bestGuessedRow = useMemo((): GuessRow | null => {
+  const bestGuessedRow = useMemo((): GuessRow | null => {
     if (guesses.length === 0 || !secretEntity) return null;
 
     const secretOrgData = getOrganizationDetails(secretEntity);
@@ -176,7 +190,6 @@ const bestGuessedRow = useMemo((): GuessRow | null => {
     guesses.forEach(g => {
       if (!g.entity) return;
 
-      // Controleer zowel echte pogingen als hint-rijen
       if (g.checks.name === 'correct') { accumulated.checks.name = 'correct'; hasAnyCorrect = true; }
 
       if (g.checks.org === 'correct') {
@@ -202,7 +215,7 @@ const bestGuessedRow = useMemo((): GuessRow | null => {
     return hasAnyCorrect ? accumulated : null;
   }, [guesses, secretEntity, getOrganizationDetails]);
 
-  const handleSelectGuess = useCallback((guessedEntity: HydratedEntity): void => {
+  const handleSelectGuess = useCallback((guessedEntity: HydratedEntity, isGiveUp = false): void => {
     if (!secretEntity || gameOver) return;
 
     const secretOrgData = getOrganizationDetails(secretEntity);
@@ -252,16 +265,60 @@ const bestGuessedRow = useMemo((): GuessRow | null => {
       }
     };
 
-    setGuesses(prev => [newRow, ...prev]);
+    const isCorrect = guessedEntity.id === secretEntity.id;
+
+    setGuesses(prev => {
+      const updatedGuesses = [newRow, ...prev];
+
+      if (isCorrect || isGiveUp) {
+        setGameOver(true);
+
+        if (!hasSavedRef.current) {
+          hasSavedRef.current = true; 
+
+          const actualGuessesCount = updatedGuesses.filter(g => g.entity.id !== 'hint-placeholder').length;
+          const hintsCount = updatedGuesses.filter(g => g.entity.id === 'hint-placeholder').length;
+
+          const currentUserId = userId || localStorage.getItem('userId') || 'guest';
+
+          const payload = {
+            userId: currentUserId,
+            themeId: theme?.id || 'default-theme',
+            type: 'guesswho',
+            name: `Guess Who: ${theme?.title || theme?.id || 'Onbekend'} - ${secretEntity?.name || 'Item'}`,
+            data: {
+              secretEntityName: secretEntity?.name,
+              result: isGiveUp ? 'gave_up' : 'won',
+              guessesCount: actualGuessesCount,
+              hintsUsed: hintsCount,
+              timestamp: new Date().toISOString(),
+            }
+          };
+
+          console.log('Verstuurde payload naar backend:', payload);
+
+          saveGameResult(payload)
+            .then(data => {
+              console.log('Guess Who game succesvol opgeslagen in MySQL:', data);
+            })
+            .catch(err => {
+              console.error('Fout bij het wegschrijven naar de backend:', err);
+              hasSavedRef.current = false;
+            });
+        }
+      }
+
+      return updatedGuesses;
+    });
+
     setSearchQuery('');
     setShowDropdown(false);
-    if (guessedEntity.id === secretEntity.id) setGameOver(true);
-  }, [secretEntity, gameOver, getOrganizationDetails, getAgeFromDateString]);
+  }, [secretEntity, gameOver, getOrganizationDetails, getAgeFromDateString, theme.id, theme.title, userId]);
 
   const handleGiveUp = useCallback((): void => {
-    if (!secretEntity) return;
-    handleSelectGuess(secretEntity);
-  }, [secretEntity, handleSelectGuess]);
+    if (!secretEntity || gameOver) return;
+    handleSelectGuess(secretEntity, true);
+  }, [secretEntity, gameOver, handleSelectGuess]);
 
   const handleUseHint = useCallback((): void => {
     if (!secretEntity || gameOver) return;
@@ -280,7 +337,7 @@ const bestGuessedRow = useMemo((): GuessRow | null => {
 
     let uncorrectKeys = keys.filter(k => {
       if (currentCorrect[k] === 'correct') return false;
-      
+
       const alreadyHasHintForField = guesses.some(g => {
         if (g.entity.id !== 'hint-placeholder') return false;
         if (k === 'name' && g.checks.name === 'correct') return true;
@@ -373,7 +430,7 @@ const bestGuessedRow = useMemo((): GuessRow | null => {
       setSearchQuery={setSearchQuery}
       setShowDropdown={setShowDropdown}
       startNewGame={startNewGame}
-      handleSelectGuess={handleSelectGuess}
+      handleSelectGuess={(entity) => handleSelectGuess(entity, false)}
       handleGiveUp={handleGiveUp}
       handleUseHint={handleUseHint}
       getAgeFromDateString={getAgeFromDateString}

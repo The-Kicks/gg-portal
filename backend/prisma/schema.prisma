@@ -27,27 +27,28 @@ model Theme {
   navbarItems         Json
   labels              Json
   layerMetadata       Json
+  
   entities            Entity[]
 
-  @@map("theme")
+  @@map("Theme") // Matches exact casing in database
 }
 
 model Entity {
-  id                String             @id
-  themeId           String
-  name              String
-  type              String
-  status            String
-  isStandalone      Boolean            @default(false)
-  image             Json
-  metadata          Json
+  id                 String             @id
+  themeId            String
+  name               String
+  type               String
+  status             String
+  isStandalone       Boolean            @default(false)
+  image              Json
+  metadata           Json
 
-  theme             Theme              @relation(fields: [themeId], references: [id], onDelete: Cascade)
-  connections       EntityConnection[] @relation("SourceEntity")
-  targetConnections EntityConnection[] @relation("TargetEntity")
+  theme              Theme              @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  connections        EntityConnection[] @relation("SourceEntity")
+  targetConnections  EntityConnection[] @relation("TargetEntity")
 
   @@index([themeId])
-  @@map("entity")
+  @@map("Entity") // Matches exact casing in database
 }
 
 model EntityConnection {
@@ -62,7 +63,7 @@ model EntityConnection {
 
   @@index([sourceEntityId])
   @@index([targetEntityId])
-  @@map("entityconnection")
+  @@map("EntityConnection") // Matches exact casing in database
 }
 
 model GameSetting {
@@ -72,5 +73,36 @@ model GameSetting {
   gameSettings Json
 
   @@unique([themeId, gameName])
-  @@map("gamesetting")
+  @@map("GameSetting") // Matches exact casing in database
+}
+
+model User {
+  id           String          @id @default(cuid())
+  username     String          @unique
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relation to user's saved items, favorites, etc.
+  savedItems   UserSavedItem[]
+
+  @@map("User") // Matches exact casing in database
+}
+
+model UserSavedItem {
+  id        String   @id @default(cuid())
+  userId    String
+  themeId   String?  // Plain string field, no relation to theme
+  type      String   // e.g. "sorter", "favorites"
+  name      String   // Custom name chosen by the user (e.g. "My favorite run")
+  data      Json     // Stores the full save state / payload
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to user only
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, themeId])
+  @@map("UserSavedItem") // Matches exact casing in database
 }

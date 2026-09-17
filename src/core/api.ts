@@ -2,6 +2,26 @@ import type { Theme, HydratedEntity } from '../types';
 
 const API_URL = 'http://localhost:5000/api';
 
+export interface GameResultData {
+  result?: string;
+  guessesCount?: number;
+  hintsUsed?: number;
+  gaveUp?: number;
+  secretEntityName?: string;
+  [key: string]: unknown;
+}
+
+export interface GameResultItem {
+  id?: string;
+  _id?: string;
+  userId: string;
+  themeId: string;
+  type: string;
+  name: string;
+  data: GameResultData;
+  createdAt?: string;
+}
+
 /**
  * Haalt alle beschikbare portal-thema's op inclusief hun basisconfiguratie.
  */
@@ -19,8 +39,7 @@ export async function fetchThemes(): Promise<Theme[]> {
 }
 
 /**
- * Haalt alle gehydrateerde entiteiten (inclusief graph connections) op 
- * voor een specifiek thema en een specifieke laag (l1, l2, l3, l4, l5).
+ * Haalt alle gehydrateerde entiteiten op voor een specifiek thema en laag.
  */
 export async function fetchEntitiesByLayer(themeId: string, layer: string): Promise<HydratedEntity[]> {
   try {
@@ -85,4 +104,60 @@ export async function deleteTheme(id: string): Promise<{ success: boolean; messa
   }
 
   return await response.json() as { success: boolean; message: string };
+}
+
+/**
+ * Slaat game-statistieken of opgeslagen items op in de database.
+ */
+export async function saveGameResult(payload: {
+  userId: string;
+  themeId: string;
+  type: string;
+  name: string;
+  data: GameResultData;
+}): Promise<GameResultItem> {
+  const response = await fetch(`${API_URL}/saved-items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Fout bij het opslaan van de game stats');
+  }
+
+  return await response.json() as GameResultItem;
+}
+
+/**
+ * Haalt game-resultaten / opgeslagen items op uit de database voor een specifieke gebruiker.
+ */
+export async function getGameResults(params: {
+  userId: string;
+  themeId?: string;
+  type?: string;
+}): Promise<GameResultItem[]> {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params.themeId) queryParams.append('themeId', params.themeId);
+    if (params.type) queryParams.append('type', params.type);
+
+    const queryString = queryParams.toString();
+    const url = `${API_URL}/saved-items/${params.userId}${queryString ? `?${queryString}` : ''}`;
+
+    const response = await fetch(url);
+    
+    if (response.status === 404) {
+      return [];
+    }
+
+    if (!response.ok) {
+      throw new Error('Netwerkrespons bij het ophalen van game stats was niet ok');
+    }
+    return await response.json() as GameResultItem[];
+  } catch (error) {
+    console.error("Fout bij het ophalen van game results:", error);
+    return [];
+  }
 }

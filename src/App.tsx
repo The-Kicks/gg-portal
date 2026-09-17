@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { fetchThemes } from './core/api';
 import { Navbar } from "./core/components/Navbar/Navbar";
@@ -6,23 +6,23 @@ import { ScrollToTop } from './core/helpers/scrollToTop';
 import Home from "./views/Home/Home";
 import { GuessWhoViewPage } from './views/Games/GuessWho/GuessWhoViewPage';
 import { BlindRankingViewPage } from './views/Games/BlindRanking/BlindRankingViewPage';
-import { SorterViewPage }  from './views/Games/Sorter/SorterViewPage'
+import { SorterViewPage } from './views/Games/Sorter/SorterViewPage';
 import { L1View, L2View, L3View, L4View } from "./views/Layers/index";
 import { ExtendedProfileViewPage } from './views/ExtendedProfileView/ExtendedProfileViewPage';
 import { ExtendedStructureViewPage } from './views/ExtendedStructureView/ExtendedStructureViewPage';
 import { AdminDashboard, AdminEditPage, AdminEntityCreate, AdminThemeManager } from './views/Admin';
+import { Login } from './core/components/Login'
+import { Register } from './core/components/Register';
 import type { Theme } from './types';
 
 interface AppContentProps {
   loadedThemes: Theme[];
   refreshThemes: () => Promise<void>;
+  onLogout: () => void;
+  userId: string;
 }
 
-/**
- * Handles the primary layout view injection, dynamic dark mode toggle styles, 
- * and controls routing mappings within an active theme workspace context.
- */
-function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
+function AppContent({ loadedThemes, refreshThemes, onLogout, userId }: AppContentProps) {
   const navigate = useNavigate();
   const { themeName } = useParams<{ themeName: string }>();
   const activeTheme = loadedThemes.find(t => t.id === themeName) || loadedThemes[0];
@@ -58,18 +58,12 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
     return () => window.removeEventListener('refresh-database', handleRefresh);
   }, [refreshThemes]);
 
-  /**
-   * Updates the application routing context to transition to a newly selected workspace configuration.
-   */
   const handleThemeChange = (newTheme: Theme) => {
     navigate(`/${newTheme.id}/home`);
   };
 
   if (!activeTheme) return null;
 
-  /**
-   * Determines if a specific hierarchy layer has been declared and configured in the theme labels database setup.
-   */
   const hasLayer = (layer: string): boolean => {
     return !!activeTheme.labels[layer];
   };
@@ -85,10 +79,21 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
         toggleDark={() => setIsDark(!isDark)}
       />
 
+      {/* Uitlogknop in de hoek */}
+      <div style={{ position: 'fixed', bottom: '1rem', right: '1rem', zIndex: 1000 }}>
+        <button
+          onClick={onLogout}
+          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm shadow transition font-semibold"
+        >
+          Uitloggen
+        </button>
+      </div>
+
       <Routes>
         <Route path="/" element={<Navigate to="home" replace />} />
         <Route path="home" element={<Home theme={activeTheme} isDark={isDark} />} />
-        <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} />} />
+        {/* We geven de userId mee aan de GuessWho pagina zodat deze gelogd kan worden */}
+        <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} userId={userId} />} />
         <Route path="blindranking" element={<BlindRankingViewPage theme={activeTheme}/>} />
         <Route path="sorter" element={<SorterViewPage theme={activeTheme}/>} />
 
@@ -120,33 +125,66 @@ function AppContent({ loadedThemes, refreshThemes }: AppContentProps) {
   );
 }
 
-/**
- * Root component of the application responsible for pulling core layout themes from backend 
- * APIs and setting up global browser-level routing boundaries.
- */
 export default function App() {
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [userId, setUserId] = useState<string>(localStorage.getItem('userId') || '');
+  const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [loadedThemes, setLoadedThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  /**
-   * Executes an asynchronous network data fetch against backend resources to refresh theme settings.
-   */
-  const refreshThemes = async (): Promise<void> => {
+  const refreshThemes = useCallback(async (): Promise<void> => {
     try {
       const data = await fetchThemes();
       setLoadedThemes(data);
-    } catch (error) {
-      console.error("Fout bij het verversen van de thema-data:", error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Fout bij het verversen van de thema-data:", error.message);
+      } else {
+        console.error("Onbekende fout bij het verversen van de thema-data");
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
     async function loadDatabaseData() {
-      await refreshThemes();
+      if (token) {
+        await refreshThemes();
+      }
       setLoading(false);
     }
     loadDatabaseData();
-  }, []);
+  }, [token, refreshThemes]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUserId('');
+  };
+
+  const handleLoginSuccess = (newToken: string, newUserId?: string) => {
+    localStorage.setItem('token', newToken);
+    if (newUserId) {
+      localStorage.setItem('userId', newUserId);
+      setUserId(newUserId);
+    }
+    setToken(newToken);
+  };
+
+  if (!token) {
+    return authView === 'login' ? (
+      <Login
+        onLoginSuccess={(newToken, userObj) => handleLoginSuccess(newToken, userObj?.id)}
+        switchToRegister={() => setAuthView('register')}
+      />
+    ) : (
+      <Register
+        onRegisterSuccess={() => setAuthView('login')}
+        switchToLogin={() => setAuthView('login')}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -161,6 +199,12 @@ export default function App() {
       <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'sans-serif', color: 'red' }}>
         <h3>Cant establish connection with database. 🛑</h3>
         <p>Please check if database is online and backend is running</p>
+        <button 
+          onClick={handleLogout}
+          style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#333', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+        >
+          Terug naar inloggen
+        </button>
       </div>
     );
   }
@@ -169,7 +213,17 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to={`/${loadedThemes[0].id}/home`} replace />} />
-        <Route path="/:themeName/*" element={<AppContent loadedThemes={loadedThemes} refreshThemes={refreshThemes} />} />
+        <Route 
+          path="/:themeName/*" 
+          element={
+            <AppContent 
+              loadedThemes={loadedThemes} 
+              refreshThemes={refreshThemes} 
+              onLogout={handleLogout}
+              userId={userId}
+            />
+          } 
+        />
         <Route path="*" element={<Navigate to={`/${loadedThemes[0].id}/home`} replace />} />
       </Routes>
     </BrowserRouter>
