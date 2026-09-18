@@ -11,6 +11,7 @@
   font-size: 2.5rem;
   font-weight: 900;
   margin-bottom: 0.5rem;
+  margin-top: 0;
 }
 
 .appHeader p {
@@ -48,15 +49,12 @@
 .cardContainer {
   display: flex;
   flex-wrap: wrap;
-  /* Permits trailing element cards nodes to stack onto multi rows naturally */
   gap: 1.5rem;
   justify-content: flex-start;
-  /* Aligns generated elements flush left against start margins boundaries */
   padding: 2rem 0;
   width: 100%;
 }
 
-/* Text nodes styles living directly inside PortalCard contexts wrappers */
 .gameTitle {
   font-weight: bold;
   letter-spacing: 1px;
@@ -78,208 +76,169 @@
   gap: 0.75rem;
 }
 
-.placeholderTag {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #71717a;
-  background-color: rgba(113, 113, 122, 0.1);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-}
-
-.statsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.5rem;
-}
-
 .statCard {
   background-color: #0c0c0f;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1rem;
-  padding: 1.5rem;
+  padding: 1rem 1.25rem;
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
 }
 
 .statCardHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.85rem;
 }
 
 .statCardHeader h3 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #f4f4f5;
   margin: 0;
 }
 
 .badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   background-color: rgba(99, 102, 241, 0.15);
   color: #818cf8;
-  padding: 0.25rem 0.6rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 9999px;
   border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
-/* --- SORTER STYLING (Vertical #1 card + vertical stack #2-#5 on the right) --- */
+/* --- SORTER TOP 5 HORIZONTAAL (1 t/m 5) --- */
 .sorterContent {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 1rem;
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1; /* <-- Voeg dit toe zodat de sorter-kaart de hoogte opvult */
+  justify-content: space-between; /* Verdeelt de inhoud netjes over de hoogte */
 }
 
-.topEntityCardVertical {
-  position: relative;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(15, 23, 42, 0.9));
-  border: 1px solid rgba(99, 102, 241, 0.4);
-  border-radius: 0.75rem;
-  padding: 0.75rem 0.5rem;
+.sorterTop5Row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.35rem;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.sorterTop5Item {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  justify-content: space-between;
 }
 
-.rankBadge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  background-color: #6366f1;
-  color: white;
+.sorterTop5RankBadge {
+  font-size: 0.65rem;
   font-weight: 700;
-  font-size: 0.7rem;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-}
-
-.topEntityAvatar {
-  width: 40px;
-  height: 40px;
-  background-color: #27272a;
-  color: #ffffff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.95rem;
-  margin: 0.5rem 0 0.25rem 0;
-  border: 2px solid rgba(99, 102, 241, 0.5);
-}
-
-.topEntityInfo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-.topEntityName {
-  font-weight: 700;
-  color: #ffffff;
-  font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.1;
+  color: #a1a1aa;
   margin-bottom: 0.2rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.topEntityMeta {
-  font-size: 0.7rem;
-  color: #a1a1aa;
+.sorterTop5FirstBadge {
+  color: #f59e0b;
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.3);
 }
 
-.runnerUpsVerticalList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  justify-content: space-between;
-}
-
-.runnerUpRowCompact {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background-color: rgba(255, 255, 255, 0.02);
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  height: 100%;
-}
-
-.runnerUpMiniAvatar {
-  width: 24px;
-  height: 24px;
-  background-color: #27272a;
-  color: #a1a1aa;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.7rem;
-  flex-shrink: 0;
-}
-
-.runnerUpMiniName {
-  font-size: 0.75rem;
-  color: #e4e4e7;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.statsGrid {
+  display: grid;
+  gap: 1.25rem;
+  align-items: stretch; /* Zet dit weer op stretch zodat de rijen gelijk lopen */
 }
 
 /* --- GUESS WHO STYLING --- */
-.guessWhoGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.guessWhoBody {
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
+  flex: 1; /* Laat Guess Who de hoogte van de kaart opvullen */
+  justify-content: space-between; /* Verdeelt de statistieken en de uitgelichte speler netjes over de hoogte */
 }
 
-.statMetricBox {
-  background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+.guessWhoFeatured {
+  /* flex: 1; <- Ook hier verwijderd */
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 0.75rem;
   padding: 1rem;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  align-items: center; /* Van stretch naar center gezet */
+  gap: 1rem;
 }
 
-.metricValue {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #ffffff;
-  margin-bottom: 0.2rem;
+.guessWhoStatsList {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+}
+
+.guessWhoStatRow {
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .metricLabel {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #a1a1aa;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 500;
 }
 
-/* --- BLIND RANKING PODIUM STYLING --- */
+.metricValue {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+
+.guessWhoScaleWrapper {
+  flex: 1; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.guessWhoScaleWrapper > * {
+  transform-origin: center center;
+}
+
+.guessWhoFeaturedInfo {
+  flex: 1; 
+  display: flex;
+  flex-direction: column;
+  justify-content: center; 
+  align-items: center;     
+  text-align: center;     
+  overflow: hidden;
+  gap: 0.35rem;
+}
+
+/* --- GEDEELDE PODIUM STYLING (Blind Ranking) --- */
 .podiumContainer {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-top: 0.2rem;
+  padding-top: 0.1rem;
+  gap: 0.5rem;
 }
 
 .podiumItem {
@@ -291,52 +250,105 @@
 }
 
 .podiumFirst {
-  transform: translateY(-12px);
-  /* Nummer 1 staat visueel hoger */
+  transform: translateY(-10px);
 }
 
 .podiumCrown {
-  font-size: 1rem;
-  margin-bottom: 0.05rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.02rem;
   line-height: 1;
 }
 
 .podiumRank {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: #a1a1aa;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.1rem;
 }
 
-/* Schaal-wrapper: compenseert zowel de boven- als onderruimte van de geschaalde EntityCard */
-.entityCardScaleWrapper {
+/* --- SCHAAL- EN CONTAINER WRAPPERS --- */
+.sorterScaleWrapper {
   width: 100%;
-  transform: scale(0.7);
-  transform-origin: top center;
-  margin-top: -4px;
-  margin-bottom: -150px; /* Trekt alle lege onderruimte volledig weg */
-  border-radius: 0.75rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
   overflow: hidden;
-  background-color: #0c0c0f;
+  background: transparent;
+  border-radius: 0.5rem;
 }
 
-/* #1 Goud / Gold Styling */
+.sorterScaleWrapper > * {
+  zoom: 0.92;
+  transform-origin: top center;
+}
+
+.podiumScaleWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.podiumScaleWrapper > * {
+  zoom: 0.95;
+  transform-origin: top center;
+}
+
+/* Entity Borders & Highlights */
+.sorterTop5EntityBorderFirst,
 .podiumEntityBorderFirst {
   border: 2px solid rgba(234, 179, 8, 0.6);
   box-shadow: 0 4px 20px rgba(234, 179, 8, 0.25);
   background: linear-gradient(to bottom, rgba(234, 179, 8, 0.12), rgba(12, 12, 15, 0.95));
 }
 
-/* #2 Zilver / Silver Styling */
+.sorterTop5EntityBorderSilver,
 .podiumEntityBorderSilver {
   border: 2px solid rgba(203, 213, 225, 0.5);
   box-shadow: 0 4px 16px rgba(203, 213, 225, 0.15);
   background: linear-gradient(to bottom, rgba(203, 213, 225, 0.1), rgba(12, 12, 15, 0.95));
 }
 
-/* #3 Brons / Bronze Styling */
+.sorterTop5EntityBorderBronze,
 .podiumEntityBorderBronze {
   border: 2px solid rgba(217, 119, 6, 0.5);
   box-shadow: 0 4px 16px rgba(217, 119, 6, 0.15);
   background: linear-gradient(to bottom, rgba(217, 119, 6, 0.1), rgba(12, 12, 15, 0.95));
+}
+
+.sorterTop5EntityBorderStandard {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 12, 15, 0.95);
+}
+
+/* Zorgt dat het item de beschikbare ruimte opvult en gecentreerd is */
+.sorterTop5Item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+/* De container rondom het elo-getal om het verticaal te centreren in de overige ruimte */
+.sorterEloWrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Het elo-getal zelf: lekker groot, dik en netjes uitgelijnd */
+.sorterEloValue {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  opacity: 0.95;
+  text-align: center;
+  padding-top:20px;
 }

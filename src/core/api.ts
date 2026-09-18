@@ -65,7 +65,7 @@ export async function createTheme(themeData: Partial<Theme>): Promise<Theme> {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(errorData.error || 'Fout bij het aanmaken van het thema');
   }
 
@@ -83,7 +83,7 @@ export async function updateTheme(id: string, themeData: Partial<Theme>): Promis
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(errorData.error || 'Fout bij het bijwerken van het thema');
   }
 
@@ -99,7 +99,7 @@ export async function deleteTheme(id: string): Promise<{ success: boolean; messa
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(errorData.error || 'Fout bij het verwijderen van het thema');
   }
 
@@ -123,7 +123,7 @@ export async function saveGameResult(payload: {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(errorData.error || 'Fout bij het opslaan van de game stats');
   }
 
@@ -160,4 +160,67 @@ export async function getGameResults(params: {
     console.error("Fout bij het ophalen van game results:", error);
     return [];
   }
+}
+
+/**
+ * Maakt een nieuw opgeslagen item aan in de database (specifiek voor sorter / states).
+ */
+export async function createUserSavedItem(payload: {
+  userId: string;
+  themeId?: string;
+  type: string;
+  name: string;
+  data: Record<string, unknown>;
+}): Promise<GameResultItem> {
+  const response = await fetch(`${API_URL}/saved-items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(errorData.error || 'Fout bij het opslaan van item');
+  }
+
+  return await response.json() as GameResultItem;
+}
+
+/**
+ * Werkt een bestaand opgeslagen item bij in de database via PUT.
+ */
+export async function updateUserSavedItem(id: string, payload: {
+  themeId?: string;
+  type?: string;
+  name?: string;
+  data?: Record<string, unknown>;
+}): Promise<GameResultItem> {
+  const response = await fetch(`${API_URL}/saved-items/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(errorData.error || 'Fout bij het bijwerken van item');
+  }
+
+  return await response.json() as GameResultItem;
+}
+
+/**
+ * Verwijdert een opgeslagen item uit de database op basis van ID.
+ */
+export async function deleteUserSavedItem(id: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_URL}/saved-items/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(errorData.error || 'Fout bij het verwijderen van item');
+  }
+
+  return await response.json() as { success: boolean; message: string };
 }

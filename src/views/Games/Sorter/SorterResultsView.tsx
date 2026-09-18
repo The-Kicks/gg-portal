@@ -2,7 +2,29 @@ import { useState, useMemo } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import type { EloExtended } from './eloUtils';
 import { getTier } from './eloUtils';
+import { saveGameResult } from '../../../core/api';
 import styles from './SorterCSS/SorterResults.module.css';
+
+interface UserStorageObject {
+  id?: string;
+  _id?: string;
+}
+
+/**
+ * Haalt direct de userId op uit localStorage
+ */
+const getStoredUserId = (): string => {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const userObj = JSON.parse(userStr) as UserStorageObject;
+      return userObj.id || userObj._id || localStorage.getItem('userId') || '';
+    } catch (err: unknown) {
+      console.error("Fout bij het uitlezen van userId uit localStorage:", err);
+    }
+  }
+  return localStorage.getItem('userId') || '';
+};
 
 interface SorterResultsViewProps {
   theme: Theme;
@@ -22,10 +44,56 @@ export function SorterResultsView({
   const [cardStates, setCardStates] = useState<Record<string, { index: number }>>({});
   const [globalFavoriteMode, setGlobalFavoriteMode] = useState<boolean>(false);
   const [showDefaultsMode, setShowDefaultsMode] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
   const sortedResults = useMemo(() => {
     return [...finalPool].sort((a, b) => b.elo - a.elo);
   }, [finalPool]);
+
+  // Sla voltooide sorter op in de backend via een prompt voor de naam
+  const handleSaveFinishedSorter = async () => {
+    const defaultName = `Sorter Results: ${theme.title}`;
+    const enteredName = window.prompt("Geef een naam op voor je opgeslagen sorter:", defaultName);
+
+    // Als de gebruiker op 'Cancel' drukt, stoppen we
+    if (enteredName === null) {
+      return;
+    }
+
+    const userId = getStoredUserId();
+    if (!userId) {
+      alert("Geen actieve gebruiker gevonden in localStorage om de resultaten op te slaan.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const payload = {
+        userId,
+        themeId: theme.id,
+        type: 'sorter_finished',
+        name: enteredName.trim() || defaultName,
+        data: {
+          rankedItems: sortedResults.map((item, index) => ({
+            id: item.id,
+            name: item.name,
+            elo: Math.round(item.elo),
+            rank: index + 1
+          }))
+        }
+      };
+
+      await saveGameResult(payload);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("Fout bij opslaan voltooide sorter:", err);
+      alert("Er is iets misgegaan bij het opslaan van je resultaten.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const getFavoritesForEntity = (entityId: string): string[] => {
     if (getFavoriteUrls) {
@@ -80,7 +148,27 @@ export function SorterResultsView({
         <h2 className={styles.resultsTitle}>Sorter Results</h2>
         <p className={styles.resultsSubtitle}>Your ultimate ranking for {theme.title}</p>
         
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+        {/* Controle paneel met knoppen */}
+        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={handleSaveFinishedSorter}
+            disabled={isSaving}
+            style={{
+              background: saveSuccess ? '#22c55e' : '#3b82f6',
+              color: '#fff',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              fontWeight: 'bold',
+              cursor: isSaving ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {isSaving ? 'Saving...' : saveSuccess ? '✓ Saved!' : '💾 Save Results'}
+          </button>
+
           <button
             type="button"
             onClick={handleGlobalToggle}
