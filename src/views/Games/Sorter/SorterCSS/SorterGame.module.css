@@ -341,14 +341,14 @@
   width: 100%;
   gap: 8px;
   justify-content: center;
+  align-items: center; 
   margin-top: 4px;
   margin-bottom: 12px;
 }
 
 .actionButtonsRow {
   display: flex;
-  gap: 8px;
-  width: 100%;
+  flex: 1;
 }
 
 .undoButton,
@@ -812,4 +812,89 @@
   line-height: 1.4;
   max-width: 280px;
   margin: 0;
+}
+
+/* ==========================================================================
+   PILL TOGGLE SWITCH STYLING
+   ========================================================================== */
+
+.toggleWrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 12px; /* Zelfde hoogte-gevoel als de undoButton (12px) */
+  background: #141416;
+  border: 1px solid #202024;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.toggleWrapper:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.toggleWrapper:hover .toggleLabel {
+  color: #60a5fa;
+}
+
+.toggleSwitch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.toggleSwitch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleSlider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #1c1c21;
+  border: 1px solid #2d2d34;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 20px;
+}
+
+.toggleSlider::before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #71717a;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 50%;
+}
+
+.toggleSwitch input:checked + .toggleSlider {
+  background-color: color-mix(in srgb, var(--primary) 25%, #1c1c21);
+  border-color: var(--primary);
+}
+
+.toggleSwitch input:checked + .toggleSlider::before {
+  transform: translateX(16px);
+  background-color: var(--primary);
+}
+
+.toggleLabel {
+  cursor: pointer;
+  font-weight: 500;
+  color: #a1a1aa;
+  transition: color 0.2s ease;
 }

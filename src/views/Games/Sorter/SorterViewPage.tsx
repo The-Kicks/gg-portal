@@ -7,11 +7,11 @@ import { SorterView } from './SorterView';
 import { SorterResultsOverlay } from './SorterResultsOverlay';
 import { useSorterKeybinds } from './useSorterKeybinds';
 import styles from './SorterCSS/SorterSetup.module.css';
-import { 
-  getGameResults, 
-  createUserSavedItem, 
-  updateUserSavedItem, 
-  deleteUserSavedItem 
+import {
+  getGameResults,
+  createUserSavedItem,
+  updateUserSavedItem,
+  deleteUserSavedItem
 } from '../../../core/api';
 
 export type SorterEntity = HydratedEntity;
@@ -26,16 +26,35 @@ interface SorterViewPageProps {
   theme: Theme;
 }
 
-interface SorterSaveData {
+interface LeanHistoryStep {
+  leftId: string;
+  rightId: string;
+  leftState: { elo: number; matchesPlayed: number };
+  rightState: { elo: number; matchesPlayed: number };
+}
+
+interface LeanSorterSaveData {
   includedGroupIds: string[];
-  tournamentList: EloExtended<SorterEntity>[];
-  history: [EloExtended<SorterEntity>, EloExtended<SorterEntity>][];
+  eloState: Record<string, { elo: number; matchesPlayed: number }>;
+  history: LeanHistoryStep[];
+  totalVotes: number;
+}
+
+interface SorterSaveDataShape {
+  includedGroupIds?: string[];
+  eloState?: Record<string, { elo: number; matchesPlayed: number }>;
+  history?: LeanHistoryStep[] | [EloExtended<SorterEntity>, EloExtended<SorterEntity>][];
+  tournamentList?: EloExtended<SorterEntity>[];
+  totalVotes?: number;
 }
 
 interface UserStorageObject {
   id?: string;
   _id?: string;
 }
+
+// Maximaal aantal stappen dat we bewaren in de undo-historie om geheugen en DB-grootte licht te houden
+const MAX_UNDO_STEPS = 50;
 
 const getStoredUserId = (): string => {
   const userStr = localStorage.getItem('user');
@@ -52,6 +71,7 @@ const getStoredUserId = (): string => {
 
 export function SorterViewPage({ theme }: SorterViewPageProps) {
   const [userId] = useState<string>(() => getStoredUserId());
+  
   const entitiesWithEloState = useMemo<EloExtended<SorterEntity>[]>(() => {
     const allEntities = theme.entities || [];
     return allEntities.map((entity: HydratedEntity) => ({
@@ -70,22 +90,21 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     const l2Map = new Map<string, BaseEntity>();
     const l3Map = new Map<string, BaseEntity>();
 
-    rankableItems.forEach((item) => {
-      item.targetConnections?.forEach((connection) => {
-        const connectedParent = connection.sourceEntity;
-        if (!connectedParent) return;
-        if (connectedParent.type === 'l1') l1Map.set(connectedParent.id, connectedParent);
-        if (connectedParent.type === 'l2') l2Map.set(connectedParent.id, connectedParent);
-        if (connectedParent.type === 'l3') l3Map.set(connectedParent.id, connectedParent);
-      });
+    entitiesWithEloState.forEach((entity) => {
+      if (entity.type === 'l1') l1Map.set(entity.id, entity);
+      if (entity.type === 'l2') l2Map.set(entity.id, entity);
+      if (entity.type === 'l3') l3Map.set(entity.id, entity);
     });
 
+    const sortByName = (a: BaseEntity, b: BaseEntity) =>
+      (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base', numeric: true });
+
     return {
-      l1: Array.from(l1Map.values()),
-      l2: Array.from(l2Map.values()),
-      l3: Array.from(l3Map.values()),
+      l1: Array.from(l1Map.values()).sort(sortByName),
+      l2: Array.from(l2Map.values()).sort(sortByName),
+      l3: Array.from(l3Map.values()).sort(sortByName),
     };
-  }, [rankableItems]);
+  }, [entitiesWithEloState]);
 
   const allGroupIds = useMemo<string[]>(() => {
     return [
@@ -95,13 +114,17 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     ].map((group) => group.id);
   }, [filterCategories]);
 
-  const [includedGroupIds, setIncludedGroupIds] = useState<string[]>(() => getGroupIdsFromTheme(theme));
+  const [includedGroupIds, setIncludedGroupIds] = useState<string[]>(() => {
+    const initialIds = getGroupIdsFromTheme(theme);
+    return initialIds.filter(id => id !== 'unknown-company-forwhenlazy');
+  });
 
   const [globalFavorites, setGlobalFavorites] = useState<Record<string, string[]>>({});
   const [activeSaveId, setActiveSaveId] = useState<string | null>(null);
 
   const [tournamentList, setTournamentList] = useState<EloExtended<SorterEntity>[]>([]);
   const [history, setHistory] = useState<[EloExtended<SorterEntity>, EloExtended<SorterEntity>][]>([]);
+  const [totalVotes, setTotalVotes] = useState<number>(1);
   const [hasSave, setHasSave] = useState<boolean>(false);
 
   const [leftMediaIndex, setLeftMediaIndex] = useState<number>(0);
@@ -112,6 +135,52 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
   const [hoveredAction, setHoveredAction] = useState<string>('Hover over a key to see its function');
   const [showResultsOverlay, setShowResultsOverlay] = useState<boolean>(false);
+
+  const [startOnFavorites, setStartOnFavorites] = useState<boolean>(() => {
+  const saved = localStorage.getItem('sorter_startOnFavorites');
+  return saved !== null ? JSON.parse(saved) : false;
+});
+
+useEffect(() => {
+  localStorage.setItem('sorter_startOnFavorites', JSON.stringify(startOnFavorites));
+}, [startOnFavorites]);
+
+  // Helper om media en favorieten correct in te stellen bij een matchup
+  const applyStartOnFavoritesForPair = (leftItem: EloExtended<SorterEntity>, rightItem: EloExtended<SorterEntity>, startFavs: boolean) => {
+    setLeftMediaIndex(0);
+    setRightMediaIndex(0);
+    const leftFavs = globalFavorites[leftItem.id] || [];
+    const rightFavs = globalFavorites[rightItem.id] || [];
+    setActiveLeftMediaCategory(startFavs && leftFavs.length > 0 ? 'favorites' : null);
+    setActiveRightMediaCategory(startFavs && rightFavs.length > 0 ? 'favorites' : null);
+  };
+
+  // Veilige handler voor het omzetten van de startOnFavorites toggle (voorkomt cascading renders)
+  const handleToggleStartOnFavorites = (valOrUpdater: boolean | ((prev: boolean) => boolean)) => {
+    const nextVal = typeof valOrUpdater === 'function' ? valOrUpdater(startOnFavorites) : valOrUpdater;
+    setStartOnFavorites(nextVal);
+
+    const currentPair = history.at(-1);
+    if (currentPair) {
+      const [leftItem, rightItem] = currentPair;
+      if (leftItem) {
+        const leftFavs = globalFavorites[leftItem.id] || [];
+        if (nextVal && leftFavs.length > 0) {
+          setActiveLeftMediaCategory('favorites');
+        } else if (!nextVal && activeLeftMediaCategory === 'favorites') {
+          setActiveLeftMediaCategory(null);
+        }
+      }
+      if (rightItem) {
+        const rightFavs = globalFavorites[rightItem.id] || [];
+        if (nextVal && rightFavs.length > 0) {
+          setActiveRightMediaCategory('favorites');
+        } else if (!nextVal && activeRightMediaCategory === 'favorites') {
+          setActiveRightMediaCategory(null);
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     async function loadDataFromDB(): Promise<void> {
@@ -134,16 +203,26 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
           }
         }
 
-        const favItem = items.find((i) => i.type === 'favorites');
-        if (favItem?.data && typeof favItem.data === 'object') {
-          const rawData = favItem.data as Record<string, unknown>;
-          const parsedFavs: Record<string, string[]> = {};
-          for (const [key, val] of Object.entries(rawData)) {
-            if (Array.isArray(val)) {
-              parsedFavs[key] = val.filter((item): item is string => typeof item === 'string');
+        const favoriteItems = items.filter((i) => i.type === 'favorites');
+        if (favoriteItems.length > 0) {
+          const favItem = favoriteItems[0];
+          if (favItem?.data && typeof favItem.data === 'object') {
+            const rawData = favItem.data as Record<string, unknown>;
+            const parsedFavs: Record<string, string[]> = {};
+            for (const [key, val] of Object.entries(rawData)) {
+              if (Array.isArray(val)) {
+                parsedFavs[key] = val.filter((item): item is string => typeof item === 'string');
+              }
+            }
+            setGlobalFavorites(parsedFavs);
+          }
+
+          for (let i = 1; i < favoriteItems.length; i++) {
+            const duplicateId = favoriteItems[i]?.id;
+            if (duplicateId) {
+              await deleteUserSavedItem(duplicateId);
             }
           }
-          setGlobalFavorites(parsedFavs);
         }
       } catch (error) {
         console.error('Fout bij ophalen opgeslagen items uit DB:', error);
@@ -152,24 +231,6 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
     loadDataFromDB();
   }, [userId, theme.id]);
-
-  const [prevLeftId, setPrevLeftId] = useState<string>('');
-  const [prevRightId, setPrevRightId] = useState<string>('');
-
-  const currentMatchup = history.at(-1);
-  if (currentMatchup) {
-    const [leftItem, rightItem] = currentMatchup;
-    if (leftItem && leftItem.id !== prevLeftId) {
-      setPrevLeftId(leftItem.id);
-      setLeftMediaIndex(0);
-      setActiveLeftMediaCategory(null);
-    }
-    if (rightItem && rightItem.id !== prevRightId) {
-      setPrevRightId(rightItem.id);
-      setRightMediaIndex(0);
-      setActiveRightMediaCategory(null);
-    }
-  }
 
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
@@ -216,11 +277,29 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     });
   }, [rankableItems, includedGroupIds]);
 
-  const handleSave = async (): Promise<void> => {
-    const saveData: SorterSaveData = {
-      includedGroupIds,
-      tournamentList,
-      history,
+  const performAutoSave = async (
+    currentList: EloExtended<SorterEntity>[],
+    currentHistory: [EloExtended<SorterEntity>, EloExtended<SorterEntity>][],
+    currentVotes: number,
+    currentGroups: string[]
+  ): Promise<void> => {
+    const eloState: Record<string, { elo: number; matchesPlayed: number }> = {};
+    currentList.forEach((item) => {
+      eloState[item.id] = { elo: item.elo, matchesPlayed: item.matchesPlayed };
+    });
+
+    const leanHistory: LeanHistoryStep[] = currentHistory.map(([left, right]) => ({
+      leftId: left.id,
+      rightId: right.id,
+      leftState: { elo: left.elo, matchesPlayed: left.matchesPlayed },
+      rightState: { elo: right.elo, matchesPlayed: right.matchesPlayed },
+    }));
+
+    const saveData: LeanSorterSaveData = {
+      includedGroupIds: currentGroups,
+      eloState,
+      history: leanHistory,
+      totalVotes: currentVotes,
     };
 
     try {
@@ -251,20 +330,89 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       }
       setHasSave(true);
     } catch (error) {
-      console.error('Fout bij opslaan sorter sessie in DB:', error);
+      console.error('Fout bij automatisch opslaan sorter sessie in DB:', error);
     }
   };
 
-  const handleLoad = async (): Promise<void> => {
+ const handleLoad = async (): Promise<void> => {
     try {
       const items = await getGameResults({ userId, themeId: theme.id, type: 'sorter_active' });
       const activeSave = items.at(0);
 
       if (activeSave?.data) {
-        const data = activeSave.data as unknown as SorterSaveData;
-        if (data.includedGroupIds) setIncludedGroupIds(data.includedGroupIds);
-        if (data.tournamentList) setTournamentList(data.tournamentList);
-        if (data.history) setHistory(data.history);
+        const data = activeSave.data as SorterSaveDataShape;
+        
+        // 1. Zet de includedGroupIds direct in een lokale variabele en update de state
+        const loadedGroupIds = data.includedGroupIds || includedGroupIds;
+        if (data.includedGroupIds) {
+          setIncludedGroupIds(data.includedGroupIds);
+        }
+
+        if (data.eloState && Array.isArray(data.history)) {
+          const entityMap = new Map<string, EloExtended<SorterEntity>>();
+          entitiesWithEloState.forEach((e) => {
+            const cloned = { ...e };
+            if (data.eloState && data.eloState[e.id]) {
+              cloned.elo = data.eloState[e.id].elo;
+              cloned.matchesPlayed = data.eloState[e.id].matchesPlayed;
+            }
+            entityMap.set(e.id, cloned);
+          });
+
+          // 2. Filter hier direct op basis van loadedGroupIds in plaats van te wachten op de state update
+          const restoredTournamentList = rankableItems
+            .filter((item) => {
+              const connectedParentIds = item.targetConnections?.map((conn) => conn.sourceEntityId) || [];
+              return connectedParentIds.some((parentId) => loadedGroupIds.includes(parentId));
+            })
+            .map((e) => {
+              const found = entityMap.get(e.id);
+              return found ? { ...found } : { ...e, elo: INITIAL_ELO, matchesPlayed: 0 };
+            });
+
+          setTournamentList(restoredTournamentList);
+
+          const historySteps = data.history as LeanHistoryStep[];
+          const restoredHistory: [EloExtended<SorterEntity>, EloExtended<SorterEntity>][] = historySteps.map((step) => {
+            const leftBase = entityMap.get(step.leftId) || entitiesWithEloState.find((e) => e.id === step.leftId)!;
+            const rightBase = entityMap.get(step.rightId) || entitiesWithEloState.find((e) => e.id === step.rightId)!;
+
+            const leftItem: EloExtended<SorterEntity> = {
+              ...leftBase,
+              elo: step.leftState?.elo ?? leftBase.elo,
+              matchesPlayed: step.leftState?.matchesPlayed ?? leftBase.matchesPlayed,
+            };
+            const rightItem: EloExtended<SorterEntity> = {
+              ...rightBase,
+              elo: step.rightState?.elo ?? rightBase.elo,
+              matchesPlayed: step.rightState?.matchesPlayed ?? rightBase.matchesPlayed,
+            };
+
+            return [leftItem, rightItem];
+          });
+          setHistory(restoredHistory);
+
+          if (typeof data.totalVotes === 'number') {
+            setTotalVotes(data.totalVotes);
+          } else {
+            setTotalVotes(restoredHistory.length);
+          }
+
+          const restoredPair = restoredHistory.at(-1);
+          if (restoredPair) {
+            applyStartOnFavoritesForPair(restoredPair[0], restoredPair[1], startOnFavorites);
+          }
+        } else if (data.tournamentList && data.history) {
+          setTournamentList(data.tournamentList);
+          const hist = data.history as [EloExtended<SorterEntity>, EloExtended<SorterEntity>][];
+          setHistory(hist);
+          setTotalVotes(data.totalVotes ?? hist.length);
+          const restoredPair = hist.at(-1);
+          if (restoredPair) {
+            applyStartOnFavoritesForPair(restoredPair[0], restoredPair[1], startOnFavorites);
+          }
+        }
+
         if (activeSave.id) {
           setActiveSaveId(activeSave.id);
         }
@@ -315,7 +463,12 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
     if (candidateA && candidateB) {
       setTournamentList(activeMatchCandidates);
-      setHistory([[candidateA, candidateB]]);
+      const initialHistory: [EloExtended<SorterEntity>, EloExtended<SorterEntity>][] = [[candidateA, candidateB]];
+      setHistory(initialHistory);
+      setTotalVotes(1);
+
+      applyStartOnFavoritesForPair(candidateA, candidateB, startOnFavorites);
+      performAutoSave(activeMatchCandidates, initialHistory, 1, includedGroupIds);
     }
   };
 
@@ -332,12 +485,21 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     const nextMatch = getNextMatch(tournamentList);
     if (!nextMatch) return;
 
-    setHistory((prevHistory) => {
-      const newHistory = [...prevHistory];
-      newHistory[newHistory.length - 1] = snapshot;
-      newHistory.push(nextMatch);
-      return newHistory;
-    });
+    const newHistory = [...history];
+    newHistory[newHistory.length - 1] = snapshot;
+    newHistory.push(nextMatch);
+
+    const finalHistory = newHistory.length > MAX_UNDO_STEPS + 1
+      ? newHistory.slice(newHistory.length - (MAX_UNDO_STEPS + 1))
+      : newHistory;
+
+    const newTotalVotes = totalVotes + 1;
+
+    setHistory(finalHistory);
+    setTotalVotes(newTotalVotes);
+
+    applyStartOnFavoritesForPair(nextMatch[0], nextMatch[1], startOnFavorites);
+    performAutoSave(tournamentList, finalHistory, newTotalVotes, includedGroupIds);
   };
 
   const handleUndo = (): void => {
@@ -348,31 +510,25 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
 
     const [leftItem, rightItem] = previousPair;
 
-    setHistory((prevHistory) => {
-      const newHistory = [...prevHistory];
-      newHistory.pop();
-      return newHistory;
-    });
+    const newHistory = [...history];
+    newHistory.pop();
 
-    setTournamentList((prevList) =>
-      prevList.map((e) =>
-        e.id === leftItem?.id ? leftItem : e.id === rightItem?.id ? rightItem : e
-      )
+    const newTournamentList = tournamentList.map((e) =>
+      e.id === leftItem?.id ? leftItem : e.id === rightItem?.id ? rightItem : e
     );
+
+    const newTotalVotes = Math.max(1, totalVotes - 1);
+
+    setHistory(newHistory);
+    setTournamentList(newTournamentList);
+    setTotalVotes(newTotalVotes);
+
+    applyStartOnFavoritesForPair(leftItem, rightItem, startOnFavorites);
+    performAutoSave(newTournamentList, newHistory, newTotalVotes, includedGroupIds);
   };
 
   const handleOpenResults = async (): Promise<void> => {
     setShowResultsOverlay(true);
-
-    if (activeSaveId) {
-      try {
-        await deleteUserSavedItem(activeSaveId);
-        setActiveSaveId(null);
-        setHasSave(false);
-      } catch (error) {
-        console.error('Fout bij verwijderen actieve sorter na voltooien:', error);
-      }
-    }
   };
 
   const getMediaCategoriesForEntity = useMemo(() => {
@@ -586,9 +742,14 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
         {(['l1', 'l2', 'l3'] as const).map((layerKey) => {
           const categories = filterCategories[layerKey];
           if (!categories || categories.length === 0) return null;
+
+          const isOpenByDefault = layerKey === 'l3';
+
           return (
-            <div key={layerKey} className={styles.filterSection}>
-              <h3 className={styles.sectionTitle}>{theme.labels?.[layerKey] || `Layer ${layerKey}`}</h3>
+            <details key={layerKey} className={styles.filterSection} open={isOpenByDefault}>
+              <summary className={styles.sectionTitle} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                {theme.labels?.[layerKey] || `Layer ${layerKey}`} ({categories.length})
+              </summary>
               <div className={styles.grid}>
                 {categories.map((group) => (
                   <label key={group.id} className={styles.checkboxLabel}>
@@ -602,7 +763,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
                   </label>
                 ))}
               </div>
-            </div>
+            </details>
           );
         })}
 
@@ -626,7 +787,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
         theme={theme}
         tournamentList={tournamentList}
         currentMatchup={activeMatchup}
-        voteCount={history.length}
+        voteCount={totalVotes}
         leftItemMedia={mediaCalculation?.leftItemMedia ?? []}
         rightItemMedia={mediaCalculation?.rightItemMedia ?? []}
         currentLeftMediaUrl={mediaCalculation?.currentLeftMediaUrl ?? ''}
@@ -646,9 +807,10 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
         onProcessVote={handleProcessVote}
         onUndo={handleUndo}
         canUndo={history.length > 1}
-        onSave={handleSave}
         toggleFavorite={toggleFavorite}
         onOpenResults={handleOpenResults}
+        startOnFavorites={startOnFavorites}
+        setStartOnFavorites={handleToggleStartOnFavorites}
       />
 
       {showResultsOverlay && (
@@ -656,6 +818,7 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
           theme={theme}
           finalPool={tournamentList}
           extractMediaUrls={extractMediaWithFavorite}
+          getFavoriteUrls={(id) => globalFavorites[id] || []}
           onClose={() => setShowResultsOverlay(false)}
         />
       )}

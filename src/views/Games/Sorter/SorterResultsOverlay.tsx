@@ -8,10 +8,11 @@ interface SorterResultsOverlayProps {
   theme: Theme;
   finalPool: EloExtended<HydratedEntity>[];
   extractMediaUrls: (entity: HydratedEntity) => string[];
+  getFavoriteUrls: (entityId: string) => string[];
   onClose: () => void;
 }
 
-export function SorterResultsOverlay({ theme, finalPool, extractMediaUrls, onClose }: SorterResultsOverlayProps) {
+export function SorterResultsOverlay({ theme, finalPool, extractMediaUrls, getFavoriteUrls, onClose }: SorterResultsOverlayProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -28,7 +29,7 @@ export function SorterResultsOverlay({ theme, finalPool, extractMediaUrls, onClo
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>
-        <SorterResultsView theme={theme} finalPool={finalPool} extractMediaUrls={extractMediaUrls} />
+        <SorterResultsView theme={theme} finalPool={finalPool} extractMediaUrls={extractMediaUrls} getFavoriteUrls={getFavoriteUrls} />
       </div>
     </div>
   );

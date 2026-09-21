@@ -35,9 +35,11 @@ interface SorterViewProps {
   onProcessVote: (winner: 'A' | 'B') => void;
   onUndo: () => void;
   canUndo: boolean;
-  onSave: () => void;
+  onSave?: () => void;
   toggleFavorite: (side: 'left' | 'right') => void;
   onOpenResults: () => void;
+  startOnFavorites: boolean;
+  setStartOnFavorites: (valOrUpdater: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 interface KeyInfo {
@@ -76,21 +78,26 @@ export function SorterView({
   onProcessVote,
   onUndo,
   canUndo,
-  onSave,
   toggleFavorite,
   onOpenResults,
+  startOnFavorites,
+  setStartOnFavorites,
 }: SorterViewProps) {
   const [leftItem, rightItem] = currentMatchup;
   const leftTier = getTier(leftItem);
   const rightTier = getTier(rightItem);
 
   const [showKeybinds, setShowKeybinds] = useState<boolean>(false);
-  
+
   const [leftVolume, setLeftVolume] = useState<number>(0);
   const [rightVolume, setRightVolume] = useState<number>(0);
-  
+
   const [leftHasAudio, setLeftHasAudio] = useState<boolean>(false);
   const [rightHasAudio, setRightHasAudio] = useState<boolean>(false);
+
+  // States voor lege favorieten feedback
+  const [leftEmptyFavMessage, setLeftEmptyFavMessage] = useState<string | null>(null);
+  const [rightEmptyFavMessage, setRightEmptyFavMessage] = useState<string | null>(null);
 
   const leftVideoRef = useRef<HTMLVideoElement | null>(null);
   const leftBgVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -123,12 +130,12 @@ export function SorterView({
 
   const handleLoadedData = (e: SyntheticEvent<HTMLVideoElement>, side: 'left' | 'right') => {
     const video = e.currentTarget as ExtendedHTMLVideoElement;
-    
-    const hasAudio = 
+
+    const hasAudio =
       Boolean(video.mozHasAudio) ||
       Boolean(video.webkitAudioDecodedByteCount && video.webkitAudioDecodedByteCount > 0) ||
       Boolean(video.audioTracks && video.audioTracks.length > 0);
-    
+
     if (side === 'left') {
       setLeftHasAudio(hasAudio);
     } else {
@@ -274,11 +281,19 @@ export function SorterView({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
                 Undo
               </button>
-              <button type="button" onClick={onSave} className={styles.saveButton}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
-                Opslaan
-              </button>
             </div>
+            <label className={styles.toggleWrapper}>
+              <div className={styles.toggleSwitch}>
+                <input
+                  type="checkbox"
+                  checked={startOnFavorites}
+                  onChange={(e) => setStartOnFavorites(e.target.checked)}
+                />
+                <span className={styles.toggleSlider}></span>
+              </div>
+              <span className={styles.toggleLabel}>Start on Favorite</span>
+            </label>
+
           </div>
         </div>
 
@@ -377,6 +392,11 @@ export function SorterView({
                       title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isEmptyFav) {
+                          setLeftEmptyFavMessage('No Favorites');
+                          setTimeout(() => setLeftEmptyFavMessage(null), 3000);
+                          return;
+                        }
                         setActiveLeftMediaCategory(isSelected ? null : cat.key);
                       }}
                     >
@@ -390,6 +410,13 @@ export function SorterView({
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Linker Feedback Melding */}
+            {leftEmptyFavMessage && (
+              <div className={styles.feedbackToast} style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px' }}>
+                {leftEmptyFavMessage}
               </div>
             )}
 
@@ -445,6 +472,11 @@ export function SorterView({
                       title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (isEmptyFav) {
+                          setRightEmptyFavMessage('No Favorites');
+                          setTimeout(() => setRightEmptyFavMessage(null), 3000);
+                          return;
+                        }
                         setActiveRightMediaCategory(isSelected ? null : cat.key);
                       }}
                     >
@@ -458,6 +490,13 @@ export function SorterView({
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Rechter Feedback Melding */}
+            {rightEmptyFavMessage && (
+              <div className={styles.feedbackToast} style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px' }}>
+                {rightEmptyFavMessage}
               </div>
             )}
 

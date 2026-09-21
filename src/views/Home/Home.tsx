@@ -127,7 +127,7 @@ export const Home = ({ theme, isDark }: HomeProps) => {
                         <div className={styles.sorterTop5Row}>
                           {currentSorterTop5.slice(0, 5).map((item, index) => {
                             const rank = index + 1;
-                            const entity = theme.entities?.find(e => e.id === item.id || e.name === item.name);
+                            const entity = theme.entities?.find(e => e.id === item.id);
                             if (!entity) return null;
 
                             let borderClass = styles.sorterTop5EntityBorderStandard;

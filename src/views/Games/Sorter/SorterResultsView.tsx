@@ -34,16 +34,16 @@ interface SorterResultsViewProps {
   onRestart?: () => void;
 }
 
-export function SorterResultsView({ 
-  theme, 
-  finalPool, 
-  extractMediaUrls, 
+export function SorterResultsView({
+  theme,
+  finalPool,
+  extractMediaUrls,
   getFavoriteUrls,
-  onRestart 
+  onRestart
 }: SorterResultsViewProps) {
   const [cardStates, setCardStates] = useState<Record<string, { index: number }>>({});
-  const [globalFavoriteMode, setGlobalFavoriteMode] = useState<boolean>(false);
-  const [showDefaultsMode, setShowDefaultsMode] = useState<boolean>(false);
+  const [showFavorites, setShowFavorites] = useState<boolean>(false);
+  const [hideControls, setHideControls] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
@@ -56,7 +56,6 @@ export function SorterResultsView({
     const defaultName = `Sorter Results: ${theme.title}`;
     const enteredName = window.prompt("Geef een naam op voor je opgeslagen sorter:", defaultName);
 
-    // Als de gebruiker op 'Cancel' drukt, stoppen we
     if (enteredName === null) {
       return;
     }
@@ -95,40 +94,60 @@ export function SorterResultsView({
     }
   };
 
+  const handleExportTxt = () => {
+    const entityMap = new Map((theme.entities || []).map(e => [e.id, e]));
+
+    const lines = sortedResults.map((item, index) => {
+      const rank = index + 1;
+      const name = item.name || 'Unknown';
+      const elo = Math.round(item.elo);
+
+      let parentName = '';
+      if (item.targetConnections && item.targetConnections.length > 0) {
+        const conn = item.targetConnections[0];
+        const parentEntity = conn?.sourceEntityId ? entityMap.get(conn.sourceEntityId) : null;
+        
+        if (parentEntity) {
+          parentName = parentEntity.name;
+        }
+      }
+
+      const parentPart = parentName ? ` (${parentName})` : '';
+      return `${rank}. ${name}${parentPart} ${elo}`;
+    });
+
+    const fileContent = lines.join('\n');
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const safeTitle = theme.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.download = `${safeTitle}_sorter_results.txt`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const getFavoritesForEntity = (entityId: string): string[] => {
     if (getFavoriteUrls) {
       const favs = getFavoriteUrls(entityId);
       if (favs && favs.length > 0) return favs;
     }
-
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.includes('favorite') || key.includes('fav'))) {
-          const data = JSON.parse(localStorage.getItem(key) || '{}');
-          if (data[entityId] && Array.isArray(data[entityId]) && data[entityId].length > 0) {
-            return data[entityId];
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Fout bij uitlezen localStorage favorieten", e);
-    }
-
     return [];
   };
 
-  const handleGlobalToggle = () => {
-    setGlobalFavoriteMode(prev => !prev);
-    setShowDefaultsMode(false);
+  const handleFavoritesToggle = () => {
+    setShowFavorites(prev => !prev);
   };
 
-  const handleDefaultsToggle = () => {
-    setShowDefaultsMode(prev => !prev);
+  const handleControlsToggle = () => {
+    setHideControls(prev => !prev);
   };
 
   const handleIndexChange = (itemId: string, direction: 'prev' | 'next', maxLen: number) => {
-    setShowDefaultsMode(false);
     setCardStates(prev => {
       const current = prev[itemId] || { index: 0 };
       const newIndex = direction === 'next'
@@ -147,7 +166,7 @@ export function SorterResultsView({
       <div className={styles.resultsHeader}>
         <h2 className={styles.resultsTitle}>Sorter Results</h2>
         <p className={styles.resultsSubtitle}>Your ultimate ranking for {theme.title}</p>
-        
+
         {/* Controle paneel met knoppen */}
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
           <button
@@ -171,10 +190,10 @@ export function SorterResultsView({
 
           <button
             type="button"
-            onClick={handleGlobalToggle}
+            onClick={handleExportTxt}
             style={{
-              background: globalFavoriteMode ? '#eab308' : '#27272a',
-              color: globalFavoriteMode ? '#000' : '#fff',
+              background: '#10b981',
+              color: '#fff',
               border: '1px solid rgba(255, 255, 255, 0.2)',
               padding: '10px 20px',
               borderRadius: '10px',
@@ -184,15 +203,15 @@ export function SorterResultsView({
               transition: 'all 0.2s ease',
             }}
           >
-            {globalFavoriteMode ? '★ Hide Controls (Ready for Screenshot)' : '★ Swap to Favorites'}
+            📄 Export TXT
           </button>
 
           <button
             type="button"
-            onClick={handleDefaultsToggle}
+            onClick={handleFavoritesToggle}
             style={{
-              background: showDefaultsMode ? '#eab308' : '#27272a',
-              color: showDefaultsMode ? '#000' : '#fff',
+              background: showFavorites ? '#eab308' : '#27272a',
+              color: showFavorites ? '#000' : '#fff',
               border: '1px solid rgba(255, 255, 255, 0.2)',
               padding: '10px 20px',
               borderRadius: '10px',
@@ -202,7 +221,25 @@ export function SorterResultsView({
               transition: 'all 0.2s ease',
             }}
           >
-            {showDefaultsMode ? '↩ Show Favorites (Restore Selection)' : '↩ Show Defaults'}
+            {showFavorites ? '★ Show Normal ProfileCard' : '★ Show Favorites'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleControlsToggle}
+            style={{
+              background: hideControls ? '#eab308' : '#27272a',
+              color: hideControls ? '#000' : '#fff',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {hideControls ? '👁 Show Controls' : '📷 Hide Controls (Screenshot)'}
           </button>
         </div>
       </div>
@@ -211,20 +248,16 @@ export function SorterResultsView({
         {sortedResults.map((item, index) => {
           const position = index + 1;
           const tier = getTier(item);
-          
+
           const allMedia = extractMediaUrls(item);
           const defaultProfilePic = allMedia[0] || '';
-          
           const favoriteMedia = getFavoritesForEntity(item.id);
-          
-          const mediaList = showDefaultsMode 
-            ? [defaultProfilePic] 
-            : (favoriteMedia.length > 0 ? favoriteMedia : [defaultProfilePic]);
-          
+
+          const mediaList = showFavorites && favoriteMedia.length > 0 ? favoriteMedia : [defaultProfilePic];
+
           const itemState = cardStates[item.id] || { index: 0 };
-          
-          const currentIndex = showDefaultsMode ? 0 : Math.min(itemState.index, Math.max(0, mediaList.length - 1));
-          const currentUrl = mediaList[currentIndex] || defaultProfilePic;
+          const currentIndex = Math.min(itemState.index, Math.max(0, mediaList.length - 1));
+          const currentUrl = mediaList[currentIndex] || '';
 
           const isVideoFile = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(currentUrl) || currentUrl.includes('mp4');
 
@@ -266,7 +299,7 @@ export function SorterResultsView({
                 </div>
               </div>
 
-              {globalFavoriteMode && !showDefaultsMode && mediaList.length > 1 && (
+              {!hideControls && showFavorites && mediaList.length > 1 && (
                 <div style={{
                   position: 'absolute',
                   bottom: '75px',
