@@ -20,6 +20,9 @@ export interface GameResultItem {
   name: string;
   data: GameResultData;
   createdAt?: string;
+  username?: string;
+  friendUserId?: string;
+  [key: string]: unknown; 
 }
 
 /**
@@ -163,7 +166,35 @@ export async function getGameResults(params: {
 }
 
 /**
- * Maakt een nieuw opgeslagen item aan in de database (specifiek voor sorter / states).
+ * Haalt alle opgeslagen items op (met optionele filters zoals themeId en userId).
+ */
+export async function getAllSavedItems(params?: {
+  userId?: string;
+  themeId?: string;
+  type?: string;
+}): Promise<GameResultItem[]> {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.userId) queryParams.append('userId', params.userId);
+    if (params?.themeId) queryParams.append('themeId', params.themeId);
+    if (params?.type) queryParams.append('type', params.type);
+
+    const queryString = queryParams.toString();
+    const url = `${API_URL}/saved-items${queryString ? `?${queryString}` : ''}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Fout bij het ophalen van opgeslagen items');
+    }
+    return await response.json() as GameResultItem[];
+  } catch (error) {
+    console.error("Fout bij getAllSavedItems:", error);
+    return [];
+  }
+}
+
+/**
+ * Maakt een nieuw opgeslagen item aan in de database.
  */
 export async function createUserSavedItem(payload: {
   userId: string;
@@ -171,6 +202,8 @@ export async function createUserSavedItem(payload: {
   type: string;
   name: string;
   data: Record<string, unknown>;
+  username?: string;
+  friendUserId?: string;
 }): Promise<GameResultItem> {
   const response = await fetch(`${API_URL}/saved-items`, {
     method: 'POST',

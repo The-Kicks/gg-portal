@@ -13,6 +13,7 @@ import { ExtendedStructureViewPage } from './views/ExtendedStructureView/Extende
 import { AdminDashboard, AdminEditPage, AdminEntityCreate, AdminThemeManager } from './views/Admin';
 import { Login } from './core/components/Login'
 import { Register } from './core/components/Register';
+import { ImportExportView } from './views/ImportExport/ImportExportView';
 import type { Theme } from './types';
 
 interface AppContentProps {
@@ -79,23 +80,14 @@ function AppContent({ loadedThemes, refreshThemes, onLogout, userId }: AppConten
         toggleDark={() => setIsDark(!isDark)}
       />
 
-      {/* Uitlogknop in de hoek */}
-      <div style={{ position: 'fixed', bottom: '1rem', right: '1rem', zIndex: 1000 }}>
-        <button
-          onClick={onLogout}
-          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm shadow transition font-semibold"
-        >
-          Uitloggen
-        </button>
-      </div>
-
       <Routes>
         <Route path="/" element={<Navigate to="home" replace />} />
-        <Route path="home" element={<Home theme={activeTheme} isDark={isDark} />} />
-        {/* We geven de userId mee aan de GuessWho pagina zodat deze gelogd kan worden */}
+        <Route path="home" element={<Home theme={activeTheme} isDark={isDark} onLogout={onLogout} />} />
         <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} userId={userId} />} />
         <Route path="blindranking" element={<BlindRankingViewPage theme={activeTheme}/>} />
         <Route path="sorter" element={<SorterViewPage theme={activeTheme}/>} />
+
+        <Route path="sync" element={<ImportExportView theme={activeTheme} userId={userId} />} />
 
         <Route path="l1" element={hasLayer('l1') ? <L1View theme={activeTheme} /> : <Navigate to="../home" replace />} />
         <Route path="l2" element={hasLayer('l2') ? <L2View theme={activeTheme} /> : <Navigate to="../l3" replace />} />

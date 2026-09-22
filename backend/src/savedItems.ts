@@ -4,18 +4,43 @@ import { prisma } from './prisma';
 const router = Router();
 
 /**
+ * GET /api/saved-items
+ * Retrieves saved items with optional query filters (userId, themeId, type)
+ */
+router.get('/', async (req: Request, res: Response) => {
+    try {
+        const { userId, themeId, type } = req.query;
+
+        const whereClause: Record<string, unknown> = {};
+        if (userId) whereClause.userId = String(userId);
+        if (themeId) whereClause.themeId = String(themeId);
+        if (type) whereClause.type = String(type);
+
+        const items = await prisma.userSavedItem.findMany({
+            where: whereClause,
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(items);
+    } catch (error) {
+        console.error("Error fetching saved items:", error);
+        res.status(500).json({ error: "Internal server error while fetching saved items." });
+    }
+});
+
+/**
  * POST /api/saved-items
- * Creates a new user saved item (e.g. game result, custom run, favorites)
+ * Creates a new user saved item (or friend profile metadata)
  */
 router.post('/', async (req: Request, res: Response) => {
     try {
-        const { userId, themeId, type, name, data } = req.body;
+        const { userId, themeId, type, name, data, username, friendUserId } = req.body;
 
-        if (!userId || !type || !name) {
-            return res.status(400).json({ error: "Missing required fields: userId, type, and name are strictly required." });
+        if (!userId || !type || (!name && type !== 'friend_profile')) {
+            return res.status(400).json({ error: "Missing required fields." });
         }
 
-     if (type === 'sorter_active' && themeId) {
+        if (type === 'sorter_active' && themeId) {
             await prisma.userSavedItem.deleteMany({
                 where: {
                     userId,
@@ -25,13 +50,17 @@ router.post('/', async (req: Request, res: Response) => {
             });
         }
 
+        const itemData = (data && typeof data === 'object') ? { ...data } : {};
+        if (username) itemData.username = username;
+        if (friendUserId) itemData.friendUserId = friendUserId;
+
         const newSavedItem = await prisma.userSavedItem.create({
             data: {
                 userId,
                 themeId: themeId || null,
                 type,
-                name,
-                data: data || {}
+                name: name || (type === 'friend_profile' ? `Friend: ${username || friendUserId}` : 'Unnamed Item'),
+                data: itemData
             }
         });
 
@@ -78,7 +107,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/saved-items/:id
- * Verwijdert een opgeslagen item (zoals een voltooide actieve sorter)
+ * Verwijdert een opgeslagen item
  */
 router.delete('/:id', async (req: Request, res: Response) => {
     try {

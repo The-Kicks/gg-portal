@@ -3,8 +3,8 @@
    ========================================================================== */
 .appHeader {
   text-align: center;
-  padding: 2rem 1rem;
   color: var(--text);
+  padding: 10px;
 }
 
 .appHeader h1 {
@@ -71,6 +71,7 @@
   font-weight: 700;
   color: #ffffff;
   margin-bottom: 1.5rem;
+  margin-top:-10px;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -155,7 +156,7 @@
 .statsGrid {
   display: grid;
   gap: 1.25rem;
-  align-items: stretch; /* Zet dit weer op stretch zodat de rijen gelijk lopen */
+  align-items: stretch; 
 }
 
 /* --- GUESS WHO STYLING --- */
@@ -163,18 +164,17 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  flex: 1; /* Laat Guess Who de hoogte van de kaart opvullen */
-  justify-content: space-between; /* Verdeelt de statistieken en de uitgelichte speler netjes over de hoogte */
+  flex: 1; 
+  justify-content: space-between; 
 }
 
 .guessWhoFeatured {
-  /* flex: 1; <- Ook hier verwijderd */
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 0.75rem;
   padding: 1rem;
   display: flex;
-  align-items: center; /* Van stretch naar center gezet */
+  align-items: center; 
   gap: 1rem;
 }
 

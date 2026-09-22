@@ -12,9 +12,10 @@ import { EntityCard } from '../../core/components/UI/PortalCard/EntityCard/Entit
 interface HomeProps {
   theme: Theme;
   isDark: boolean;
+  onLogout: () => void;
 }
 
-export const Home = ({ theme, isDark }: HomeProps) => {
+export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
   const navigate = useNavigate();
   const { username, guessWhoStats } = useGuessWhoStats(theme.id);
   const { topBlindRankingItems } = useBlindRankingStats(theme.id);
@@ -64,13 +65,32 @@ export const Home = ({ theme, isDark }: HomeProps) => {
   return (
     <main>
       <header className={styles.appHeader}>
-        {username && (
-          <div className={styles.welcomeBadge}>
-            Logged in as <span className={styles.username}>@{username}</span>
-          </div>
-        )}
         <h1>{theme.title}</h1>
         <p>{theme.description}</p>
+         {username && (
+          <div className={styles.welcomeBadge}>
+            Logged in as <span className={styles.username}>@{username}</span>   
+          </div>
+        )}
+        <button
+              onClick={onLogout}
+              style={{
+                padding: '2px 8px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                backgroundColor: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+                margin:'10px',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#b91c1c')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
+            >
+              Uitloggen
+            </button>
       </header>
 
       <section className={styles.statsSection}>
