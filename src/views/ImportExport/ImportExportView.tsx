@@ -36,12 +36,12 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
         }
       }
     } catch {
-      // Stilzwijgen bij parse fout
+      // Ignore parse error
     }
     return userId;
   })();
 
-  // --- 1. EXPORT: Alleen jouw eigen data (exclusief vriend-meta) ---
+  // --- 1. EXPORT: Only your own data (excluding friend meta) ---
   const handleExport = async (): Promise<void> => {
     try {
       setLoading(true);
@@ -66,18 +66,18 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
       downloadAnchor.click();
       downloadAnchor.remove();
 
-      setStatusMessage('Jouw data is succesvol geëxporteerd!');
+      setStatusMessage('Your data has been successfully exported!');
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error(error.message);
       }
-      setStatusMessage('Fout opgetreden bij het exporteren.');
+      setStatusMessage('An error occurred while exporting.');
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 2. IMPORT: Sla vriend-items én het profiel-record op ---
+  // --- 2. IMPORT: Save friend items & profile record ---
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const fileReader = new FileReader();
     const files = event.target.files;
@@ -89,19 +89,19 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
           setLoading(true);
           const resultString = e.target?.result;
           if (typeof resultString !== 'string') {
-            throw new Error('Bestand kon niet als tekst gelezen worden');
+            throw new Error('File could not be read as text');
           }
 
           const importedData = JSON.parse(resultString) as ExportPackage;
 
           if (importedData.themeId && importedData.themeId !== theme.id) {
-            setStatusMessage(`⚠️ Fout: Dit bestand hoort bij thema '${importedData.themeId}', maar je bent nu in '${theme.id}'.`);
+            setStatusMessage(`⚠️ Error: This file belongs to theme '${importedData.themeId}', but you are currently in '${theme.id}'.`);
             setLoading(false);
             return;
           }
 
           if (!importedData.items || !Array.isArray(importedData.items)) {
-            setStatusMessage('⚠️ Ongeldig bestand: Geen items gevonden.');
+            setStatusMessage('⚠️ Invalid file: No items found.');
             setLoading(false);
             return;
           }
@@ -110,15 +110,15 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
           const friendUsername = importedData.username;
 
           if (!friendUserId) {
-            setStatusMessage('⚠️ Ongeldig bestand: Kan de gebruiker van de vriend niet achterhalen.');
+            setStatusMessage("⚠️ Invalid file: Could not determine the friend's user ID.");
             setLoading(false);
             return;
           }
 
-          // A. Haal alle items voor dit thema op om te controleren op duplicaten
+          // A. Fetch existing items for this theme to check for duplicates
           const existingItems = await getAllSavedItems({ themeId: theme.id });
 
-          // B. Sla het profiel-record op onder jouw userId
+          // B. Save the profile record under your userId
           const profileExists = existingItems.some(
             (ex: GameResultItem) => ex.userId === userId && ex.type === 'friend_profile' && ex.friendUserId === friendUserId
           );
@@ -139,7 +139,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
           let addedCount = 0;
           let skippedCount = 0;
 
-          // C. Sla de reguliere game-items van de vriend op in de database
+          // C. Save the friend's regular game items to the database
           for (const item of importedData.items) {
             const itemCreatedAt = item.createdAt || (item.data?.creationDate as string);
 
@@ -162,7 +162,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
             }
           }
 
-          setStatusMessage(`✅ Import gelukt! ${addedCount} nieuwe items van ${friendUsername || 'vriend'} toegevoegd. ${skippedCount} duplicaten overgeslagen.`);
+          setStatusMessage(`✅ Import successful! ${addedCount} new items from ${friendUsername || 'friend'} added. ${skippedCount} duplicates skipped.`);
           
           window.dispatchEvent(new Event('refresh-database'));
 
@@ -170,7 +170,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
           if (err instanceof Error) {
             console.error(err.message);
           }
-          setStatusMessage('❌ Fout bij het verwerken van het importbestand.');
+          setStatusMessage('❌ Error processing the import file.');
         } finally {
           setLoading(false);
         }
@@ -181,27 +181,27 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h2>Database Synchronisatie ({theme.title})</h2>
+        <h2>Database Synchronization ({theme.title})</h2>
         <p className={styles.subtitle}>
-          Exporteer jouw gegevens of importeer het bestand van een vriend.
+          Export your data or import a friend's file.
         </p>
 
         <div className={styles.section}>
-          <h3>📤 Exporteer mijn gegevens</h3>
-          <p>Maakt een JSON-bestand met uitsluitend jouw eigen opgeslagen items.</p>
+          <h3>📤 Export My Data</h3>
+          <p>Generates a JSON file containing only your own saved items.</p>
           <button className={styles.primaryButton} onClick={handleExport} disabled={loading}>
-            {loading ? 'Bezig...' : 'Exporteer Mijn Data (.json)'}
+            {loading ? 'Processing...' : 'Export My Data (.json)'}
           </button>
         </div>
 
         <hr className={styles.divider} />
 
         <div className={styles.section}>
-          <h3>📥 Importeer vriend gegevens</h3>
-          <p>Upload het exportbestand van een vriend. De data wordt direct opgeslagen in je database.</p>
+          <h3>📥 Import Friend Data</h3>
+          <p>Upload a friend's export file. The data will be stored directly in your database.</p>
           
           <label className={`${styles.fileInputLabel} ${loading ? styles.disabled : ''}`}>
-            {loading ? 'Bezig met importeren...' : 'Kies Vriend Bestand...'}
+            {loading ? 'Importing...' : 'Choose Friend File...'}
             <input 
               type="file" 
               accept=".json" 
