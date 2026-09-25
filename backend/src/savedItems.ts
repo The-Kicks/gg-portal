@@ -28,6 +28,8 @@ router.get('/', async (req: Request, res: Response) => {
     }
 });
 
+
+
 /**
  * POST /api/saved-items
  * Creates a new user saved item (or friend profile metadata)
@@ -39,6 +41,19 @@ router.post('/', async (req: Request, res: Response) => {
         if (!userId || !type || (!name && type !== 'friend_profile')) {
             return res.status(400).json({ error: "Missing required fields." });
         }
+
+        // 1. Zorg dat de user/vriend bestaat in de User-tabel (voorkomt foreign key constraint errors)
+        await prisma.user.upsert({
+            where: { id: userId },
+            update: {
+                ...(username ? { username } : {})
+            },
+            create: {
+                id: userId,
+                username: username || friendUserId || userId,
+                passwordHash: 'IMPORTED_USER_NO_LOGIN_DUMMY_HASH' 
+            }
+        });
 
         if (type === 'sorter_active' && themeId) {
             await prisma.userSavedItem.deleteMany({

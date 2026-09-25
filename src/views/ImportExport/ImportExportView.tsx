@@ -46,7 +46,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
     try {
       setLoading(true);
       const rawItems = await getAllSavedItems({ userId, themeId: theme.id });
-      
+
       const myCleanItems = rawItems.filter((item: GameResultItem) => item.type !== 'friend_profile');
 
       const exportPackage: ExportPackage = {
@@ -81,7 +81,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const fileReader = new FileReader();
     const files = event.target.files;
-    
+
     if (files && files[0]) {
       fileReader.readAsText(files[0], "UTF-8");
       fileReader.onload = async (e: ProgressEvent<FileReader>): Promise<void> => {
@@ -150,10 +150,11 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
 
             if (!alreadyExists) {
               await createUserSavedItem({
-                userId: friendUserId,
+                userId: friendUserId, 
                 themeId: theme.id,
                 type: item.type || 'unknown',
                 name: item.name || 'Imported Item',
+                username: friendUsername,
                 data: (item.data && typeof item.data === 'object') ? item.data : {}
               });
               addedCount++;
@@ -163,7 +164,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
           }
 
           setStatusMessage(`✅ Import successful! ${addedCount} new items from ${friendUsername || 'friend'} added. ${skippedCount} duplicates skipped.`);
-          
+
           window.dispatchEvent(new Event('refresh-database'));
 
         } catch (err: unknown) {
@@ -199,15 +200,15 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
         <div className={styles.section}>
           <h3>📥 Import Friend Data</h3>
           <p>Upload a friend's export file. The data will be stored directly in your database.</p>
-          
+
           <label className={`${styles.fileInputLabel} ${loading ? styles.disabled : ''}`}>
             {loading ? 'Importing...' : 'Choose Friend File...'}
-            <input 
-              type="file" 
-              accept=".json" 
-              onChange={handleFileChange} 
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleFileChange}
               disabled={loading}
-              style={{ display: 'none' }} 
+              style={{ display: 'none' }}
             />
           </label>
         </div>
