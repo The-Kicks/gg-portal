@@ -41,13 +41,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
     return userId;
   })();
 
-  // --- 1. EXPORT: Only your own data (excluding friend meta) ---
   const handleExport = async (): Promise<void> => {
     try {
       setLoading(true);
       const rawItems = await getAllSavedItems({ userId, themeId: theme.id });
 
-      const myCleanItems = rawItems.filter((item: GameResultItem) => item.type !== 'friend_profile');
+      const myCleanItems = rawItems.filter(
+        (item: GameResultItem) => item.type !== 'friend_profile'
+      );
 
       const exportPackage: ExportPackage = {
         version: '1.0',
@@ -55,7 +56,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
         userId: userId,
         username: currentUsername,
         exportedAt: new Date().toISOString(),
-        items: myCleanItems
+        items: myCleanItems 
       };
 
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportPackage, null, 2));
@@ -77,7 +78,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
     }
   };
 
-  // --- 2. IMPORT: Save friend items & profile record ---
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const fileReader = new FileReader();
     const files = event.target.files;
@@ -115,17 +115,15 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
             return;
           }
 
-          // A. Fetch existing items for this theme to check for duplicates
-          const existingItems = await getAllSavedItems({ themeId: theme.id });
+          const myExistingItems = await getAllSavedItems({ userId, themeId: theme.id });
 
-          // B. Save the profile record under your userId
-          const profileExists = existingItems.some(
-            (ex: GameResultItem) => ex.userId === userId && ex.type === 'friend_profile' && ex.friendUserId === friendUserId
+          const profileExists = myExistingItems.some(
+            (ex: GameResultItem) => ex.type === 'friend_profile' && ex.data?.friendUserId === friendUserId
           );
 
           if (!profileExists && friendUsername) {
             await createUserSavedItem({
-              userId: userId,
+              userId: userId, 
               themeId: theme.id,
               type: 'friend_profile',
               name: `Friend Profile: ${friendUsername}`,
@@ -136,21 +134,22 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
             });
           }
 
+          const existingFriendItems = await getAllSavedItems({ userId: friendUserId, themeId: theme.id });
+
           let addedCount = 0;
           let skippedCount = 0;
 
-          // C. Save the friend's regular game items to the database
           for (const item of importedData.items) {
             const itemCreatedAt = item.createdAt || (item.data?.creationDate as string);
 
-            const alreadyExists = existingItems.some((ex: GameResultItem) => {
+            const alreadyExists = existingFriendItems.some((ex: GameResultItem) => {
               const exCreatedAt = ex.createdAt || (ex.data?.creationDate as string);
-              return ex.userId === friendUserId && exCreatedAt === itemCreatedAt;
+              return ex.name === item.name && exCreatedAt === itemCreatedAt;
             });
 
             if (!alreadyExists) {
               await createUserSavedItem({
-                userId: friendUserId, 
+                userId: friendUserId,
                 themeId: theme.id,
                 type: item.type || 'unknown',
                 name: item.name || 'Imported Item',

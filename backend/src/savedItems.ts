@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /api/saved-items
- * Creates a new user saved item (or friend profile metadata)
+ * Maakt een nieuw item aan of werkt een bestaand item bij (voorkomt duplicaten)
  */
 router.post('/', async (req: Request, res: Response) => {
     try {
@@ -42,7 +42,6 @@ router.post('/', async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Missing required fields." });
         }
 
-        // 1. Zorg dat de user/vriend bestaat in de User-tabel (voorkomt foreign key constraint errors)
         await prisma.user.upsert({
             where: { id: userId },
             update: {
@@ -64,24 +63,46 @@ router.post('/', async (req: Request, res: Response) => {
                 }
             });
         }
+        const itemName = name || (type === 'friend_profile' ? `Friend: ${username || friendUserId}` : 'Unnamed Item');
 
-        const itemData = (data && typeof data === 'object') ? { ...data } : {};
-        if (username) itemData.username = username;
-        if (friendUserId) itemData.friendUserId = friendUserId;
-
-        const newSavedItem = await prisma.userSavedItem.create({
-            data: {
+        const existingItem = await prisma.userSavedItem.findFirst({
+            where: {
                 userId,
                 themeId: themeId || null,
                 type,
-                name: name || (type === 'friend_profile' ? `Friend: ${username || friendUserId}` : 'Unnamed Item'),
-                data: itemData
+                name: itemName
             }
         });
 
-        res.status(201).json(newSavedItem);
+        const itemData = (data && typeof data === 'object') ? { ...data } : {};
+        if (username && !itemData.username) itemData.username = username;
+        if (friendUserId && !itemData.friendUserId) itemData.friendUserId = friendUserId;
+
+        let savedItem;
+
+        if (existingItem) {
+            savedItem = await prisma.userSavedItem.update({
+                where: { id: existingItem.id },
+                data: {
+                    themeId: themeId || null,
+                    data: itemData
+                }
+            });
+        } else {
+            savedItem = await prisma.userSavedItem.create({
+                data: {
+                    userId,
+                    themeId: themeId || null,
+                    type,
+                    name: itemName,
+                    data: itemData
+                }
+            });
+        }
+
+        res.status(201).json(savedItem);
     } catch (error) {
-        console.error("Error creating user saved item:", error);
+        console.error("Error creating/updating user saved item:", error);
         res.status(500).json({ error: "Internal server error while saving item." });
     }
 });
