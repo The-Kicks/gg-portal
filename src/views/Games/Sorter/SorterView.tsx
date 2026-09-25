@@ -158,7 +158,7 @@ export function SorterView({
       );
     }
 
-    const isVideoFile = /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url) || url.includes('mp4') || url.includes('video');
+    const isVideoFile = /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$|mp4|video/i.test(url);
     const currentVol = side === 'left' ? leftVolume : rightVolume;
 
     return (
@@ -233,7 +233,6 @@ export function SorterView({
           <button
             type="button"
             className={`${styles.favoriteStar} ${isLeftFav ? styles.isFavorite : ''}`}
-            style={isLeftFav ? { color: '#c0c0c0' } : undefined}
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite('left');
@@ -399,6 +398,9 @@ export function SorterView({
                         ${isUserFav ? styles.favoriteChip : ''} 
                         ${isEmptyFav ? styles.emptyFavoriteChip : ''}
                       `}
+                      style={{
+                        opacity: isFriendCat && !containsMedia && !isSelected ? 0.4 : 1,
+                      }}
                       title={titleString}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -494,6 +496,9 @@ export function SorterView({
                         ${isUserFav ? styles.favoriteChip : ''} 
                         ${isEmptyFav ? styles.emptyFavoriteChip : ''}
                       `}
+                      style={{
+                        opacity: isFriendCat && !containsMedia && !isSelected ? 0.4 : 1,
+                      }}
                       title={titleString}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -614,7 +619,6 @@ export function SorterView({
           <button
             type="button"
             className={`${styles.favoriteStar} ${isRightFav ? styles.isFavorite : ''}`}
-            style={isRightFav ? { color: '#c0c0c0' } : undefined}
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite('right');
