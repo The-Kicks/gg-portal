@@ -9,6 +9,7 @@ import { useSorterKeybinds } from './useSorterKeybinds';
 import styles from './SorterCSS/SorterSetup.module.css';
 import {
   getGameResults,
+  getAllSavedItems,
   createUserSavedItem,
   updateUserSavedItem,
   deleteUserSavedItem
@@ -18,8 +19,10 @@ export type SorterEntity = HydratedEntity;
 
 export interface MediaCategoryGroup {
   key: string;
-  label: string;
+  label: string | React.ReactNode;
   urls: string[];
+  isFriendFavorite?: boolean;
+  friendUsername?: string;
 }
 
 interface SorterViewPageProps {
@@ -120,6 +123,9 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
   });
 
   const [globalFavorites, setGlobalFavorites] = useState<Record<string, string[]>>({});
+  const [friendProfiles, setFriendProfiles] = useState<{ friendUserId: string; username: string }[]>([]);
+  const [friendFavoritesMap, setFriendFavoritesMap] = useState<Record<string, Record<string, string[]>>>({});
+  
   const [activeSaveId, setActiveSaveId] = useState<string | null>(null);
 
   const [tournamentList, setTournamentList] = useState<EloExtended<SorterEntity>[]>([]);
@@ -137,13 +143,13 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
   const [showResultsOverlay, setShowResultsOverlay] = useState<boolean>(false);
 
   const [startOnFavorites, setStartOnFavorites] = useState<boolean>(() => {
-  const saved = localStorage.getItem('sorter_startOnFavorites');
-  return saved !== null ? JSON.parse(saved) : false;
-});
+    const saved = localStorage.getItem('sorter_startOnFavorites');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
 
-useEffect(() => {
-  localStorage.setItem('sorter_startOnFavorites', JSON.stringify(startOnFavorites));
-}, [startOnFavorites]);
+  useEffect(() => {
+    localStorage.setItem('sorter_startOnFavorites', JSON.stringify(startOnFavorites));
+  }, [startOnFavorites]);
 
   // Helper om media en favorieten correct in te stellen bij een matchup
   const applyStartOnFavoritesForPair = (leftItem: EloExtended<SorterEntity>, rightItem: EloExtended<SorterEntity>, startFavs: boolean) => {
@@ -185,9 +191,10 @@ useEffect(() => {
   useEffect(() => {
     async function loadDataFromDB(): Promise<void> {
       try {
-        const items = await getGameResults({ userId, themeId: theme.id });
+        const allItems = await getAllSavedItems({ themeId: theme.id });
 
-        const activeSaves = items.filter((i) => i.type === 'sorter_active');
+        // 1. Active sorter saves voor de huidige gebruiker
+        const activeSaves = allItems.filter((i) => i.type === 'sorter_active' && i.userId === userId);
         if (activeSaves.length > 0) {
           const activeSave = activeSaves[0];
           if (activeSave?.id) {
@@ -203,7 +210,8 @@ useEffect(() => {
           }
         }
 
-        const favoriteItems = items.filter((i) => i.type === 'favorites');
+        // 2. Eigen favorieten van de gebruiker
+        const favoriteItems = allItems.filter((i) => i.type === 'favorites' && i.userId === userId);
         if (favoriteItems.length > 0) {
           const favItem = favoriteItems[0];
           if (favItem?.data && typeof favItem.data === 'object') {
@@ -224,6 +232,45 @@ useEffect(() => {
             }
           }
         }
+
+        // 3. Vriendenprofielen die in jouw DB zijn opgeslagen
+        const myFriendProfiles = allItems.filter((i) => i.type === 'friend_profile' && i.userId === userId);
+        const profiles: { friendUserId: string; username: string }[] = [];
+        myFriendProfiles.forEach((fp) => {
+          if (fp.data && typeof fp.data === 'object') {
+            const data = fp.data as Record<string, unknown>;
+            const fUserId = (data.friendUserId || data.userId) as string;
+            const fUsername = (data.username || data.name) as string;
+            if (fUserId) {
+              profiles.push({
+                friendUserId: fUserId,
+                username: fUsername || fUserId,
+              });
+            }
+          }
+        });
+        setFriendProfiles(profiles);
+
+        // 4. Favorieten van de vrienden (items met type 'favorites' en userId van de vriend)
+        const friendUserIds = new Set(profiles.map(p => p.friendUserId));
+        const newFriendFavMap: Record<string, Record<string, string[]>> = {};
+
+        allItems.forEach((item) => {
+          if (item.type === 'favorites' && friendUserIds.has(item.userId)) {
+            if (item.data && typeof item.data === 'object') {
+              const rawData = item.data as Record<string, unknown>;
+              const parsedFavs: Record<string, string[]> = {};
+              for (const [key, val] of Object.entries(rawData)) {
+                if (Array.isArray(val)) {
+                  parsedFavs[key] = val.filter((v): v is string => typeof v === 'string');
+                }
+              }
+              newFriendFavMap[item.userId] = parsedFavs;
+            }
+          }
+        });
+        setFriendFavoritesMap(newFriendFavMap);
+
       } catch (error) {
         console.error('Fout bij ophalen opgeslagen items uit DB:', error);
       }
@@ -334,7 +381,7 @@ useEffect(() => {
     }
   };
 
- const handleLoad = async (): Promise<void> => {
+  const handleLoad = async (): Promise<void> => {
     try {
       const items = await getGameResults({ userId, themeId: theme.id, type: 'sorter_active' });
       const activeSave = items.at(0);
@@ -342,7 +389,6 @@ useEffect(() => {
       if (activeSave?.data) {
         const data = activeSave.data as SorterSaveDataShape;
         
-        // 1. Zet de includedGroupIds direct in een lokale variabele en update de state
         const loadedGroupIds = data.includedGroupIds || includedGroupIds;
         if (data.includedGroupIds) {
           setIncludedGroupIds(data.includedGroupIds);
@@ -359,7 +405,6 @@ useEffect(() => {
             entityMap.set(e.id, cloned);
           });
 
-          // 2. Filter hier direct op basis van loadedGroupIds in plaats van te wachten op de state update
           const restoredTournamentList = rankableItems
             .filter((item) => {
               const connectedParentIds = item.targetConnections?.map((conn) => conn.sourceEntityId) || [];
@@ -573,6 +618,7 @@ useEffect(() => {
         });
       }
 
+      // Eigen favorieten toevoegen
       const favs = globalFavorites[entity.id] || [];
       groups.push({
         key: 'favorites',
@@ -580,9 +626,36 @@ useEffect(() => {
         urls: favs,
       });
 
+      // Favorieten van vrienden toevoegen met 2-poppetjes SVG + sterretje
+      friendProfiles.forEach((fp) => {
+        const friendFavs = friendFavoritesMap[fp.friendUserId]?.[entity.id] || [];
+        if (friendFavs.length > 0) {
+          groups.push({
+            key: `friend_fav_${fp.friendUserId}`,
+            label: (
+              <span 
+                title={`Friend Favorites: ${fp.username}`} 
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', verticalAlign: 'middle' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                ⭐
+              </span>
+            ),
+            urls: friendFavs,
+            isFriendFavorite: true,
+            friendUsername: fp.username,
+          });
+        }
+      });
+
       return groups;
     };
-  }, [globalFavorites, theme]);
+  }, [globalFavorites, friendProfiles, friendFavoritesMap, theme]);
 
   const mediaCalculation = useMemo(() => {
     const currentPair = history.at(-1);
@@ -630,14 +703,20 @@ useEffect(() => {
   }, [history, leftMediaIndex, rightMediaIndex, activeLeftMediaCategory, activeRightMediaCategory, getMediaCategoriesForEntity]);
 
   const toggleFavorite = (side: 'left' | 'right') => {
+    const isLeft = side === 'left';
+    const activeCat = isLeft ? activeLeftMediaCategory : activeRightMediaCategory;
+
+    // BELANGRIJK: Vrienden favorieten mogen niet worden bewerkt (toegevoegd/verwijderd)
+    if (activeCat?.startsWith('friend_fav_')) {
+      return;
+    }
+
     const currentPair = history.at(-1);
     if (!currentPair || !mediaCalculation) return;
     const [leftItem, rightItem] = currentPair;
     if (!leftItem || !rightItem) return;
 
     const { currentLeftMediaUrl, currentRightMediaUrl } = mediaCalculation;
-
-    const isLeft = side === 'left';
     const targetItem = isLeft ? leftItem : rightItem;
     const currentMediaUrl = isLeft ? currentLeftMediaUrl : currentRightMediaUrl;
 

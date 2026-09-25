@@ -40,6 +40,8 @@ interface SorterViewProps {
   onOpenResults: () => void;
   startOnFavorites: boolean;
   setStartOnFavorites: (valOrUpdater: boolean | ((prev: boolean) => boolean)) => void;
+  leftFriendName?: string;
+  rightFriendName?: string;
 }
 
 interface KeyInfo {
@@ -95,7 +97,6 @@ export function SorterView({
   const [leftHasAudio, setLeftHasAudio] = useState<boolean>(false);
   const [rightHasAudio, setRightHasAudio] = useState<boolean>(false);
 
-  // States voor lege favorieten feedback
   const [leftEmptyFavMessage, setLeftEmptyFavMessage] = useState<string | null>(null);
   const [rightEmptyFavMessage, setRightEmptyFavMessage] = useState<string | null>(null);
 
@@ -232,6 +233,7 @@ export function SorterView({
           <button
             type="button"
             className={`${styles.favoriteStar} ${isLeftFav ? styles.isFavorite : ''}`}
+            style={isLeftFav ? { color: '#c0c0c0' } : undefined}
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite('left');
@@ -293,7 +295,6 @@ export function SorterView({
               </div>
               <span className={styles.toggleLabel}>Start on Favorite</span>
             </label>
-
           </div>
         </div>
 
@@ -368,15 +369,24 @@ export function SorterView({
 
           {/* Linker Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls}>
-            <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
+            </div>
 
             {leftCategories.length > 0 && (
               <div className={styles.mediaCategoryChips}>
                 {leftCategories.map((cat) => {
                   const isSelected = activeLeftMediaCategory === cat.key;
                   const containsMedia = currentLeftMediaUrl ? cat.urls.includes(currentLeftMediaUrl) : false;
-                  const isEmptyFav = cat.key === 'favorites' && cat.urls.length === 0;
-                  const isFavCat = cat.key === 'favorites';
+                  const isUserFav = cat.key === 'favorites';
+                  const isEmptyFav = isUserFav && cat.urls.length === 0;
+
+                  const isFriendCat = Boolean(cat.isFriendFavorite);
+                  const friendName = cat.friendUsername || '';
+
+                  const titleString = isEmptyFav
+                    ? 'Favorites (Leeg)'
+                    : (isFriendCat ? `Friend Favorites: ${friendName}` : (typeof cat.label === 'string' ? cat.label : cat.key));
 
                   return (
                     <button
@@ -386,10 +396,10 @@ export function SorterView({
                         ${styles.mediaCategoryChip} 
                         ${isSelected ? styles.mediaCategoryChipActive : ''} 
                         ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
-                        ${isFavCat ? styles.favoriteChip : ''} 
+                        ${isUserFav ? styles.favoriteChip : ''} 
                         ${isEmptyFav ? styles.emptyFavoriteChip : ''}
                       `}
-                      title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
+                      title={titleString}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isEmptyFav) {
@@ -400,10 +410,17 @@ export function SorterView({
                         setActiveLeftMediaCategory(isSelected ? null : cat.key);
                       }}
                     >
-                      {isFavCat ? (
+                      {isUserFav ? (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill={containsMedia || isSelected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
+                      ) : isFriendCat ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {friendName}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill={containsMedia || isSelected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                          </svg>
+                        </span>
                       ) : (
                         cat.label
                       )}
@@ -413,7 +430,6 @@ export function SorterView({
               </div>
             )}
 
-            {/* Linker Feedback Melding */}
             {leftEmptyFavMessage && (
               <div className={styles.feedbackToast} style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px' }}>
                 {leftEmptyFavMessage}
@@ -448,15 +464,24 @@ export function SorterView({
 
           {/* Rechter Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls}>
-            <span className={styles.controlLabel}>Rechts ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <span className={styles.controlLabel}>Rechts ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
+            </div>
 
             {rightCategories.length > 0 && (
               <div className={styles.mediaCategoryChips}>
                 {rightCategories.map((cat) => {
                   const isSelected = activeRightMediaCategory === cat.key;
                   const containsMedia = currentRightMediaUrl ? cat.urls.includes(currentRightMediaUrl) : false;
-                  const isEmptyFav = cat.key === 'favorites' && cat.urls.length === 0;
-                  const isFavCat = cat.key === 'favorites';
+                  const isUserFav = cat.key === 'favorites';
+                  const isEmptyFav = isUserFav && cat.urls.length === 0;
+
+                  const isFriendCat = Boolean(cat.isFriendFavorite);
+                  const friendName = cat.friendUsername || '';
+
+                  const titleString = isEmptyFav
+                    ? 'Favorites (Leeg)'
+                    : (isFriendCat ? `Friend Favorites: ${friendName}` : (typeof cat.label === 'string' ? cat.label : cat.key));
 
                   return (
                     <button
@@ -466,10 +491,10 @@ export function SorterView({
                         ${styles.mediaCategoryChip} 
                         ${isSelected ? styles.mediaCategoryChipActive : ''} 
                         ${!isSelected && containsMedia ? styles.mediaCategoryChipContains : ''}
-                        ${isFavCat ? styles.favoriteChip : ''} 
+                        ${isUserFav ? styles.favoriteChip : ''} 
                         ${isEmptyFav ? styles.emptyFavoriteChip : ''}
                       `}
-                      title={isEmptyFav ? 'Favorites (Leeg)' : cat.label}
+                      title={titleString}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isEmptyFav) {
@@ -480,10 +505,17 @@ export function SorterView({
                         setActiveRightMediaCategory(isSelected ? null : cat.key);
                       }}
                     >
-                      {isFavCat ? (
+                      {isUserFav ? (
                         <svg width="12" height="12" viewBox="0 0 24 24" fill={containsMedia || isSelected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
+                      ) : isFriendCat ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {friendName}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill={containsMedia || isSelected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                          </svg>
+                        </span>
                       ) : (
                         cat.label
                       )}
@@ -493,7 +525,6 @@ export function SorterView({
               </div>
             )}
 
-            {/* Rechter Feedback Melding */}
             {rightEmptyFavMessage && (
               <div className={styles.feedbackToast} style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px' }}>
                 {rightEmptyFavMessage}
@@ -583,6 +614,7 @@ export function SorterView({
           <button
             type="button"
             className={`${styles.favoriteStar} ${isRightFav ? styles.isFavorite : ''}`}
+            style={isRightFav ? { color: '#c0c0c0' } : undefined}
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite('right');
