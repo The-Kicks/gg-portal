@@ -189,7 +189,7 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
 
               if (isGuessWho && hasGuessWho) {
                 const featuredEntity = theme.entities?.find(
-                  e => e.id === guessWhoStats.mostGuessedEntity || e.name === guessWhoStats.mostGuessedEntity
+                  e => e.id === guessWhoStats.mostGuessedEntity
                 );
 
                 return (
