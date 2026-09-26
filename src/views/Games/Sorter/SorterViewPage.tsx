@@ -572,16 +572,34 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
     setShowResultsOverlay(true);
   };
 
-  const getMediaCategoriesForEntity = useMemo(() => {
+ const getMediaCategoriesForEntity = useMemo(() => {
     return (entity: SorterEntity): MediaCategoryGroup[] => {
       const groups: MediaCategoryGroup[] = [];
-
       const profileUrls: string[] = [];
-      if (entity.image?.profileCard) {
-        profileUrls.push(entity.image.profileCard.trim());
+
+      // Helper die veilig de eerste URL pakt (zonder type-aanpassingen elders)
+      const getFirstUrl = (val: unknown): string | null => {
+        if (typeof val === 'string' && val.trim()) {
+          const first = val.split(' ')[0]?.trim();
+          return first || null;
+        }
+        if (Array.isArray(val) && val.length > 0) {
+          const first = val.find((u): u is string => typeof u === 'string' && u.trim() !== '');
+          return first ? first.trim() : null;
+        }
+        return null;
+      };
+
+      const profileCardVal = entity.image?.profileCard as unknown;
+      const profileCardUrl = getFirstUrl(profileCardVal);
+      if (profileCardUrl) {
+        profileUrls.push(profileCardUrl);
       }
-      if (entity.image?.heroBanner) {
-        profileUrls.push(entity.image.heroBanner.trim());
+
+      const heroBannerVal = entity.image?.heroBanner as unknown;
+      const heroBannerUrl = getFirstUrl(heroBannerVal);
+      if (heroBannerUrl) {
+        profileUrls.push(heroBannerUrl);
       }
 
       if (profileUrls.length > 0) {
@@ -591,6 +609,8 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
           urls: profileUrls,
         });
       }
+
+      // Rest van je bestaande code...
 
       const layerMetadata = theme.layerMetadata?.[entity.type];
       if (layerMetadata?.mediaKeys) {
