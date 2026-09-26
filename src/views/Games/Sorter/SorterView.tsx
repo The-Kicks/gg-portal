@@ -203,6 +203,67 @@ export function SorterView({
     return parentConnection?.sourceEntity?.name || '';
   };
 
+const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | number)[]) => {
+    if (!form || form.length === 0) {
+      return (
+        <div style={{ padding: '6px 10px', fontSize: '0.65rem', opacity: 0.4, fontStyle: 'italic', textAlign: 'center' }}>
+          n/a
+        </div>
+      );
+    }
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '3px', 
+        alignItems: 'center', 
+        width: 'fit-content',
+        background: 'rgba(0, 0, 0, 0.2)',
+        padding: '4px',
+        borderRadius: '6px',
+        border: '1px solid rgba(255, 255, 255, 0.05)'
+      }}>
+        {form.map((result, i) => {
+          const opponentId = opponents?.[i];
+          const opponent = tournamentList.find(e => e.id === opponentId);
+          const opponentName = opponent ? opponent.name : 'Onbekende tegenstander';
+          
+          return (
+            <div 
+              key={i} 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                width: '18px', 
+                height: '18px',
+                cursor: 'pointer'
+              }}
+              title={`${result === 'W' ? 'Gewonnen' : 'Verloren'} van ${opponentName}`}
+            >
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '3px',
+                  fontSize: '9px',
+                  fontWeight: 'bold',
+                  backgroundColor: result === 'W' ? '#22c55e' : '#ef4444',
+                  color: '#ffffff',
+                }}
+              >
+                {result}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const liveTopThree = [...tournamentList]
     .sort((a, b) => b.elo - a.elo)
     .slice(0, 3);
@@ -249,11 +310,11 @@ export function SorterView({
             <span className={styles.tierTag} style={{ backgroundColor: leftTier.color }}>{leftTier.abbreviation}</span>
             {leftItem.name}
           </h3>
-          <p className={styles.entitySubtitle}>{getItemSubtitle(leftItem)}</p>
+          <p className={styles.entitySubtitle}>{getItemSubtitle(leftItem)}</p>   
         </div>
       </div>
 
-      {/* MIDDENSECTIE */}
+  {/* MIDDENSECTIE */}
       <div className={styles.centerColumn}>
         <div className={styles.centerTopSection}>
           <div className={styles.headerZone}>
@@ -367,7 +428,7 @@ export function SorterView({
           )}
 
           {/* Linker Kant Media Categorieën & Carrousel */}
-          <div className={styles.carouselControls}>
+          <div className={styles.carouselControls} style={{ width: '100%', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
               <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
             </div>
@@ -465,7 +526,7 @@ export function SorterView({
           <div className={styles.vsBadge}>VS</div>
 
           {/* Rechter Kant Media Categorieën & Carrousel */}
-          <div className={styles.carouselControls}>
+          <div className={styles.carouselControls} style={{ width: '100%', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
               <span className={styles.controlLabel}>Rechts ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
             </div>
@@ -582,6 +643,12 @@ export function SorterView({
             </div>
           </div>
         )}
+
+        {/* W/L kolommen direct tegen de linker- en rechterrand uitgelijnd */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', margin: '6px 0' }}>
+          {renderVerticalFormList(leftItem.recentForm, leftItem.recentOpponents)}
+          {renderVerticalFormList(rightItem.recentForm, rightItem.recentOpponents)}
+        </div>
 
         {/* Live Top 3 */}
         <div className={styles.leaderboardZone} onClick={onOpenResults}>

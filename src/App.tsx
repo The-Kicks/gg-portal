@@ -14,6 +14,7 @@ import { AdminDashboard, AdminEditPage, AdminEntityCreate, AdminThemeManager } f
 import { Login } from './core/components/Login'
 import { Register } from './core/components/Register';
 import { ImportExportView } from './views/ImportExport/ImportExportView';
+import { CompareSortersView } from './views/Games/CompareSorter/CompareSortersView';
 import type { Theme } from './types';
 
 interface AppContentProps {
@@ -84,10 +85,11 @@ function AppContent({ loadedThemes, refreshThemes, onLogout, userId }: AppConten
         <Route path="/" element={<Navigate to="home" replace />} />
         <Route path="home" element={<Home theme={activeTheme} isDark={isDark} onLogout={onLogout} />} />
         <Route path="guesswho" element={<GuessWhoViewPage theme={activeTheme} userId={userId} />} />
-        <Route path="blindranking" element={<BlindRankingViewPage theme={activeTheme}/>} />
-        <Route path="sorter" element={<SorterViewPage theme={activeTheme}/>} />
+        <Route path="blindranking" element={<BlindRankingViewPage theme={activeTheme} />} />
+        <Route path="sorter" element={<SorterViewPage theme={activeTheme} />} />
 
         <Route path="sync" element={<ImportExportView theme={activeTheme} userId={userId} />} />
+        <Route path="compare" element={<CompareSortersView theme={activeTheme} />} />
 
         <Route path="l1" element={hasLayer('l1') ? <L1View theme={activeTheme} /> : <Navigate to="../home" replace />} />
         <Route path="l2" element={hasLayer('l2') ? <L2View theme={activeTheme} /> : <Navigate to="../l3" replace />} />
@@ -191,7 +193,7 @@ export default function App() {
       <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'sans-serif', color: 'red' }}>
         <h3>Cant establish connection with database. 🛑</h3>
         <p>Please check if database is online and backend is running</p>
-        <button 
+        <button
           onClick={handleLogout}
           style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#333', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
         >
@@ -205,16 +207,16 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to={`/${loadedThemes[0].id}/home`} replace />} />
-        <Route 
-          path="/:themeName/*" 
+        <Route
+          path="/:themeName/*"
           element={
-            <AppContent 
-              loadedThemes={loadedThemes} 
-              refreshThemes={refreshThemes} 
+            <AppContent
+              loadedThemes={loadedThemes}
+              refreshThemes={refreshThemes}
               onLogout={handleLogout}
               userId={userId}
             />
-          } 
+          }
         />
         <Route path="*" element={<Navigate to={`/${loadedThemes[0].id}/home`} replace />} />
       </Routes>

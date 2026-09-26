@@ -12,10 +12,6 @@ interface NavbarProps {
   toggleDark: () => void;
 }
 
-/**
- * Global navigation header component that renders branding links, theme toggles,
- * dynamic navigational steps based on layout configuration settings, and the workspace theme switcher.
- */
 export const Navbar = ({ loadedThemes, activeTheme, onThemeChange, isDark, toggleDark }: NavbarProps) => {
   const navigate = useNavigate();
   const { themeName } = useParams<{ themeName: string }>();
@@ -23,10 +19,6 @@ export const Navbar = ({ loadedThemes, activeTheme, onThemeChange, isDark, toggl
 
   const currentLayer = location.pathname.split('/').pop() || 'home';
 
-  /**
-   * Postpones routing execution slightly using a brief timeout delay to allow active 
-   * heavy sub-elements, charts, or frames enough window space to clear and unmount smoothly.
-   */
   const handleNavClick = (layer: string) => {
     setTimeout(() => {
       navigate(`/${themeName}/${layer.toLowerCase()}`);
@@ -67,6 +59,29 @@ export const Navbar = ({ loadedThemes, activeTheme, onThemeChange, isDark, toggl
       </div>
 
       <div className={styles.navRight}>
+        <button
+          type="button"
+          className={`${styles.navIconBtn} ${currentLayer === 'sync' ? styles.active : ''}`}
+          onClick={() => handleNavClick('sync')}
+          title="Delen / Synchroniseren"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </button>
+
         <ThemeSelector
           loadedThemes={loadedThemes}
           currentThemeId={activeTheme.id}

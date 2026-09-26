@@ -76,3 +76,29 @@
   font-weight: bold;
   border-bottom: 2px solid var(--secondary); /* High contrast underline indicator */
 }
+
+/* ==========================================================================
+   Navigation Icon Button (Sync / Actions)
+   ========================================================================== */
+.navIconBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text); /* Neemt netjes de tekstkleur van je thema over */
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%; /* Maakt het hover-effect mooi rond */
+  transition: background-color 0.2s ease;
+}
+
+/* Subtiele achtergrond alleen bij hover, verder volledig transparant */
+.navIconBtn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Actieve status wanneer je op de sync-pagina bent */
+.navIconBtn.active {
+  background-color: rgba(255, 255, 255, 0.2);
+}

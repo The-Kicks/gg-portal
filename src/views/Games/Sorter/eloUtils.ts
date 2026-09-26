@@ -23,6 +23,11 @@ export const SORTER_SETTINGS = {
    * Disfavour entities with a lot of matches in matchup selection
    */
   PLAYED_ADVANTAGE: 2,
+
+  /**
+   * Aantal recente tegenstanders & vorm om bij te houden (laatste 5)
+   */
+  MAX_RECENT_OPPONENTS: 5,
 };
 
 // Backwards compatibility voor andere componenten die INITIAL_ELO rechtstreeks importeren
@@ -32,8 +37,11 @@ export const INITIAL_ELO = SORTER_SETTINGS.INITIAL_ELO;
 // TYPES & INTERFACES
 // ============================================================================
 export type EloExtended<T> = T & {
+  id: string | number;
   elo: number;
   matchesPlayed: number;
+  recentOpponents?: (string | number)[];
+  recentForm?: ('W' | 'L')[];
 };
 
 export interface SorterStage {
@@ -52,10 +60,6 @@ export interface SorterTier {
 // ============================================================================
 // TIERS
 // ============================================================================
-// Quick & dirty local tiers. TODO: derive these from the database (cutoff,
-// name, abbreviation, colour, and eventually an image) instead of hardcoding.
-
-// Shown for entities that have not finished their placement games yet.
 export const UNRANKED_TIER: SorterTier = {
   name: 'Unranked',
   abbreviation: 'UR',
@@ -63,14 +67,13 @@ export const UNRANKED_TIER: SorterTier = {
   minElo: -Infinity,
 };
 
-// Ordered from highest cutoff to lowest so getTier can return the first match.
 export const SORTER_TIERS: SorterTier[] = [
-  { name: 'Master',   abbreviation: 'MST', color: '#c084fc', minElo: 1550 },
-  { name: 'Diamond',  abbreviation: 'DIA', color: '#38bdf8', minElo: 1450 },
-  { name: 'Platinum', abbreviation: 'PLT', color: '#2dd4bf', minElo: 1350 },
-  { name: 'Gold',     abbreviation: 'GLD', color: '#eab308', minElo: 1250 },
-  { name: 'Silver',   abbreviation: 'SLV', color: '#9ca3af', minElo: 1150 },
-  { name: 'Bronze',   abbreviation: 'BRZ', color: '#cd7f32', minElo: -Infinity },
+  { name: 'Master',    abbreviation: 'MST', color: '#c084fc', minElo: 1550 },
+  { name: 'Diamond',   abbreviation: 'DIA', color: '#38bdf8', minElo: 1450 },
+  { name: 'Platinum',  abbreviation: 'PLT', color: '#2dd4bf', minElo: 1350 },
+  { name: 'Gold',      abbreviation: 'GLD', color: '#eab308', minElo: 1250 },
+  { name: 'Silver',    abbreviation: 'SLV', color: '#9ca3af', minElo: 1150 },
+  { name: 'Bronze',    abbreviation: 'BRZ', color: '#cd7f32', minElo: -Infinity },
 ];
 
 export function getTier<T extends HydratedEntity>(entity: EloExtended<T>): SorterTier {
@@ -83,7 +86,7 @@ export function getTier<T extends HydratedEntity>(entity: EloExtended<T>): Sorte
 // ============================================================================
 // FUNCTIES
 // ============================================================================
-export function processMatch <T extends HydratedEntity> (A: EloExtended<T>, B:EloExtended<T>, outcome: 'A' | 'B'): void {
+export function processMatch <T extends HydratedEntity> (A: EloExtended<T>, B: EloExtended<T>, outcome: 'A' | 'B'): void {
   const expectedA: number = 1 / (1 + Math.pow(10, (B.elo - A.elo) / 400));
   const expectedB: number = 1 / (1 + Math.pow(10, (A.elo - B.elo) / 400));
 
@@ -95,6 +98,21 @@ export function processMatch <T extends HydratedEntity> (A: EloExtended<T>, B:El
 
   A.elo += kA * (actualA - expectedA);
   B.elo += kB * (actualB - expectedB);
+
+  // Recente tegenstanders bijhouden (laatste 5)
+  const maxRecent = SORTER_SETTINGS.MAX_RECENT_OPPONENTS;
+  A.recentOpponents = [B.id, ...(A.recentOpponents || [])].slice(0, maxRecent);
+  B.recentOpponents = [A.id, ...(B.recentOpponents || [])].slice(0, maxRecent);
+
+  // Vorm ('W' | 'L') expliciet getypeerd om TypeScript errors te voorkomen
+  const formA = (outcome === 'A' ? 'W' : 'L') as 'W' | 'L';
+  const formB = (outcome === 'B' ? 'W' : 'L') as 'W' | 'L';
+
+  const existingFormA = (A.recentForm || []) as ('W' | 'L')[];
+  const existingFormB = (B.recentForm || []) as ('W' | 'L')[];
+
+  A.recentForm = [formA, ...existingFormA].slice(0, maxRecent) as ('W' | 'L')[];
+  B.recentForm = [formB, ...existingFormB].slice(0, maxRecent) as ('W' | 'L')[];
 }
 
 export function getNextMatch <T extends HydratedEntity> (pool: EloExtended<T>[]) : [EloExtended<T>, EloExtended<T>] | null {
@@ -105,10 +123,12 @@ export function getNextMatch <T extends HydratedEntity> (pool: EloExtended<T>[])
   const maxELO: number = Math.max(...pool.map(e => e.elo));
   const minMatches: number = Math.min(...pool.map(e => e.matchesPlayed));
   const maxMatches: number = Math.max(...pool.map(e => e.matchesPlayed));
+  
   function weight (entry: EloExtended<T>) : number {
     return 1 + SORTER_SETTINGS.ELO_ADVANTAGE * (entry.elo - minELO) / (maxELO - minELO)
-             + SORTER_SETTINGS.PLAYED_ADVANTAGE * (entry.matchesPlayed - maxMatches) / (minMatches - maxMatches);
+            + SORTER_SETTINGS.PLAYED_ADVANTAGE * (entry.matchesPlayed - maxMatches) / (minMatches - maxMatches);
   }
+  
   const total = pool.reduce((sum, current) => sum + weight(current), 0);
   const target = Math.random() * total;
 
@@ -116,10 +136,25 @@ export function getNextMatch <T extends HydratedEntity> (pool: EloExtended<T>[])
   for (let sum: number = 0; sum + weight(pool[index]) < target; sum += weight(pool[index++]));
   const A: EloExtended<T> = pool[index];
 
-  // OPTIONAL: implement max ELO gap
-  let eloGap:number  = 25;
-  for (; pool.filter(e => Math.abs(A.elo - e.elo) <= eloGap).filter(e => e !== A).length === 0; eloGap += 25);
-  const opponentPool: EloExtended<T>[] = pool.filter(e => Math.abs(A.elo - e.elo) < eloGap).filter(e => e !== A);
+  let eloGap: number = 25;
+  let opponentPool: EloExtended<T>[] = [];
+
+  while (opponentPool.length === 0 && eloGap <= 500) {
+    const basePool = pool.filter(e => Math.abs(A.elo - e.elo) <= eloGap && e !== A);
+    const recent = A.recentOpponents || [];
+    
+    opponentPool = basePool.filter(e => !recent.includes(e.id));
+
+    if (opponentPool.length === 0 && basePool.length > 0) {
+      opponentPool = basePool;
+    } else if (opponentPool.length === 0) {
+      eloGap += 25;
+    }
+  }
+
+  if (opponentPool.length === 0)
+    return null;
+
   const B: EloExtended<T> = opponentPool[Math.floor(Math.random() * opponentPool.length)];
 
   return [A, B];
