@@ -61,6 +61,27 @@ export const Navbar = ({ loadedThemes, activeTheme, onThemeChange, isDark, toggl
       <div className={styles.navRight}>
         <button
           type="button"
+          className={`${styles.navIconBtn} ${currentLayer === 'compare' ? styles.active : ''}`}
+          onClick={() => handleNavClick('compare')}
+          title="Vergelijk Sorters"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M7 18V6M3 10l4-4 4 4" />
+            <path d="M17 6v12m-4-4l4 4 4-4" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
           className={`${styles.navIconBtn} ${currentLayer === 'sync' ? styles.active : ''}`}
           onClick={() => handleNavClick('sync')}
           title="Delen / Synchroniseren"
