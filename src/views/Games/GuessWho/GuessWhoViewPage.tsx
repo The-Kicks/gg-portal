@@ -109,7 +109,7 @@ const GuessWhoGameEngine: React.FC<GuessWhoGameEngineProps> = ({ theme, availabl
   const [guesses, setGuesses] = useState<GuessRow[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  
+
   const hasSavedRef = useRef(false);
 
   const startNewGame = useCallback(() => {
@@ -274,7 +274,7 @@ const GuessWhoGameEngine: React.FC<GuessWhoGameEngineProps> = ({ theme, availabl
         setGameOver(true);
 
         if (!hasSavedRef.current) {
-          hasSavedRef.current = true; 
+          hasSavedRef.current = true;
 
           const actualGuessesCount = updatedGuesses.filter(g => g.entity.id !== 'hint-placeholder').length;
           const hintsCount = updatedGuesses.filter(g => g.entity.id === 'hint-placeholder').length;
@@ -287,7 +287,8 @@ const GuessWhoGameEngine: React.FC<GuessWhoGameEngineProps> = ({ theme, availabl
             type: 'guesswho',
             name: `Guess Who: ${theme?.title || theme?.id || 'Onbekend'} - ${secretEntity?.name || 'Item'}`,
             data: {
-              secretEntityName: secretEntity?.name,
+              secretEntityId: secretEntity?.id,       
+              secretEntityName: secretEntity?.name, 
               result: isGiveUp ? 'gave_up' : 'won',
               guessesCount: actualGuessesCount,
               hintsUsed: hintsCount,

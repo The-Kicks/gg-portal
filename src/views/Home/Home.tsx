@@ -23,6 +23,19 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
 
   const [sorterIndex, setSorterIndex] = useState<number>(0);
 
+  const findEntity = (key?: string) => {
+    if (!theme.entities || !key) return undefined;
+    const cleanKey = key.trim().toLowerCase();
+
+    const byId = theme.entities.find(e => e.id.toLowerCase() === cleanKey);
+    if (byId) return byId;
+
+    const byName = theme.entities.find(e => e.name.toLowerCase() === cleanKey);
+    if (byName) return byName;
+
+    return undefined;
+  };
+
   const sortedGames = [...(theme.games || [])].sort((a, b) => a.localeCompare(b));
 
   const availableGamesLower = sortedGames.map(g => g.toLowerCase());
@@ -147,7 +160,7 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
                         <div className={styles.sorterTop5Row}>
                           {currentSorterTop5.slice(0, 5).map((item, index) => {
                             const rank = index + 1;
-                            const entity = theme.entities?.find(e => e.id === item.id);
+                            const entity = findEntity(item.id);
                             if (!entity) return null;
 
                             let borderClass = styles.sorterTop5EntityBorderStandard;
@@ -188,9 +201,7 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
               }
 
               if (isGuessWho && hasGuessWho) {
-                const featuredEntity = theme.entities?.find(
-                  e => e.id === guessWhoStats.mostGuessedEntity
-                );
+                const featuredEntity = findEntity(guessWhoStats.mostGuessedEntity);
 
                 return (
                   <div key="guesswho" className={styles.statCard}>
@@ -263,7 +274,7 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
                       {topBlindRankingItems.length > 0 ? (
                         <>
                           {topBlindRankingItems[1] && (() => {
-                            const entity = theme.entities?.find(e => e.id === topBlindRankingItems[1].id);
+                            const entity = findEntity(topBlindRankingItems[1].id);
                             return entity ? (
                               <div className={`${styles.podiumItem} ${styles.podiumSecond}`}>
                                 <span className={styles.podiumRank}>#2</span>
@@ -280,7 +291,7 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
                           })()}
 
                           {topBlindRankingItems[0] && (() => {
-                            const entity = theme.entities?.find(e => e.id === topBlindRankingItems[0].id);
+                            const entity = findEntity(topBlindRankingItems[0].id);
                             return entity ? (
                               <div className={`${styles.podiumItem} ${styles.podiumFirst}`}>
                                 <span className={styles.podiumCrown}>👑</span>
@@ -298,7 +309,7 @@ export const Home = ({ theme, isDark, onLogout }: HomeProps) => {
                           })()}
 
                           {topBlindRankingItems[2] && (() => {
-                            const entity = theme.entities?.find(e => e.id === topBlindRankingItems[2].id);
+                            const entity = findEntity(topBlindRankingItems[2].id);
                             return entity ? (
                               <div className={`${styles.podiumItem} ${styles.podiumThird}`}>
                                 <span className={styles.podiumRank}>#3</span>

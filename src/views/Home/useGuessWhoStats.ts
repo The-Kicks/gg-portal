@@ -71,8 +71,9 @@ export function useGuessWhoStats(themeId: string) {
           } else {
             totalGuesses += Number(data.guessesCount) || 0;
             
-            if (typeof data.secretEntityName === 'string' && data.secretEntityName.trim() !== '') {
-              entityCounts[data.secretEntityName] = (entityCounts[data.secretEntityName] || 0) + 1;
+            const entityKey = data.secretEntityId || data.secretEntityName;
+            if (typeof entityKey === 'string' && entityKey.trim() !== '') {
+              entityCounts[entityKey] = (entityCounts[entityKey] || 0) + 1;
             }
           }
           hintsUsed += Number(data.hintsUsed) || 0;
@@ -81,10 +82,10 @@ export function useGuessWhoStats(themeId: string) {
         let topEntity = 'Nog geen winstpartijen';
         let topCount = 0;
 
-        Object.entries(entityCounts).forEach(([name, count]) => {
+        Object.entries(entityCounts).forEach(([id, count]) => {
           if (count > topCount) {
             topCount = count;
-            topEntity = name;
+            topEntity = id;
           }
         });
 
