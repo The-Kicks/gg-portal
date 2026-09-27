@@ -743,6 +743,18 @@ export function SorterViewPage({ theme }: SorterViewPageProps) {
       nextFavs = [...currentFavs, currentMediaUrl];
     }
 
+    if (isLeft) {
+      if (activeLeftMediaCategory === 'favorites' && nextFavs.length === 0) {
+        setActiveLeftMediaCategory(null);
+        setLeftMediaIndex(0);
+      }
+    } else {
+      if (activeRightMediaCategory === 'favorites' && nextFavs.length === 0) {
+        setActiveRightMediaCategory(null);
+        setRightMediaIndex(0);
+      }
+    }
+
     setGlobalFavorites((prev) => {
       const updated = { ...prev };
       if (nextFavs.length > 0) {
