@@ -34,46 +34,11 @@ const checkIsStandaloneByMetadata = (metadata: unknown, term: string): boolean =
 };
 
 const smartAlphanumericSort = (aName: string, bName: string) => {
-  const parsePrefix = (str: string) => {
-    const match = str.trim().match(/^([A-Za-z]*)(\d+)(.*)$/);
-    if (match) {
-      return {
-        prefix: match[1].toLowerCase(),
-        num: parseInt(match[2], 10),
-        rest: match[3]
-      };
-    }
-    const matchOnlyNum = str.trim().match(/^(\d+)(.*)$/);
-    if (matchOnlyNum) {
-      return {
-        prefix: '',
-        num: parseInt(matchOnlyNum[1], 10),
-        rest: matchOnlyNum[2]
-      };
-    }
-    return null;
-  };
-
-  const parsedA = parsePrefix(aName);
-  const parsedB = parsePrefix(bName);
-
-  // Als beide een prefix/getal structuur hebben (bijv. S1, S2, S10)
-  if (parsedA && parsedB) {
-    if (parsedA.prefix !== parsedB.prefix) {
-      return parsedA.prefix.localeCompare(parsedB.prefix);
-    }
-    if (parsedA.num !== parsedB.num) {
-      return parsedA.num - parsedB.num;
-    }
-    return parsedA.rest.localeCompare(parsedB.rest, undefined, { sensitivity: 'base' });
-  }
-
-  // Als eentje wel een nummer heeft en de ander niet, krijgt de genummerde voorrang
-  if (parsedA && !parsedB) return -1;
-  if (!parsedA && parsedB) return 1;
-
-  // Standaard alfabetische sortering als geen van beide een nummer bevat
-  return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base', ignorePunctuation: true });
+  return aName.localeCompare(bName, undefined, {
+    numeric: true,
+    sensitivity: 'base',
+    ignorePunctuation: true,
+  });
 };
 
 export const L4View: React.FC<Props> = ({ theme }) => {
