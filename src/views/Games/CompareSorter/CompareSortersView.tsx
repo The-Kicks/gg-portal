@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Theme, BaseEntity, LayerKey } from '../../../types';
 import { EntityCard } from '../../../core/components/UI/PortalCard/EntityCard/EntityCard';
-import styles from '../Sorter/SorterCSS/SorterResults.module.css';
+import styles from '../CompareSorter/CompareSortersView.module.css';
 
 interface UserStorageObject {
   id?: string;
@@ -382,7 +382,7 @@ export function CompareSortersView({
   };
 
   return (
-    <div className={styles.resultsContainer} style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
+    <div className={styles.resultsContainer}>
       <div className={styles.resultsHeader}>
         <h2 className={styles.resultsTitle}>Sorter Comparator</h2>
         <p className={styles.resultsSubtitle}>Vergelijk jouw rankings met die van je vrienden voor {theme.title}</p>
@@ -611,7 +611,6 @@ export function CompareSortersView({
                   )}
                 </div>
 
-                {/* Mediacontrols netjes onder de afbeelding geplaatst */}
                 {!hideControls && isActiveFavMode && mediaList.length > 1 && (
                   <div style={{
                     display: 'flex',
