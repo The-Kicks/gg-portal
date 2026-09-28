@@ -27,6 +27,50 @@ interface TableRow {
 }
 
 /**
+ * Slimme sorteerfunctie die tekst met voorloop-letters/getallen (zoals S1, S2, S10)
+ * correct alfanumeriek sorteert, en namen zonder nummer alfabetisch achteraan plaatst.
+ */
+const smartAlphanumericSort = (aName: string, bName: string) => {
+  const parsePrefix = (str: string) => {
+    const match = str.trim().match(/^([A-Za-z]*)(\d+)(.*)$/);
+    if (match) {
+      return {
+        prefix: match[1].toLowerCase(),
+        num: parseInt(match[2], 10),
+        rest: match[3]
+      };
+    }
+    const matchOnlyNum = str.trim().match(/^(\d+)(.*)$/);
+    if (matchOnlyNum) {
+      return {
+        prefix: '',
+        num: parseInt(matchOnlyNum[1], 10),
+        rest: matchOnlyNum[2]
+      };
+    }
+    return null;
+  };
+
+  const parsedA = parsePrefix(aName);
+  const parsedB = parsePrefix(bName);
+
+  if (parsedA && parsedB) {
+    if (parsedA.prefix !== parsedB.prefix) {
+      return parsedA.prefix.localeCompare(parsedB.prefix);
+    }
+    if (parsedA.num !== parsedB.num) {
+      return parsedA.num - parsedB.num;
+    }
+    return parsedA.rest.localeCompare(parsedB.rest, undefined, { sensitivity: 'base' });
+  }
+
+  if (parsedA && !parsedB) return -1;
+  if (!parsedA && parsedB) return 1;
+
+  return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base', ignorePunctuation: true });
+};
+
+/**
  * Main administration control panel dashboard component that exposes administrative utility links,
  * dynamic grid filtering systems, and structural schema overview visualizations for existing graph nodes.
  */
@@ -139,10 +183,10 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
       if (parentA === '-' && parentB !== '-') return 1;
       if (parentB === '-' && parentA !== '-') return -1;
 
-      const parentCompare = parentA.localeCompare(parentB);
+      const parentCompare = smartAlphanumericSort(parentA, parentB);
       if (parentCompare !== 0) return parentCompare;
 
-      return a.entity.name.localeCompare(b.entity.name);
+      return smartAlphanumericSort(a.entity.name, b.entity.name);
     });
   }, [theme?.entities, filterType, searchQuery]);
 
@@ -190,7 +234,6 @@ export const AdminDashboard: React.FC<Props> = ({ theme }) => {
         ))}
       </div>
 
-      {/* Zoekbalk met de nieuwe CSS Module klassen */}
       <div className={styles.searchContainer}>
         <input
           type="text"

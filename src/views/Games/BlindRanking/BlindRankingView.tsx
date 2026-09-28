@@ -17,6 +17,7 @@ interface ViewProps {
     maxSlots: number;
     leftSlots: number[];
     rightSlots: number[];
+    organizationName?: string;
     setIsPlaying: (val: boolean) => void;
     handleStartGame: (categoryName: string) => void;
     handlePlaceEntity: (slotIndex: number) => void;
@@ -24,6 +25,36 @@ interface ViewProps {
     handlePrevMedia: () => void;
     l1Label: string;
 }
+
+const calculateAge = (birthdayString: string | undefined): number | null => {
+    if (!birthdayString) return null;
+
+    let birthDate: Date;
+    if (birthdayString.includes('-')) {
+        const parts = birthdayString.split('-');
+        if (parts.length === 3) {
+            if (parts[0].length === 2) {
+                birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            } else {
+                birthDate = new Date(birthdayString);
+            }
+        } else {
+            birthDate = new Date(birthdayString);
+        }
+    } else {
+        birthDate = new Date(birthdayString);
+    }
+
+    if (isNaN(birthDate.getTime())) return null;
+
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+};
 
 export const BlindRankingView: React.FC<ViewProps> = ({
     isPlaying,
@@ -39,6 +70,7 @@ export const BlindRankingView: React.FC<ViewProps> = ({
     maxSlots,
     leftSlots,
     rightSlots,
+    organizationName,
     setIsPlaying,
     handleStartGame,
     handlePlaceEntity,
@@ -50,6 +82,10 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
     const progressPercent = maxSlots > 0 ? (currentIndex / maxSlots) * 100 : 0;
     const isGameOver = !currentEntity || currentIndex >= maxSlots;
+
+    const calculatedAge = calculateAge(
+        (currentEntity?.metadata?.Birthday as string) ?? undefined
+    );
 
     const handleSelectRandomCategory = () => {
         if (availableCategories.length === 0) return;
@@ -71,10 +107,12 @@ export const BlindRankingView: React.FC<ViewProps> = ({
         e.target.value = '';
     };
 
-    const getPlacedEntityImage = (placed: HydratedEntity | null): string => {
-        if (!placed?.image) return '';
+    const getPlacedEntityMedia = (placed: HydratedEntity | null): { url: string; isVideo: boolean } => {
+        if (!placed?.image) return { url: '', isVideo: false };
         const imgs = placed.image as Record<string, string | undefined>;
-        return imgs.profileCard || imgs.heroBanner || '';
+        const rawUrl = imgs.profileCard || imgs.heroBanner || '';
+        const isVideo = rawUrl.toLowerCase().endsWith('.mp4');
+        return { url: rawUrl, isVideo };
     };
 
     if (isPlaying) {
@@ -106,15 +144,25 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                         <div className={styles.horizontalRow}>
                             {leftSlots.map(index => {
                                 const placed = rankings[index];
-                                const imgUrl = getPlacedEntityImage(placed);
+                                const { url: mediaUrl, isVideo } = getPlacedEntityMedia(placed);
                                 return (
                                     <button
                                         key={index}
                                         disabled={placed !== null || !currentEntity}
                                         onClick={() => handlePlaceEntity(index)}
                                         className={`${styles.slotButton} ${placed ? styles.slotFilled : styles.slotEmpty}`}
-                                        style={placed && imgUrl ? { '--slot-bg': `url(${imgUrl})` } as React.CSSProperties : {}}
+                                        style={placed && !isVideo && mediaUrl ? { '--slot-bg': `url(${mediaUrl})` } as React.CSSProperties : {}}
                                     >
+                                        {placed && isVideo && mediaUrl && (
+                                            <video
+                                                src={mediaUrl}
+                                                className={styles.slotVideoBackground}
+                                                autoPlay
+                                                loop
+                                                muted
+                                                playsInline
+                                            />
+                                        )}
                                         <span className={styles.slotNumber}>{index + 1}</span>
                                         <div className={styles.slotBlurOverlay} />
                                         <div className={styles.slotContent}>
@@ -130,15 +178,25 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                         <div className={styles.horizontalRow}>
                             {rightSlots.map(index => {
                                 const placed = rankings[index];
-                                const imgUrl = getPlacedEntityImage(placed);
+                                const { url: mediaUrl, isVideo } = getPlacedEntityMedia(placed);
                                 return (
                                     <button
                                         key={index}
                                         disabled={placed !== null || !currentEntity}
                                         onClick={() => handlePlaceEntity(index)}
                                         className={`${styles.slotButton} ${placed ? styles.slotFilled : styles.slotEmpty}`}
-                                        style={placed && imgUrl ? { '--slot-bg': `url(${imgUrl})` } as React.CSSProperties : {}}
+                                        style={placed && !isVideo && mediaUrl ? { '--slot-bg': `url(${mediaUrl})` } as React.CSSProperties : {}}
                                     >
+                                        {placed && isVideo && mediaUrl && (
+                                            <video
+                                                src={mediaUrl}
+                                                className={styles.slotVideoBackground}
+                                                autoPlay
+                                                loop
+                                                muted
+                                                playsInline
+                                            />
+                                        )}
                                         <span className={styles.slotNumber}>{index + 1}</span>
                                         <div className={styles.slotBlurOverlay} />
                                         <div className={styles.slotContent}>
@@ -156,9 +214,43 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                     {!isGameOver ? (
                         <div className={styles.centerColumn}>
                             <div className={styles.entityCard}>
-                                <div className={styles.cardHeader}>
-                                    <span className={styles.cardSub}>Currently reviewing:</span>
-                                    <h2 className={styles.entityName}>{currentEntity?.name}</h2>
+                                {/* TOP METADATA BAR: ORGANIZATION & ORIGIN */}
+                                <div className={styles.topMetaBar}>
+                                    <div className={styles.metaBadgeTop}>
+                                        <span>Organization</span>
+                                        <strong>{organizationName || 'N/A'}</strong>
+                                    </div>
+
+                                    <div className={styles.cardHeaderCenter}>
+                                        <span className={styles.cardSub}>Currently reviewing:</span>
+                                        <h2 className={styles.entityName}>{currentEntity?.name}</h2>
+                                    </div>
+
+                                    <div className={styles.metaBadgeTopRight}>
+                                        {currentEntity?.metadata?.Nationality && Array.isArray(currentEntity.metadata.Nationality) ? (
+                                            <>
+                                                <span>Origin</span>
+                                                <div className={styles.flagsRow}>
+                                                    {(currentEntity.metadata.Nationality as string[]).map((code: string) => (
+                                                        <ReactCountryFlag
+                                                            key={code}
+                                                            countryCode={code}
+                                                            svg
+                                                            style={{
+                                                                width: '1.6em',
+                                                                height: '1.2em',
+                                                                borderRadius: '4px',
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                                            }}
+                                                            title={code}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <span style={{ visibility: 'hidden' }}>Origin</span> 
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className={`${styles.albumWrapper} ${isMatchingCategoryMedia ? styles.matchingCategory : ''}`}>
@@ -171,9 +263,9 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
                                     {currentMediaUrls.length > 0 ? (
                                         <div className={styles.mediaFlexBox}>
-                                            <a 
-                                                href={currentMediaUrls[currentMediaIndex]} 
-                                                target="_blank" 
+                                            <a
+                                                href={currentMediaUrls[currentMediaIndex]}
+                                                target="_blank"
                                                 rel="noreferrer"
                                                 className={styles.btnFullscreenMedia}
                                                 title="Open in new tab"
@@ -211,33 +303,21 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                     )}
                                 </div>
 
+                                {/* BOTTOM METADATA: POSITION/ROLE & AGE */}
                                 <div className={styles.quickMeta}>
                                     <div className={styles.metaBadge}>
                                         <span>Position / Role</span>
-                                        <strong>{Array.isArray(currentEntity?.metadata?.Role) ? currentEntity.metadata.Role.join(', ') : String(currentEntity?.metadata?.Role || 'N/A')}</strong>
+                                        <strong>
+                                            {Array.isArray(currentEntity?.metadata?.Role)
+                                                ? (currentEntity.metadata.Role as string[]).join(', ')
+                                                : String(currentEntity?.metadata?.Role || 'N/A')}
+                                        </strong>
                                     </div>
 
-                                    {currentEntity?.metadata?.Nationality && Array.isArray(currentEntity.metadata.Nationality) && (
-                                        <div className={styles.metaBadge}>
-                                            <span>Origin</span>
-                                            <div className={styles.flagsRow}>
-                                                {currentEntity.metadata.Nationality.map((code: string) => (
-                                                    <ReactCountryFlag
-                                                        key={code}
-                                                        countryCode={code}
-                                                        svg
-                                                        style={{
-                                                            width: '1.6em',
-                                                            height: '1.2em',
-                                                            borderRadius: '4px',
-                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                                                        }}
-                                                        title={code}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className={styles.metaBadge}>
+                                        <span>Age</span>
+                                        <strong>{calculatedAge !== null ? calculatedAge : 'N/A'}</strong>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -249,7 +329,7 @@ export const BlindRankingView: React.FC<ViewProps> = ({
         );
     }
 
-    {/* LOBBY INTERFACE */}
+    {/* LOBBY INTERFACE */ }
     return (
         <div className={styles.setupContainer}>
             <div className={styles.setupHeader}>
@@ -261,13 +341,12 @@ export const BlindRankingView: React.FC<ViewProps> = ({
 
             <div className={styles.menuLayout}>
                 <div className={styles.setupCard}>
-                    
-                    {/* DROPDOWN FOR L1 ENTITIES - Only displays if there are more than 1 L1 options available */}
+
                     {l1Entities.length > 1 && (
                         <div className={styles.dropdownFormGroup} style={{ marginBottom: '1.5rem' }}>
                             <label className={styles.inputLabel}>Filter by {l1Label}</label>
-                            <select 
-                                onChange={handleSelectL1Dropdown} 
+                            <select
+                                onChange={handleSelectL1Dropdown}
                                 className={styles.customCategoryInput}
                                 defaultValue=""
                                 style={{ width: '100%', cursor: 'pointer' }}
@@ -293,9 +372,9 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                 className={styles.customCategoryInput}
                                 maxLength={50}
                             />
-                            <button 
-                                type="submit" 
-                                disabled={!customCategory.trim()} 
+                            <button
+                                type="submit"
+                                disabled={!customCategory.trim()}
                                 className={styles.btnSubmitCustom}
                             >
                                 ➔

@@ -13,10 +13,6 @@ interface Props {
   theme: Theme;
 }
 
-/**
- * L2View maps, aggregates, and renders Layer 2 subsidiary nodes 
- * nested inside their corresponding Layer 1 parent entities.
- */
 export const L2View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const parentMap = new Map<string, ParentBucket>();
@@ -25,7 +21,7 @@ export const L2View: React.FC<Props> = ({ theme }) => {
 
   if (endpoints.length === 0) {
     return (
-      <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
+      <div className={styles.emptyState}>
         <h3>No data found for {theme.labels.l2 || 'Layer 2'}.</h3>
       </div>
     );
@@ -60,62 +56,113 @@ export const L2View: React.FC<Props> = ({ theme }) => {
 
   const allBuckets = Array.from(parentMap.values());
   const isInactiveStatus = (status: string) =>
-    ['disbanded', 'inactive', 'retired', 'historical'].includes(status.toLowerCase().trim());
+    ['disbanded', 'inactive', 'retired', 'historical', 'ex', 'former'].includes(status.toLowerCase().trim());
 
   const activeBuckets = allBuckets.filter((b) => !isInactiveStatus(b.parent.status || ''));
   const inactiveBuckets = allBuckets.filter((b) => isInactiveStatus(b.parent.status || ''));
 
+  const checkIfFormer = (entity: HydratedEntity) => {
+    const status = (entity.status || '').toLowerCase().trim();
+    return ['disbanded', 'inactive', 'retired', 'historical', 'ex', 'former'].includes(status) || !!entity.metadata?.PassingDate;
+  };
+
   return (
     <div className={styles.layerContainer}>
       {activeBuckets.map(({ parent, children }) => (
-        <div key={parent.id} className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{parent.name}</h2>
-          <div className={styles.cardGrid}>
-            {children.map((child, idx) => (
-              <div
-                key={`${parent.id}-${child.id}-${idx}`}
-                onClick={() => navigate(`/${theme.id}/structure/${child.id}`)}
-                className={styles.cardWrapper}
-              >
-                <EntityCard entity={child} activeKey="l2" theme={theme} labels={theme.labels} organization={parent} />
-              </div>
-            ))}
+        <section key={parent.id} className={styles.groupCard}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>{parent.name}</h2>
+            <div className={styles.groupBadge}>
+              <span className={styles.badgeDot} />
+              {children.length} leden
+            </div>
           </div>
-        </div>
+          <div className={styles.cardGrid}>
+            {children.map((child, idx) => {
+              const isFormer = checkIfFormer(child);
+              const enrichedChild = isFormer ? {
+                ...child,
+                metadata: { ...(child.metadata || {}), isFormer: true }
+              } : child;
+
+              return (
+                <div
+                  key={`${parent.id}-${child.id}-${idx}`}
+                  onClick={() => navigate(`/${theme.id}/structure/${child.id}`)}
+                  className={styles.cardWrapper}
+                  style={{ animationDelay: `${idx * 0.04}s` }}
+                >
+                  <EntityCard entity={enrichedChild} activeKey="l2" theme={theme} labels={theme.labels} organization={parent} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
       ))}
 
       {standaloneEntities.length > 0 && (
-        <div className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{theme.labels['l2_standalone'] ?? 'Independent Agencies'}</h2>
-          <div className={styles.cardGrid}>
-            {standaloneEntities.map((standalone, idx) => (
-              <div
-                key={`standalone-${standalone.id}-${idx}`}
-                onClick={() => navigate(`/${theme.id}/structure/${standalone.id}`)}
-                className={styles.cardWrapper}
-              >
-                <EntityCard entity={standalone} activeKey="l2" theme={theme} labels={theme.labels} />
-              </div>
-            ))}
+        <section className={styles.groupCard}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>{theme.labels['l2_standalone'] ?? 'Independent Agencies'}</h2>
+            <div className={styles.groupBadge}>
+              <span className={styles.badgeDot} />
+              {standaloneEntities.length} items
+            </div>
           </div>
-        </div>
+          <div className={styles.cardGrid}>
+            {standaloneEntities.map((standalone, idx) => {
+              const isFormer = checkIfFormer(standalone);
+              const enrichedStandalone = isFormer ? {
+                ...standalone,
+                metadata: { ...(standalone.metadata || {}), isFormer: true }
+              } : standalone;
+
+              return (
+                <div
+                  key={`standalone-${standalone.id}-${idx}`}
+                  onClick={() => navigate(`/${theme.id}/structure/${standalone.id}`)}
+                  className={styles.cardWrapper}
+                  style={{ animationDelay: `${idx * 0.04}s` }}
+                >
+                  <EntityCard entity={enrichedStandalone} activeKey="l2" theme={theme} labels={theme.labels} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {inactiveBuckets.map(({ parent, children }) => (
-        <div key={parent.id} className={styles.groupSection}>
-          <h2 className={styles.groupHeader}>{parent.name} ({theme.labels['disbanded_tag'] ?? 'Defunct'})</h2>
-          <div className={styles.cardGrid}>
-            {children.map((child, idx) => (
-              <div
-                key={`${parent.id}-${child.id}-${idx}`}
-                onClick={() => navigate(`/${theme.id}/structure/${child.id}`)}
-                className={styles.cardWrapper}
-              >
-                <EntityCard entity={child} activeKey="l2" theme={theme} labels={theme.labels} organization={parent} />
-              </div>
-            ))}
+        <section key={parent.id} className={`${styles.groupCard} ${styles.inactiveGroup}`}>
+          <div className={styles.groupHeaderRow}>
+            <h2 className={styles.groupHeader}>
+              {parent.name} <span className={styles.subTag}>({theme.labels['disbanded_tag'] ?? 'Defunct'})</span>
+            </h2>
+            <div className={styles.groupBadgeInactive}>
+              {children.length} leden
+            </div>
           </div>
-        </div>
+          <div className={styles.cardGrid}>
+            {children.map((child, idx) => {
+              const isFormer = checkIfFormer(child);
+              const enrichedChild = isFormer ? {
+                ...child,
+                metadata: { ...(child.metadata || {}), isFormer: true }
+              } : child;
+
+              return (
+                <div
+                  key={`${parent.id}-${child.id}-${idx}`}
+                  onClick={() => navigate(`/${theme.id}/structure/${child.id}`)}
+                  className={styles.cardWrapper}
+                  style={{ animationDelay: `${idx * 0.04}s` }}
+                >
+                  <EntityCard entity={enrichedChild} activeKey="l2" theme={theme} labels={theme.labels} organization={parent} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
       ))}
     </div>
   );

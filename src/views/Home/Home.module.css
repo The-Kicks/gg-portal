@@ -3,14 +3,15 @@
    ========================================================================== */
 .appHeader {
   text-align: center;
-  padding: 2rem 1rem;
   color: var(--text);
+  padding: 10px;
 }
 
 .appHeader h1 {
   font-size: 2.5rem;
   font-weight: 900;
   margin-bottom: 0.5rem;
+  margin-top: 0;
 }
 
 .appHeader p {
@@ -18,6 +19,23 @@
   opacity: 0.8;
   max-width: 600px;
   margin: 0 auto;
+}
+
+.welcomeBadge {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  padding: 0.35rem 0.85rem;
+  background-color: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  color: #a5b4fc;
+  font-weight: 500;
+}
+
+.username {
+  color: #ffffff;
+  font-weight: 700;
 }
 
 /* Outer layout panel boundary margins wrapper */
@@ -30,16 +48,307 @@
    ========================================================================== */
 .cardContainer {
   display: flex;
-  flex-wrap: wrap; /* Permits trailing element cards nodes to stack onto multi rows naturally */
-  gap: 1.5rem; 
-  justify-content: flex-start; /* Aligns generated elements flush left against start margins boundaries */
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  justify-content: flex-start;
   padding: 2rem 0;
   width: 100%;
 }
 
-/* Text nodes styles living directly inside PortalCard contexts wrappers */
 .gameTitle {
   font-weight: bold;
   letter-spacing: 1px;
   font-size: 1.2rem;
+}
+
+.statsSection {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.statsSectionTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 1.5rem;
+  margin-top:-10px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.statCard {
+  background-color: #0c0c0f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+}
+
+.statCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.statCardHeader h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  margin: 0;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+/* --- SORTER TOP 5 HORIZONTAAL (1 t/m 5) --- */
+.sorterContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1; /* <-- Voeg dit toe zodat de sorter-kaart de hoogte opvult */
+  justify-content: space-between; /* Verdeelt de inhoud netjes over de hoogte */
+}
+
+.sorterTop5Row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.35rem;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.sorterTop5Item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.sorterTop5RankBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #a1a1aa;
+  margin-bottom: 0.2rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sorterTop5FirstBadge {
+  color: #f59e0b;
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+.statsGrid {
+  display: grid;
+  gap: 1.25rem;
+  align-items: stretch; 
+}
+
+/* --- GUESS WHO STYLING --- */
+.guessWhoBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1; 
+  justify-content: space-between; 
+}
+
+.guessWhoFeatured {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  align-items: center; 
+  gap: 1rem;
+}
+
+.guessWhoStatsList {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+}
+
+.guessWhoStatRow {
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metricLabel {
+  font-size: 0.8rem;
+  color: #a1a1aa;
+  font-weight: 500;
+}
+
+.metricValue {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+
+.guessWhoScaleWrapper {
+  flex: 1; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.guessWhoScaleWrapper > * {
+  transform-origin: center center;
+}
+
+.guessWhoFeaturedInfo {
+  flex: 1; 
+  display: flex;
+  flex-direction: column;
+  justify-content: center; 
+  align-items: center;     
+  text-align: center;     
+  overflow: hidden;
+  gap: 0.35rem;
+}
+
+/* --- GEDEELDE PODIUM STYLING (Blind Ranking) --- */
+.podiumContainer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-top: 0.1rem;
+  gap: 0.5rem;
+}
+
+.podiumItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.podiumFirst {
+  transform: translateY(-10px);
+}
+
+.podiumCrown {
+  font-size: 0.85rem;
+  margin-bottom: 0.02rem;
+  line-height: 1;
+}
+
+.podiumRank {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #a1a1aa;
+  margin-bottom: 0.1rem;
+}
+
+/* --- SCHAAL- EN CONTAINER WRAPPERS --- */
+.sorterScaleWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.sorterScaleWrapper > * {
+  zoom: 0.92;
+  transform-origin: top center;
+}
+
+.podiumScaleWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.podiumScaleWrapper > * {
+  zoom: 0.95;
+  transform-origin: top center;
+}
+
+/* Entity Borders & Highlights */
+.sorterTop5EntityBorderFirst,
+.podiumEntityBorderFirst {
+  border: 2px solid rgba(234, 179, 8, 0.6);
+  box-shadow: 0 4px 20px rgba(234, 179, 8, 0.25);
+  background: linear-gradient(to bottom, rgba(234, 179, 8, 0.12), rgba(12, 12, 15, 0.95));
+}
+
+.sorterTop5EntityBorderSilver,
+.podiumEntityBorderSilver {
+  border: 2px solid rgba(203, 213, 225, 0.5);
+  box-shadow: 0 4px 16px rgba(203, 213, 225, 0.15);
+  background: linear-gradient(to bottom, rgba(203, 213, 225, 0.1), rgba(12, 12, 15, 0.95));
+}
+
+.sorterTop5EntityBorderBronze,
+.podiumEntityBorderBronze {
+  border: 2px solid rgba(217, 119, 6, 0.5);
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.15);
+  background: linear-gradient(to bottom, rgba(217, 119, 6, 0.1), rgba(12, 12, 15, 0.95));
+}
+
+.sorterTop5EntityBorderStandard {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 12, 15, 0.95);
+}
+
+/* Zorgt dat het item de beschikbare ruimte opvult en gecentreerd is */
+.sorterTop5Item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+/* De container rondom het elo-getal om het verticaal te centreren in de overige ruimte */
+.sorterEloWrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Het elo-getal zelf: lekker groot, dik en netjes uitgelijnd */
+.sorterEloValue {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  opacity: 0.95;
+  text-align: center;
+  padding-top:20px;
 }

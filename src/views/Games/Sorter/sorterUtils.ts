@@ -2,20 +2,28 @@ import type { Theme, HydratedEntity } from '../../../types';
 
 export const extractMediaUrls = (entity: HydratedEntity, theme: Theme): string[] => {
   const discoveredUrls: string[] = [];
+  const imageObj = entity.image as Record<string, unknown> | undefined;
 
-  if (entity.image?.profileCard) {
-    discoveredUrls.push(entity.image.profileCard.trim());
-  }
-  if (entity.image?.heroBanner) {
-    discoveredUrls.push(entity.image.heroBanner.trim());
+  const profileCard = imageObj?.profileCard;
+  if (typeof profileCard === 'string') {
+    discoveredUrls.push(...profileCard.split(' ').map(url => url.trim()).filter(Boolean));
+  } else if (Array.isArray(profileCard)) {
+    discoveredUrls.push(...profileCard.filter((url): url is string => typeof url === 'string').map(url => url.trim()));
   }
 
-  const layerMetadata = theme.layerMetadata[entity.type];
-  if (layerMetadata && layerMetadata.mediaKeys) {
+  const heroBanner = imageObj?.heroBanner;
+  if (typeof heroBanner === 'string') {
+    discoveredUrls.push(...heroBanner.split(' ').map(url => url.trim()).filter(Boolean));
+  } else if (Array.isArray(heroBanner)) {
+    discoveredUrls.push(...heroBanner.filter((url): url is string => typeof url === 'string').map(url => url.trim()));
+  }
+
+  const layerMetadata = theme.layerMetadata?.[entity.type];
+  if (layerMetadata && layerMetadata.mediaKeys && imageObj) {
     layerMetadata.mediaKeys.forEach(key => {
       if (key === 'profileCard' || key === 'heroBanner') return;
 
-      const dynamicMediaData = entity.image[key];
+      const dynamicMediaData = imageObj[key];
       if (typeof dynamicMediaData === 'string') {
         discoveredUrls.push(...dynamicMediaData.split(' ').map(url => url.trim()).filter(Boolean));
       } else if (Array.isArray(dynamicMediaData)) {

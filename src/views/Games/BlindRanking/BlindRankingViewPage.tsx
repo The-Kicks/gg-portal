@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Theme, HydratedEntity } from '../../../types';
 import { BlindRankingView } from './BlindRankingView';
+import { saveGameResult } from '../../../core/api';
 
 interface BlindRankingSettings {
   availableCategories?: string[];
@@ -11,22 +12,39 @@ interface GameSettingsConfig {
   blindranking?: BlindRankingSettings;
 }
 
-export interface BlindRankingTheme extends Omit<Theme, 'gameSettings'> {
+export interface BlindRankingTheme extends Omit<Theme, 'gameSettings' | 'orgLayer'> {
   gameSettings?: GameSettingsConfig;
+  orgLayer?: string;
 }
 
 interface Props {
   theme: BlindRankingTheme;
 }
 
+interface UserStorageObject {
+  id?: string;
+  _id?: string;
+}
+
+/**
+ * Haalt direct de userId op uit localStorage
+ */
+const getStoredUserId = (): string => {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const userObj = JSON.parse(userStr) as UserStorageObject;
+      return userObj.id || userObj._id || localStorage.getItem('userId') || '';
+    } catch (err: unknown) {
+      console.error("Fout bij het uitlezen van userId uit localStorage:", err);
+    }
+  }
+  return localStorage.getItem('userId') || '';
+};
+
 /**
  * Checks if a target entity ID is a parent or ancestor of a given entity
  * by searching top-down through the connections defined on the parent entities.
- *
- * @param currentEntityId The ID of the entity we want to trace upwards (e.g. an L4 ID)
- * @param targetL1Id The ID of the L1 category we want to match against
- * @param allEntities The entire hydrated graph from the theme dataset
- * @param depth Safety guard to prevent infinite traversal loops
  */
 const checkL1ConnectionTopDown = (
   currentEntityId: string,
@@ -83,7 +101,6 @@ interface EngineProps {
 }
 
 const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, availableEntities }) => {
-  
   const availableCategories = useMemo<string[]>(() => {
     const adminCategories = theme.gameSettings?.blindranking?.availableCategories;
     if (Array.isArray(adminCategories) && adminCategories.length > 0) {
@@ -105,6 +122,14 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
 
   const maxSlots = shuffledEntities.length;
   const currentEntity = shuffledEntities[currentIndex] as HydratedEntity | undefined;
+
+  const organizationName = useMemo<string | undefined>(() => {
+    if (!currentEntity || !theme.orgLayer) return undefined;
+    const orgConnection = currentEntity.targetConnections?.find(
+      (conn) => conn.sourceEntity?.type === theme.orgLayer
+    );
+    return orgConnection?.sourceEntity?.name;
+  }, [currentEntity, theme.orgLayer]);
 
   useEffect(() => {
     const appContainerEl = document.querySelector('.app-container');
@@ -274,19 +299,46 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
     if (rankings[slotIndex] !== null || currentIndex >= shuffledEntities.length) return;
 
     const activeCard = shuffledEntities[currentIndex];
-    setRankings(prev => {
-      const nextRankings = [...prev];
-      nextRankings[slotIndex] = activeCard;
-      return nextRankings;
-    });
+    const nextRankings = [...rankings];
+    nextRankings[slotIndex] = activeCard;
+
+    setRankings(nextRankings);
 
     const nextIndex = currentIndex + 1;
+
+    if (nextIndex >= shuffledEntities.length) {
+      const userId = getStoredUserId();
+      if (userId) {
+        const gamePayload = {
+          userId,
+          themeId: theme.id,
+          type: 'blindranking',
+          name: `Blind Ranking: ${activeCategory}`,
+          data: {
+            rankedItems: nextRankings.map((item, idx) => ({
+              id: item?.id || '',
+              name: item?.name || '',
+              rank: idx + 1
+            }))
+          }
+        };
+
+        saveGameResult(gamePayload)
+          .then(() => {
+            console.log("Blind Ranking succesvol opgeslagen in MySQL!");
+          })
+          .catch((err: unknown) => {
+            console.error("Fout bij opslaan Blind Ranking:", err);
+          });
+      }
+    }
+
     const nextEntity = shuffledEntities[nextIndex];
     const nextMediaStartingIndex = getInitialMediaIndex(nextEntity, activeCategory);
 
     setCurrentMediaIndex(nextMediaStartingIndex);
     setCurrentIndex(nextIndex);
-  }, [currentIndex, shuffledEntities, rankings, activeCategory, getInitialMediaIndex]);
+  }, [currentIndex, shuffledEntities, rankings, activeCategory, getInitialMediaIndex, theme.id]);
 
   const handleNextMedia = useCallback(() => {
     if (currentMediaUrls.length <= 1) return;
@@ -313,6 +365,7 @@ const BlindRankingGameEngine: React.FC<EngineProps> = ({ theme, allEntities, ava
       maxSlots={maxSlots}
       leftSlots={leftSlots}
       rightSlots={rightSlots}
+      organizationName={organizationName}
       setIsPlaying={setIsPlaying}
       handleStartGame={handleStartGame}
       handlePlaceEntity={handlePlaceEntity}

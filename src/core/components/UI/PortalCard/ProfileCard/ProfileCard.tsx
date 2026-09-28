@@ -1,3 +1,4 @@
+import React from 'react';
 import { ReactCountryFlag } from 'react-country-flag';
 import type { BaseEntity, EntityImages } from '../../../../../types';
 import { getEntityImage } from '../../../../helpers/getEntityImage';
@@ -12,52 +13,72 @@ interface ProfileCardProps {
 }
 
 /**
- * Renders a detailed visual profile showcase layout, resolving dynamic background asset paths, 
- * embedding multi-national country flag badges, and applying context label overrides with high precedence.
+ * ProfileCard component renders an entity's profile view with a background image or video,
+ * optional nationality flags, and organizational badges or subtitles.
  */
 export const ProfileCard: React.FC<ProfileCardProps> = ({ 
   entity, 
   organization, 
-  label, 
   profileCardBadge, 
   subtitle 
 }) => {
-  const imagePath = getEntityImage(entity.image as EntityImages, 'profileCard');
+  const mediaPath = getEntityImage(entity.image as EntityImages, 'profileCard');
 
-  const hasCustomBadgeData = Boolean(profileCardBadge || subtitle);
-  const shouldRenderBadgeContainer = hasCustomBadgeData || Boolean(organization);
+  // Check if the media is a video (including .gifv, .mp4, .webm, .mov)
+  const isVideo = typeof mediaPath === 'string' && /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$/i.test(mediaPath);
 
-  const displayBadgeLabel = profileCardBadge || label;
-  const displayBadgeValue = subtitle || organization?.name;
+  // If subtitle or profileCardBadge equals 'L3' (or 'l3'), show the organization name as the label. Otherwise, use the regular subtitle.
+  const isL3 = (subtitle && subtitle.toLowerCase() === 'l3') || (profileCardBadge && profileCardBadge.toLowerCase() === 'l3');
+  
+  const displayBadgeLabel = isL3 ? organization?.name : subtitle;
+  const displayBadgeValue = profileCardBadge;
+
+  // The container only renders when there is actual content available
+  const shouldRenderBadgeContainer = Boolean(displayBadgeLabel || displayBadgeValue);
 
   return (
     <div className={styles.card}>
-      <div
-        className={styles.imageContainer}
-        style={{ backgroundImage: `url(${imagePath})` }}
-      >
+      <div className={styles.imageContainer}>
+        {/* Render a video element for videos/gifv, otherwise the background image */}
+        {isVideo ? (
+          <video 
+            className={styles.backgroundVideo} 
+            src={mediaPath} 
+            autoPlay 
+            loop 
+            muted 
+            playsInline 
+          />
+        ) : (
+          <div
+            className={styles.backgroundImage}
+            style={{ backgroundImage: `url(${mediaPath})` }}
+          />
+        )}
+
+        {/* Country flag(s) absolutely positioned in the top-left corner */}
+        {entity.metadata?.Nationality && Array.isArray(entity.metadata.Nationality) && entity.metadata.Nationality.length > 0 && (
+          <div className={styles.topLeftFlags}>
+            {entity.metadata.Nationality.map((code: string) => (
+              <span key={code} className={styles.countryBadge}>
+                <ReactCountryFlag 
+                  countryCode={code} 
+                  svg 
+                  style={{
+                    width: '1.5em',
+                    height: '1.1em',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                  title={code} 
+                />
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className={styles.overlay}>
           <div className={styles.info}>
-            
-            {entity.metadata?.Nationality && Array.isArray(entity.metadata.Nationality) && (
-              <div className={styles.metadata}>
-                {entity.metadata.Nationality.map((code: string) => (
-                  <span key={code} className={styles.countryBadge}>
-                    <ReactCountryFlag 
-                      countryCode={code} 
-                      svg 
-                      style={{
-                        width: '1.5em',
-                        height: '1.5em',
-                        borderRadius: '2px'
-                      }}
-                      title={code} 
-                    />
-                  </span>
-                ))}
-              </div>
-            )}
-
             <h2 className={styles.name}>{entity.name}</h2>
             
             {shouldRenderBadgeContainer && (
@@ -66,7 +87,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 {displayBadgeValue && <span className={styles.orgName}>{displayBadgeValue}</span>}
               </div>
             )}
-
           </div>
         </div>
       </div>

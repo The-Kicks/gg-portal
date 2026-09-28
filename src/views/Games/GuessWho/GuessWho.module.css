@@ -53,12 +53,13 @@
   background-color: var(--primary);
   color: var(--bg);
   border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
+  padding: 12px 20px;
+  border-radius: 12px;
   cursor: pointer;
   font-weight: 700;
   text-transform: uppercase;
   font-size: 14px;
+  white-space: nowrap;
   transition: transform 0.1s ease, filter 0.2s ease;
 }
 
@@ -67,21 +68,44 @@
   transform: translateY(-1px);
 }
 
+.hintBtnColor {
+  background-color: #e67e22;
+}
+
+.giveUpBtnColor {
+  background-color: #c0392b;
+}
+
+/* Container om zoekbalk en knoppen naast elkaar te zetten */
+.searchAndButtonsContainer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto 32px auto;
+  width: 100%;
+}
+
+.actionButtonsWrapper {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 /* Search and Dropdown Autocomplete Context */
 .searchWrapper {
   position: relative;
-  max-width: 500px;
-  margin: 0 auto 32px auto;
+  flex-grow: 1;
 }
 
 .searchBar {
   width: 100%;
-  padding: 14px 16px;
+  padding: 16px 20px;
   background-color: color-mix(in srgb, var(--bg), white 8%);
   color: var(--text);
-  border: 2px solid color-mix(in srgb, var(--text), transparent 80%);
-  border-radius: 8px;
-  font-size: 16px;
+  border: 2px solid var(--secondary);
+  border-radius: 12px;
+  font-size: 18px;
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.2s ease;
@@ -93,47 +117,71 @@
 
 .dropdown {
   position: absolute;
-  top: 100%;
+  top: 105%;
   left: 0;
-  right: 0;
-  background-color: var(--navbarColor);
-  border: 1px solid color-mix(in srgb, var(--text), transparent 80%);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  padding: 0;
-  margin: 4px 0 0 0;
-  list-style: none;
-  max-height: 250px;
+  width: 100%;
+  max-height: 450px;
   overflow-y: auto;
-  z-index: 10;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  background: var(--navbarColor);
+  border: 2px solid var(--secondary);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  z-index: 100;
+  list-style: none;
+  padding: 8px;
+  margin: 0;
 }
 
 .dropdownItem {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 16px;
+  padding: 12px 16px;
   cursor: pointer;
+  border-radius: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--text), transparent 90%);
-  transition: background-color 0.15s ease;
+  transition: background 0.2s;
 }
 
 .dropdownItem:hover {
-  background-color: color-mix(in srgb, var(--navbarColor), white 8%);
+  background: color-mix(in srgb, var(--secondary) 20%, transparent);
 }
 
 .avatarMini {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
   object-fit: cover;
   border: 1px solid var(--secondary);
 }
 
+.avatarDropdown {
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 2px solid var(--secondary);
+  flex-shrink: 0;
+}
+
+.dropOrg {
+  font-weight: 400;
+  font-size: 16px;
+  color: color-mix(in srgb, var(--text), transparent 35%);
+  margin-left: 8px;
+}
+
 .dropName {
   font-weight: 600;
+  font-size: 18px;
   color: var(--text);
+}
+
+.enterTabHint {
+  opacity: 0.4;
+  font-size: 11px;
+  font-style: italic;
+  margin-left: 8px;
 }
 
 /* Responsive Matrix Results Table */
@@ -150,6 +198,7 @@
   border-collapse: separate;
   border-spacing: 4px;
   min-width: 800px;
+  table-layout: fixed;
 }
 
 .gameTable th {
@@ -167,7 +216,6 @@
   background-color: color-mix(in srgb, var(--bg), white 4%);
   text-align: center;
   padding: 4px;
-  width: 60px;
   border-radius: 4px;
 }
 
@@ -190,6 +238,16 @@
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
+/* Kolombreedtes via colgroup klassen zodat beide tabellen exact matchen */
+.col_profile { width: 70px; }
+.col_name { width: 160px; }
+.col_org { width: 160px; }
+.col_nationality { width: 140px; }
+.col_role { width: 180px; }
+.col_debut { width: 100px; }
+.col_age { width: 90px; }
+.col_height { width: 100px; }
+
 /* 🔒 WORDLE / LOLDLE MECHANICS: Static Feedback States */
 .correct {
   background-color: #28a745 !important;
@@ -211,4 +269,70 @@
   background-color: #343a40 !important;
   color: #ffffff !important;
   border: 1px solid color-mix(in srgb, var(--text), transparent 85%);
+}
+
+/* Standaard grijze achtergrondkleur voor lege cellen in de hint-rij */
+.hintCell {
+  background-color: color-mix(in srgb, var(--bg), white 8%) !important;
+  color: color-mix(in srgb, var(--text), transparent 50%) !important;
+  text-shadow: none !important;
+}
+
+.bestRowContainer {
+  margin-bottom: 24px;
+  background: color-mix(in srgb, var(--bg), white 3%);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--primary);
+  overflow-x: auto;
+}
+
+.bestRowTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  min-width: 800px;
+}
+
+.bestRowTitle {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: var(--primary);
+  letter-spacing: 0.5px;
+}
+
+.victoryAvatar {
+  max-width: 220px;
+  max-height: 220px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  object-fit: contain;
+  margin: 0 auto 15px auto;
+  display: block;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.nationalityFlex {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.nationalityItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flagIcon {
+  width: 1.4em;
+  height: 1em;
+  border-radius: 2px;
+  object-fit: cover;
 }

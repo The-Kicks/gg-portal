@@ -8,10 +8,6 @@ interface Props {
   theme: Theme;
 }
 
-/**
- * L3View aggregates and renders Layer 3 operational working entities.
- * Resolves upstream structural graph links dynamically to attach corporate parent context.
- */
 export const L3View: React.FC<Props> = ({ theme }) => {
   const navigate = useNavigate();
   const allEntities = theme.entities || [];
@@ -21,15 +17,11 @@ export const L3View: React.FC<Props> = ({ theme }) => {
   if (groups.length === 0) {
     return (
       <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text)' }}>
-        <h3>No data found for {theme.labels.l3 || 'Layer 3'}.</h3>
+        <h3 style={{ fontSize: '1.5rem', fontWeight: 700 }}>No data found for {theme.labels.l3 || 'Layer 3'}.</h3>
       </div>
     );
   }
 
-  /**
-   * Traverses structural connection vectors backward to determine the nearest upstream parent node.
-   * Scans immediate preferred layers before falling back to multi-tier recursive path evaluation.
-   */
   const findClosestParent = (entity: HydratedEntity, preferredTypes: string[]): BaseEntity | null => {
     const conns = [...(entity.connections || []), ...(entity.targetConnections || [])];
 
@@ -64,34 +56,47 @@ export const L3View: React.FC<Props> = ({ theme }) => {
 
   return (
     <div className={styles.layerContainer}>
-      <div className={styles.cardGrid}>
-        {sortedGroups.map((group) => {
-          const closestParent = findClosestParent(group, ['l2', 'l1']);
+      <section className={styles.groupCard}>
+        <div className={styles.groupHeaderRow}>
+          <h2 className={styles.groupHeader}>{theme.labels.l3 || 'Layer 3'}</h2>
+          <div className={styles.groupBadge}>
+            <span className={styles.badgeDot} />
+            {sortedGroups.length} items
+          </div>
+        </div>
+        <div className={styles.cardGrid}>
+          {sortedGroups.map((group, idx) => {
+            const closestParent = findClosestParent(group, ['l2', 'l1']);
 
-          const isDisbanded = ['disbanded', 'inactive', 'retired', 'historical'].includes(
-            (group.status || '').toLowerCase().trim()
-          );
+            const groupStatus = (group.status || '').toLowerCase().trim();
+            const isDeceased = !!group.metadata?.PassingDate;
+            const isDisbanded = ['disbanded', 'inactive', 'retired', 'historical', 'ex', 'former'].includes(groupStatus) || isDeceased;
 
-          const cardClass = `${styles.cardWrapper} ${isDisbanded ? styles.isFormer : ''}`;
+            const enrichedGroup = isDisbanded ? {
+              ...group,
+              metadata: { ...(group.metadata || {}), isFormer: true }
+            } : group;
 
-          return (
-            <div
-              key={group.id}
-              onClick={() => navigate(`/${theme.id}/structure/${group.id}`)}
-              className={cardClass}
-            >
-              <EntityCard 
-                entity={group} 
-                activeKey="l3" 
-                theme={theme} 
-                labels={theme.labels} 
-                organization={closestParent || undefined}
-                customLabel={theme.labels.l3}
-              />
-            </div>
-          );
-        })}
-      </div>
+            return (
+              <div
+                key={group.id}
+                onClick={() => navigate(`/${theme.id}/structure/${group.id}`)}
+                className={styles.cardWrapper}
+                style={{ animationDelay: `${idx * 0.04}s` }}
+              >
+                <EntityCard 
+                  entity={enrichedGroup} 
+                  activeKey="l3" 
+                  theme={theme} 
+                  labels={theme.labels} 
+                  organization={closestParent || undefined}
+                  customLabel={theme.labels.l3}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 };
