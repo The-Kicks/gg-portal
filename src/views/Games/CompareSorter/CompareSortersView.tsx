@@ -8,6 +8,9 @@ interface UserStorageObject {
   _id?: string;
 }
 
+/**
+ * Fetches the userId directly from localStorage.
+ */
 const getStoredUserId = (): string => {
   const userStr = localStorage.getItem('user');
   if (userStr) {
@@ -15,7 +18,7 @@ const getStoredUserId = (): string => {
       const userObj = JSON.parse(userStr) as UserStorageObject;
       return userObj.id || userObj._id || localStorage.getItem('userId') || '';
     } catch (err: unknown) {
-      console.error("Fout bij uitlezen userId uit JSON:", err);
+      console.error("Error reading userId from JSON:", err);
     }
   }
   return localStorage.getItem('userId') || '';
@@ -102,6 +105,10 @@ interface CompareSortersViewProps {
   activeKey?: LayerKey;
 }
 
+/**
+ * CompareSortersView allows users to compare their saved sorter rankings with those of their friends
+ * for a specific theme, providing visual rank differentials and favorite media views.
+ */
 export function CompareSortersView({
   theme,
   onBack,
@@ -217,7 +224,7 @@ export function CompareSortersView({
           }
         }
       } catch (err: unknown) {
-        console.error("Fout bij ophalen initiële data:", err);
+        console.error("Error fetching initial data:", err);
       } finally {
         setLoadingMy(false);
         setLoadingFriendsList(false);
@@ -261,7 +268,7 @@ export function CompareSortersView({
           setFriendFavoritesMap({});
         }
       } catch (err: unknown) {
-        console.error("Fout bij ophalen vriend data:", err);
+        console.error("Error fetching friend data:", err);
         setFriendSorters([]);
         setFriendFavoritesMap({});
       } finally {
@@ -353,7 +360,7 @@ export function CompareSortersView({
     if (row.friendRank === null) {
       return (
         <p style={{ fontSize: '0.75rem', color: '#a1a1aa', fontStyle: 'italic', margin: '2px 0 0 0' }}>
-          Vriend: Niet gerankt
+          Friend: Unranked
         </p>
       );
     }
@@ -364,13 +371,13 @@ export function CompareSortersView({
     if (row.rankDiff !== null) {
       if (row.rankDiff < 0) {
         color = '#22c55e';
-        text = `Vriend: #${row.friendRank} (▲ ${Math.abs(row.rankDiff)})`;
+        text = `Friend: #${row.friendRank} (▲ ${Math.abs(row.rankDiff)})`;
       } else if (row.rankDiff > 0) {
         color = '#ef4444';
-        text = `Vriend: #${row.friendRank} (▼ ${row.rankDiff})`;
+        text = `Friend: #${row.friendRank} (▼ ${row.rankDiff})`;
       } else {
         color = '#38bdf8';
-        text = `Vriend: #${row.friendRank} (=)`;
+        text = `Friend: #${row.friendRank} (=)`;
       }
     }
 
@@ -385,16 +392,16 @@ export function CompareSortersView({
     <div className={styles.resultsContainer}>
       <div className={styles.resultsHeader}>
         <h2 className={styles.resultsTitle}>Sorter Comparator</h2>
-        <p className={styles.resultsSubtitle}>Vergelijk jouw rankings met die van je vrienden voor {theme.title}</p>
+        <p className={styles.resultsSubtitle}>Compare your rankings with your friends for {theme.title}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', margin: '2rem 0', background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)' }}>
         <div>
-          <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '0.75rem' }}>Jouw Opgeslagen Sorter</h3>
+          <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '0.75rem' }}>Your Saved Sorter</h3>
           {loadingMy ? (
-            <p style={{ color: 'rgba(255,255,255,0.6)' }}>Laden...</p>
+            <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading...</p>
           ) : mySorters.length === 0 ? (
-            <p style={{ color: '#ef4444', fontSize: '0.9rem' }}>Geen opgeslagen sorters gevonden voor dit thema.</p>
+            <p style={{ color: '#ef4444', fontSize: '0.9rem' }}>No saved sorters found for this theme.</p>
           ) : (
             <select
               value={selectedMyId}
@@ -411,11 +418,11 @@ export function CompareSortersView({
         </div>
 
         <div>
-          <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '0.75rem' }}>Selecteer Vriend</h3>
+          <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '0.75rem' }}>Select Friend</h3>
           {loadingFriendsList ? (
-            <p style={{ color: 'rgba(255,255,255,0.6)' }}>Vrienden laden...</p>
+            <p style={{ color: 'rgba(255,255,255,0.6)' }}>Loading friends...</p>
           ) : friendProfiles.length === 0 ? (
-            <p style={{ color: '#eab308', fontSize: '0.9rem' }}>Geen geïmporteerde vrienden gevonden.</p>
+            <p style={{ color: '#eab308', fontSize: '0.9rem' }}>No imported friends found.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <select
@@ -425,13 +432,13 @@ export function CompareSortersView({
               >
                 {friendProfiles.map(fp => (
                   <option key={fp.id} value={fp.id}>
-                    {fp.name || 'Naamloze Vriend'}
+                    {fp.name || 'Unnamed Friend'}
                   </option>
                 ))}
               </select>
 
               {loadingFriendSorters ? (
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Sorters van vriend ophalen...</p>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>Fetching friend's sorters...</p>
               ) : friendSorters.length > 0 ? (
                 <select
                   value={selectedFriendId}
@@ -446,7 +453,7 @@ export function CompareSortersView({
                 </select>
               ) : (
                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-                  Geen sorters gevonden voor deze vriend bij dit thema.
+                  No sorters found for this friend for this theme.
                 </p>
               )}
             </div>
@@ -697,14 +704,14 @@ export function CompareSortersView({
         </div>
       ) : (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.6)' }}>
-          Selecteer een eigen sorter om de vergelijking te starten.
+          Select one of your sorters to start the comparison.
         </div>
       )}
 
       {onBack && (
         <div style={{ textAlign: 'center', marginTop: '3rem' }}>
           <button onClick={onBack} className={styles.startButton} style={{ marginTop: 0, background: '#27272a' }}>
-            Terug naar Sorter
+            Back to Sorter
           </button>
         </div>
       )}

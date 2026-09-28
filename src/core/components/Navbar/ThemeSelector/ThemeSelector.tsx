@@ -15,7 +15,7 @@ export const ThemeSelector = ({ loadedThemes = [], currentThemeId, onThemeChange
   return (
     <div className={styles.themeSelectorContainer}>
       <label htmlFor="theme-select" className={styles.label}>
-        Kies je onderwerp:
+        Choose a theme:
       </label>
       
       <select

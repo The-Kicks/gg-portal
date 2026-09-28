@@ -393,17 +393,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
     }
   };
 
-  // --- 🧪 TEST HELPER ---
-  const handleTestPreview = (): void => {
-    setNewMediaItems([
-      { url: 'https://i.imgur.com/7NMkHpe.jpeg', entityName: 'Lionel Messi', category: 'dribbel' },
-      { url: 'https://i.imgur.com/gW2cwet.mp4', entityName: 'Lionel Messi', category: 'dribbel' },
-      { url: 'https://i.imgur.com/PmEQAZk.png', entityName: 'Cristiano Ronaldo', category: 'penalties' },
-      { url: 'https://i.imgur.com/9Gxs3Dj.jpeg', entityName: 'Kylian Mbappé', category: 'Face' },
-    ]);
-    setStatusMessage('🧪 Test preview geactiveerd! Je kunt nu de carrousel bekijken.');
-  };
-
   const isVideoUrl = (url: string): boolean => {
     const lower = url.toLowerCase();
     return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg') || lower.includes('.mp4');
@@ -471,14 +460,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
                   style={{ display: 'none' }}
                 />
               </label>
-              <button 
-                className={styles.primaryButton} 
-                onClick={handleTestPreview} 
-                style={{ backgroundColor: '#6c757d' }}
-                title="Test de media carrousel zonder database wijziging"
-              >
-                🧪 Test Carrousel Preview
-              </button>
             </div>
           </div>
         </div>

@@ -756,3 +756,58 @@
     flex: 1.5;
     text-align: center;
 }
+
+.dropdownFormGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.inputLabel {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: color-mix(in srgb, var(--text) 70%, transparent);
+}
+
+.selectWrapper {
+    position: relative;
+    width: 100%;
+}
+
+.customCategoryInput {
+    width: 100%;
+    padding: 14px 45px 14px 18px;
+    background: color-mix(in srgb, var(--bg) 90%, black 10%);
+    border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.customCategoryInput:focus {
+    border-color: var(--text);
+}
+
+.selectWrapper::after {
+    content: '';
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid var(--text);
+    border-bottom: 2px solid var(--text);
+    transform: translateY(-60%) rotate(45deg);
+    pointer-events: none; 
+}

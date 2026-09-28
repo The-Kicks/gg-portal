@@ -11,7 +11,7 @@ interface UserStorageObject {
 }
 
 /**
- * Haalt direct de userId op uit localStorage
+ * Fetches the userId directly from localStorage.
  */
 const getStoredUserId = (): string => {
   const userStr = localStorage.getItem('user');
@@ -20,7 +20,7 @@ const getStoredUserId = (): string => {
       const userObj = JSON.parse(userStr) as UserStorageObject;
       return userObj.id || userObj._id || localStorage.getItem('userId') || '';
     } catch (err: unknown) {
-      console.error("Fout bij het uitlezen van userId uit localStorage:", err);
+      console.error("Error reading userId from localStorage:", err);
     }
   }
   return localStorage.getItem('userId') || '';
@@ -34,6 +34,10 @@ interface SorterResultsViewProps {
   onRestart?: () => void;
 }
 
+/**
+ * SorterResultsView displays the final Elo rankings of entities after a sorter game,
+ * offering features like filtering, favorite views, text export, and hierarchical grouping.
+ */
 export function SorterResultsView({
   theme,
   finalPool,
@@ -51,7 +55,7 @@ export function SorterResultsView({
     return [...finalPool].sort((a, b) => b.elo - a.elo);
   }, [finalPool]);
 
-  // Map voor globale ranglijst posities
+  // Map for global ranking positions
   const globalRankMap = useMemo(() => {
     const map = new Map<string, number>();
     sortedResults.forEach((item, index) => {
@@ -60,17 +64,17 @@ export function SorterResultsView({
     return map;
   }, [sortedResults]);
 
-  // Entiteiten map voor L3 opzoekwerk
+  // Entity map for L3 lookups
   const entityMap = useMemo(() => {
     return new Map((theme.entities || []).map(e => [e.id, e]));
   }, [theme.entities]);
 
-  // Groepering per L3 ouderlaag voor de onderste sectie
+  // Grouping by L3 parent layer for the bottom section
   const rankedGroups = useMemo(() => {
     const groupMap = new Map<string, { groupName: string; entities: EloExtended<HydratedEntity>[]; totalElo: number }>();
 
     finalPool.forEach((item) => {
-      let parentName = 'Overig';
+      let parentName = 'Other';
       if (item.targetConnections && item.targetConnections.length > 0) {
         const conn = item.targetConnections.find(c => {
           const src = c.sourceEntity || (c.sourceEntityId ? entityMap.get(c.sourceEntityId) : null);
@@ -100,7 +104,6 @@ export function SorterResultsView({
       .sort((a, b) => b.avgElo - a.avgElo);
   }, [finalPool, entityMap, theme.orgLayer]);
 
-  // Helper voor >30% afwijkingskleur in de onderste sectie
   const getDeviationStyle = (itemElo: number, groupAvg: number) => {
     if (groupAvg === 0) return { style: {}, borderColor: undefined };
     const diffRatio = (itemElo - groupAvg) / groupAvg;
@@ -119,10 +122,9 @@ export function SorterResultsView({
     return { style: {}, borderColor: undefined };
   };
 
-  // Sla voltooide sorter op in de backend via een prompt voor de naam
   const handleSaveFinishedSorter = async () => {
     const defaultName = `Sorter Results: ${theme.title}`;
-    const enteredName = window.prompt("Geef een naam op voor je opgeslagen sorter:", defaultName);
+    const enteredName = window.prompt("Enter a name for your saved sorter:", defaultName);
 
     if (enteredName === null) {
       return;
@@ -130,7 +132,7 @@ export function SorterResultsView({
 
     const userId = getStoredUserId();
     if (!userId) {
-      alert("Geen actieve gebruiker gevonden in localStorage om de resultaten op te slaan.");
+      alert("No active user found in localStorage to save the results.");
       return;
     }
 
@@ -155,8 +157,8 @@ export function SorterResultsView({
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      console.error("Fout bij opslaan voltooide sorter:", err);
-      alert("Er is iets misgegaan bij het opslaan van je resultaten.");
+      console.error("Error saving completed sorter:", err);
+      alert("Something went wrong while saving your results.");
     } finally {
       setIsSaving(false);
     }
@@ -233,7 +235,7 @@ export function SorterResultsView({
         <h2 className={styles.resultsTitle}>Sorter Results</h2>
         <p className={styles.resultsSubtitle}>Your ultimate ranking for {theme.title}</p>
 
-        {/* Controle paneel met knoppen */}
+        {/* Control panel with buttons */}
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             type="button"
@@ -310,7 +312,7 @@ export function SorterResultsView({
         </div>
       </div>
 
-      {/* 1. Standaard Resultaten Grid */}
+      {/* 1. Standard Results Grid */}
       <div className={styles.photocardGrid}>
         {sortedResults.map((item, index) => {
           const position = index + 1;
@@ -443,10 +445,10 @@ export function SorterResultsView({
         })}
       </div>
 
-      {/* 2. EXTRA SECTIE ONDERAAN: Hiërarchisch gegroepeerd per L3 groep */}
+      {/* 2. EXTRA SECTION AT THE BOTTOM: Hierarchically grouped by L3 group */}
       <div style={{ marginTop: '4rem', borderTop: '2px dashed rgba(255, 255, 255, 0.15)', paddingTop: '2.5rem' }}>
         <h3 style={{ fontSize: '1.5rem', color: '#fff', marginBottom: '1.5rem', textAlign: 'center' }}>
-          Hiërarchisch Overzicht per Organisatie
+          Hierarchical Overview per Organization
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -461,7 +463,7 @@ export function SorterResultsView({
                     #{l3Rank}
                   </span>
                   <h4 style={{ margin: 0, fontSize: '1.25rem', color: '#fff' }}>{group.groupName}</h4>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>(Gemiddeld: {avgEloRounded} ELO)</span>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}>(Average: {avgEloRounded} ELO)</span>
                 </div>
 
                 <div className={styles.photocardGrid}>
