@@ -12,6 +12,10 @@ interface ProfileCardProps {
   subtitle?: string;         
 }
 
+/**
+ * ProfileCard component renders an entity's profile view with a background image or video,
+ * optional nationality flags, and organizational badges or subtitles.
+ */
 export const ProfileCard: React.FC<ProfileCardProps> = ({ 
   entity, 
   organization, 
@@ -20,22 +24,22 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 }) => {
   const mediaPath = getEntityImage(entity.image as EntityImages, 'profileCard');
 
-  // Check of het om een video gaat (inclusief .gifv, .mp4, .webm, .mov)
+  // Check if the media is a video (including .gifv, .mp4, .webm, .mov)
   const isVideo = typeof mediaPath === 'string' && /\.(mp4|webm|ogg|mov|gifv)(\?.*)?$/i.test(mediaPath);
 
-  // Als subtitle of profileCardBadge gelijk is aan 'L3' (of 'l3'), tonen we de organisatienaam als label. Anders gebruiken we de normale subtitle.
+  // If subtitle or profileCardBadge equals 'L3' (or 'l3'), show the organization name as the label. Otherwise, use the regular subtitle.
   const isL3 = (subtitle && subtitle.toLowerCase() === 'l3') || (profileCardBadge && profileCardBadge.toLowerCase() === 'l3');
   
   const displayBadgeLabel = isL3 ? organization?.name : subtitle;
   const displayBadgeValue = profileCardBadge;
 
-  // De container verschijnt alleen als er daadwerkelijk content is
+  // The container only renders when there is actual content available
   const shouldRenderBadgeContainer = Boolean(displayBadgeLabel || displayBadgeValue);
 
   return (
     <div className={styles.card}>
       <div className={styles.imageContainer}>
-        {/* Render een video-element bij video's/gifv, anders de achtergrondafbeelding */}
+        {/* Render a video element for videos/gifv, otherwise the background image */}
         {isVideo ? (
           <video 
             className={styles.backgroundVideo} 
@@ -52,7 +56,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           />
         )}
 
-        {/* Landvlag(gen) absoluut gepositioneerd in de linker bovenhoek (zonder achtergrond en niet rond) */}
+        {/* Country flag(s) absolutely positioned in the top-left corner */}
         {entity.metadata?.Nationality && Array.isArray(entity.metadata.Nationality) && entity.metadata.Nationality.length > 0 && (
           <div className={styles.topLeftFlags}>
             {entity.metadata.Nationality.map((code: string) => (

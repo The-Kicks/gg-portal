@@ -20,7 +20,6 @@ interface EntityCardProps {
 export const EntityCard: React.FC<EntityCardProps> = ({
   entity, activeKey, theme, labels, organization, customLabel
 }) => {
-  
   const shouldShowMini = theme.miniViewLayers.includes(activeKey);
 
   /**
@@ -35,7 +34,7 @@ export const EntityCard: React.FC<EntityCardProps> = ({
         const parsed = JSON.parse(theme.layerMetadata) as Record<string, MetaDataStandard | undefined>;
         return parsed[activeKey.toLowerCase()];
       } catch (err) {
-        console.error("Fout bij parsen layerMetadata in EntityCard:", err);
+        console.error("Error parsing layerMetadata in EntityCard:", err);
         return undefined;
       }
     }
@@ -97,18 +96,18 @@ export const EntityCard: React.FC<EntityCardProps> = ({
     return badges;
   }, [triggers, safeMetadata, labels]);
 
-  // Check welke keys er in het theme zijn meegegeven voor de badge
+  // Check which keys are provided in the theme configuration for the badge
   const badgeKey = layerStandard?.badgeKey ? String(layerStandard.badgeKey).trim() : '';
   const subtitleKey = layerStandard?.subtitleKey ? String(layerStandard.subtitleKey).trim() : '';
 
-  // Bepaal of de badgeKey of subtitleKey zelf 'l3', 'l2' of 'l1' is
+  // Determine whether the badgeKey or subtitleKey itself is 'l3', 'l2', or 'l1'
   const isL3OrL2Key = (key: string) => ['l3', 'l2', 'l1'].includes(key.toLowerCase());
 
-  // Haal de ruwe waarde op uit metadata (of val terug op lege string)
+  // Retrieve the raw value from metadata (or fall back to an empty string)
   const rawBadgeValue = badgeKey ? String(safeMetadata[badgeKey] || '').trim() : '';
   const rawSubtitleValue = subtitleKey ? String(safeMetadata[subtitleKey] || '').trim() : '';
 
-  // Logica voor profileCardBadge (onderste regel of enige regel)
+  // Logic for profileCardBadge (bottom line or only line)
   let profileCardBadge: string | undefined = undefined;
   if (badgeKey && isL3OrL2Key(badgeKey) && organization?.name) {
     profileCardBadge = organization.name;
@@ -116,7 +115,7 @@ export const EntityCard: React.FC<EntityCardProps> = ({
     profileCardBadge = labels[rawBadgeValue] || labels[rawBadgeValue.toLowerCase()] || rawBadgeValue;
   }
 
-  // Logica voor subtitle (bovenste regel van de badge)
+  // Logic for subtitle (top line of the badge)
   let subtitle: string | undefined = undefined;
   if (subtitleKey && isL3OrL2Key(subtitleKey) && organization?.name) {
     subtitle = organization.name;

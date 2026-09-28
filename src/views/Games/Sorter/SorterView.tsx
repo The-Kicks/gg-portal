@@ -56,6 +56,10 @@ interface ExtendedHTMLVideoElement extends HTMLVideoElement {
   audioTracks?: { length: number };
 }
 
+/**
+ * SorterView component renders the interactive voting interface for comparing two entities,
+ * managing media playback, volume controls, category filters, favorites, keyboard shortcuts, and recent form history.
+ */
 export function SorterView({
   theme,
   tournamentList,
@@ -149,11 +153,14 @@ export function SorterView({
   const isLeftFav = currentLeftFavs.includes(currentLeftMediaUrl);
   const isRightFav = currentRightFavs.includes(currentRightMediaUrl);
 
+  /**
+   * Renders the media component (image or video with a blurred background) for the specified side.
+   */
   const renderMediaComponent = (url: string, tierColor: string, side: 'left' | 'right'): React.JSX.Element => {
     if (!url) {
       return (
         <div className={styles.mediaWrapper}>
-          <span className={styles.noMediaText}>Geen media beschikbaar</span>
+          <span className={styles.noMediaText}>No media available</span>
         </div>
       );
     }
@@ -198,19 +205,25 @@ export function SorterView({
     );
   };
 
+  /**
+   * Retrieves the subtitle for an entity based on its parent organization layer connection.
+   */
   const getItemSubtitle = (entity: SorterEntity): string => {
     const parentConnection = entity.targetConnections?.find((conn) => conn.sourceEntity?.type === theme.orgLayer);
     return parentConnection?.sourceEntity?.name || '';
   };
 
-const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | number)[]) => {
-    if (!form || form.length === 0) {
-      return (
-        <div style={{ padding: '6px 10px', fontSize: '0.65rem', opacity: 0.4, fontStyle: 'italic', textAlign: 'center' }}>
-          n/a
-        </div>
-      );
-    }
+  /**
+   * Renders a vertical list showing recent form results (wins/losses) and opponents.
+   */
+  const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | number)[]) => {
+    const maxItems = 5; 
+    
+    const paddedForm: (('W' | 'L') | undefined)[] = Array.from(
+      { length: maxItems }, 
+      (_, i) => form?.[i]
+    );
+
     return (
       <div style={{ 
         display: 'flex', 
@@ -221,12 +234,26 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
         background: 'rgba(0, 0, 0, 0.2)',
         padding: '4px',
         borderRadius: '6px',
-        border: '1px solid rgba(255, 255, 255, 0.05)'
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        minHeight: `${(maxItems * 18) + ((maxItems - 1) * 3) + 8}px`,
+        justifyContent: 'flex-start'
       }}>
-        {form.map((result, i) => {
+        {paddedForm.map((result, i) => {
+          if (!result) {
+            return (
+              <div 
+                key={`empty-${i}`} 
+                style={{ 
+                  width: '18px', 
+                  height: '18px', 
+                }} 
+              />
+            );
+          }
+
           const opponentId = opponents?.[i];
           const opponent = tournamentList.find(e => e.id === opponentId);
-          const opponentName = opponent ? opponent.name : 'Onbekende tegenstander';
+          const opponentName = opponent ? opponent.name : 'Unknown opponent';
           
           return (
             <div 
@@ -239,7 +266,7 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
                 height: '18px',
                 cursor: 'pointer'
               }}
-              title={`${result === 'W' ? 'Gewonnen' : 'Verloren'} van ${opponentName}`}
+              title={`${result === 'W' ? 'Won' : 'Lost'} against ${opponentName}`}
             >
               <span
                 style={{
@@ -269,23 +296,22 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
     .slice(0, 3);
 
   const numpadKeys: KeyInfo[] = [
-    { key: '7', label: '7', action: 'Linker Asset: Vorige (Omhoog)' },
-    { key: '8', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6" /></svg>, action: 'Beide Assets: Vorige (Omhoog)' },
-    { key: '9', label: '9', action: 'Rechter Asset: Vorige (Omhoog)' },
-    { key: '4', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6" /></svg>, action: 'Stem Links (A) | Hold [0]: Favoriet album | Hold [Enter]: Nieuw Tabblad' },
-    { key: '5', label: '5', action: 'Laatste stem ongedaan maken' },
-    { key: '6', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6" /></svg>, action: 'Stem Rechts (B) | Hold [0]: Favoriet album | Hold [Enter]: Nieuw Tabblad' },
-    { key: '1', label: '1', action: 'Linker Asset: Volgende (Omlaag)' },
-    { key: '2', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>, action: 'Beide Assets: Volgende (Omlaag)' },
-    { key: '3', label: '3', action: 'Rechter Asset: Volgende (Omlaag)' },
-    { key: '0', label: '0', action: 'Modifier: Houd ingedrukt + [4] of [6] om media aan favorieten toe te voegen' },
-    { key: '.', label: '•', action: 'Volledig scherm inschakelen / Video afspelen' },
-    { key: 'Enter', label: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 10l-5 5 5 5M20 4v7a4 4 0 0 1-4 4H4" /></svg>, action: 'Modifier: Houd ingedrukt + [4] of [6] om bron te openen' },
+    { key: '7', label: '7', action: 'Left Asset: Previous (Up)' },
+    { key: '8', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m18 15-6-6-6 6" /></svg>, action: 'Both Assets: Previous (Up)' },
+    { key: '9', label: '9', action: 'Right Asset: Previous (Up)' },
+    { key: '4', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m15 18-6-6 6-6" /></svg>, action: 'Vote Left (A) | Hold [0]: Favorite item | Hold [Enter]: New Tab' },
+    { key: '5', label: '5', action: 'Undo last vote' },
+    { key: '6', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6" /></svg>, action: 'Vote Right (B) | Hold [0]: Favorite item | Hold [Enter]: New Tab' },
+    { key: '1', label: '1', action: 'Left Asset: Next (Down)' },
+    { key: '2', label: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>, action: 'Both Assets: Next (Down)' },
+    { key: '3', label: '3', action: 'Right Asset: Next (Down)' },
+    { key: '0', label: '0', action: 'Modifier: Hold down + [4] or [6] to add media to favorites' },
+    { key: '.', label: '•', action: 'Toggle fullscreen / Play video' },
+    { key: 'Enter', label: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 10l-5 5 5 5M20 4v7a4 4 0 0 1-4 4H4" /></svg>, action: 'Modifier: Hold down + [4] or [6] to open source' },
   ];
 
   return (
     <div className={styles.sorterContainer}>
-      {/* LINKER KANDIDAAT */}
       <div className={styles.mediaColumn} onClick={() => onProcessVote('A')} data-side="left">
         <div className={styles.vignetteOverlay} />
         {renderMediaComponent(currentLeftMediaUrl, leftTier.color, 'left')}
@@ -314,7 +340,6 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
         </div>
       </div>
 
-  {/* MIDDENSECTIE */}
       <div className={styles.centerColumn}>
         <div className={styles.centerTopSection}>
           <div className={styles.headerZone}>
@@ -325,7 +350,7 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
                 <button
                   type="button"
                   onClick={() => setShowKeybinds(!showKeybinds)}
-                  title={showKeybinds ? 'Verberg sneltoetsen' : 'Toon sneltoetsen'}
+                  title={showKeybinds ? 'Hide shortcuts' : 'Show shortcuts'}
                   className={`${styles.keybindToggleButton} ${showKeybinds ? styles.keybindToggleActive : ''}`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -359,14 +384,13 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
         </div>
 
         <div className={styles.controlZone}>
-          {/* LINKER VOLUME SLIDER */}
           {leftHasAudio && (
             <div className={styles.volumeSliderWrapperLeft}>
               <span className={styles.volumeLabelLeft}>L</span>
               <button
                 type="button"
                 onClick={() => setLeftVolume(prev => prev > 0 ? 0 : 0.5)}
-                title={leftVolume === 0 ? 'Unmute Links' : 'Mute Links'}
+                title={leftVolume === 0 ? 'Unmute Left' : 'Mute Left'}
                 className={styles.volumeMuteButton}
               >
                 {leftVolume === 0 ? (
@@ -393,14 +417,13 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
             </div>
           )}
 
-          {/* RECHTER VOLUME SLIDER */}
           {rightHasAudio && (
             <div className={styles.volumeSliderWrapperRight}>
               <span className={styles.volumeLabelRight}>R</span>
               <button
                 type="button"
                 onClick={() => setRightVolume(prev => prev > 0 ? 0 : 0.5)}
-                title={rightVolume === 0 ? 'Unmute Rechts' : 'Mute Rechts'}
+                title={rightVolume === 0 ? 'Unmute Right' : 'Mute Right'}
                 className={styles.volumeMuteButton}
               >
                 {rightVolume === 0 ? (
@@ -427,10 +450,9 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
             </div>
           )}
 
-          {/* Linker Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls} style={{ width: '100%', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-              <span className={styles.controlLabel}>Links ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
+              <span className={styles.controlLabel}>Left ({leftMediaIndex + 1}/{leftItemMedia.length})</span>
             </div>
 
             {leftCategories.length > 0 && (
@@ -445,7 +467,7 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
                   const friendName = cat.friendUsername || '';
 
                   const titleString = isEmptyFav
-                    ? 'Favorites (Leeg)'
+                    ? 'Favorites (Empty)'
                     : (isFriendCat ? `Friend Favorites: ${friendName}` : (typeof cat.label === 'string' ? cat.label : cat.key));
 
                   return (
@@ -525,10 +547,9 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
 
           <div className={styles.vsBadge}>VS</div>
 
-          {/* Rechter Kant Media Categorieën & Carrousel */}
           <div className={styles.carouselControls} style={{ width: '100%', margin: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-              <span className={styles.controlLabel}>Rechts ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
+              <span className={styles.controlLabel}>Right ({rightMediaIndex + 1}/{rightItemMedia.length})</span>
             </div>
 
             {rightCategories.length > 0 && (
@@ -543,7 +564,7 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
                   const friendName = cat.friendUsername || '';
 
                   const titleString = isEmptyFav
-                    ? 'Favorites (Leeg)'
+                    ? 'Favorites (Empty)'
                     : (isFriendCat ? `Friend Favorites: ${friendName}` : (typeof cat.label === 'string' ? cat.label : cat.key));
 
                   return (
@@ -622,17 +643,16 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
           </div>
         </div>
 
-        {/* Visuele Keybind Numpad Map */}
         {showKeybinds && (
           <div className={styles.keybindMapSection}>
-            <h4 className={styles.keybindTitle}>Numpad Sneltoetsen</h4>
+            <h4 className={styles.keybindTitle}>Numpad Shortcuts</h4>
             <div className={styles.numpadGrid}>
               {numpadKeys.map((k, idx) => (
                 <div
                   key={typeof k.label === 'string' ? k.key + idx : idx}
                   className={styles.numpadKey}
                   onMouseEnter={() => setHoveredAction(k.action)}
-                  onMouseLeave={() => setHoveredAction('Hover over een toets voor de functie')}
+                  onMouseLeave={() => setHoveredAction('Hover over a key for its function')}
                 >
                   {k.label}
                 </div>
@@ -644,13 +664,11 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
           </div>
         )}
 
-        {/* W/L kolommen direct tegen de linker- en rechterrand uitgelijnd */}
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', margin: '6px 0' }}>
           {renderVerticalFormList(leftItem.recentForm, leftItem.recentOpponents)}
           {renderVerticalFormList(rightItem.recentForm, rightItem.recentOpponents)}
         </div>
 
-        {/* Live Top 3 */}
         <div className={styles.leaderboardZone} onClick={onOpenResults}>
           <h4 className={styles.leaderboardTitle}>Standings</h4>
           <div className={styles.topThreeContainer}>
@@ -677,7 +695,6 @@ const renderVerticalFormList = (form?: ('W' | 'L')[], opponents?: (string | numb
         </div>
       </div>
 
-      {/* RECHTER KANDIDAAT */}
       <div className={styles.mediaColumn} onClick={() => onProcessVote('B')} data-side="right">
         <div className={styles.vignetteOverlay} />
         {renderMediaComponent(currentRightMediaUrl, rightTier.color, 'right')}

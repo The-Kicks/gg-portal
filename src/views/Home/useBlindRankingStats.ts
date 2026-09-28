@@ -23,7 +23,6 @@ export function useBlindRankingStats(themeId: string) {
         const games = results.filter((r: GameResultItem) => r.type === 'blindranking' && r.themeId === themeId);
         if (games.length === 0) return;
 
-        // Houd bij hoe vaak items in de top 3 stonden en wat de som van hun ranks was
         const itemStats: Record<string, { name: string; rankSum: number; count: number }> = {};
 
         games.forEach((game) => {
@@ -41,7 +40,6 @@ export function useBlindRankingStats(themeId: string) {
           }
         });
 
-        // Bereken gemiddelde positie en sorteer op populariteit/hoogste positie
         const computedTop = Object.entries(itemStats).map(([id, stats]) => ({
           id,
           name: stats.name,
@@ -51,9 +49,9 @@ export function useBlindRankingStats(themeId: string) {
 
         computedTop.sort((a, b) => {
           if (b.appearances !== a.appearances) {
-            return b.appearances - a.appearances; // Wie het vaakst in de top 3 stond
+            return b.appearances - a.appearances; 
           }
-          return a.averageRank - b.averageRank; // Laagste gemiddelde rank (1 is het best)
+          return a.averageRank - b.averageRank; 
         });
 
         setTopBlindRankingItems(computedTop.slice(0, 3));

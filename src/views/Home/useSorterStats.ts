@@ -34,14 +34,12 @@ export function useSorterStats(themeId: string) {
       .then((results: GameResultItem[]) => {
         if (!results || results.length === 0) return;
 
-        // Filter voor sorter resultaten
         const sorterGames = results.filter(
           (r) => (r.type === 'sorter_finished' || r.type === 'sorter') && r.themeId === themeId
         );
 
         if (sorterGames.length === 0) return;
 
-        // 1. Individuele runs (top 5 per opgeslagen sorter)
         const runs: SorterRun[] = sorterGames.map((game) => {
           const rawItems = game.data?.rankedItems;
           const rankedItems: RankedItem[] = Array.isArray(rawItems) ? rawItems : [];
@@ -61,7 +59,6 @@ export function useSorterStats(themeId: string) {
         });
         setSorterRuns(runs);
 
-        // 2. Geaggrementeerde gemiddelde top 5 over alle sorters heen
         const entityStats: Record<string, { name: string; eloSum: number; count: number }> = {};
 
         sorterGames.forEach((game) => {
