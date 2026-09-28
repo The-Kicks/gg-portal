@@ -247,7 +247,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
     }
   };
 
-  // --- 4. ENTITY TABLE IMPORT (WITH ADDITIONS, REMOVALS & MEDIA CAROUSEL) ---
+  // --- 4. ENTITY TABLE IMPORT (FLEXIBLE KEYS, ADDITIONS, REMOVALS & CAROUSEL) ---
   const handleEntityFileChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const fileReader = new FileReader();
     const files = event.target.files;
@@ -294,7 +294,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
             const importedImages = importedEntity.image || {};
 
             if (!existing) {
-              // Entity does not exist -> Create new and collect all its media
               const createRes = await fetch(`/api/themes/${theme.id}/entities`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -319,7 +318,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
                 console.error(`Failed to create entity ${importedEntity.id}`);
               }
             } else {
-              // Entity exists -> Check for additions, changes OR removals
               const existingImages = existing.image || {};
               let entityHasChanges = false;
               const updatedImages: EntityImages = { ...existingImages };
@@ -336,7 +334,6 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
                   const existingUrls = new Set(existingVal.split(/\s+/).filter(Boolean));
                   const importedUrls = importedVal.split(/\s+/).filter(Boolean);
 
-                  // Detect brand new URLs to show in the preview carousel (ignore removals)
                   const brandNewUrls = importedUrls.filter(u => !existingUrls.has(u));
                   brandNewUrls.forEach(url => {
                     collectedNewMedia.push({
@@ -346,12 +343,10 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
                     });
                   });
 
-                  // Overwrite with imported value so deletions/modifications are properly saved
                   updatedImages[imgKey] = importedVal;
                 }
               }
 
-              // Also check if other entity properties changed (name, type, metadata, etc.)
               if (
                 existing.name !== importedEntity.name ||
                 existing.type !== importedEntity.type ||
@@ -398,8 +393,20 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
     }
   };
 
+  // --- 🧪 TEST HELPER ---
+  const handleTestPreview = (): void => {
+    setNewMediaItems([
+      { url: 'https://i.imgur.com/7NMkHpe.jpeg', entityName: 'Lionel Messi', category: 'dribbel' },
+      { url: 'https://i.imgur.com/gW2cwet.mp4', entityName: 'Lionel Messi', category: 'dribbel' },
+      { url: 'https://i.imgur.com/PmEQAZk.png', entityName: 'Cristiano Ronaldo', category: 'penalties' },
+      { url: 'https://i.imgur.com/9Gxs3Dj.jpeg', entityName: 'Kylian Mbappé', category: 'Face' },
+    ]);
+    setStatusMessage('🧪 Test preview geactiveerd! Je kunt nu de carrousel bekijken.');
+  };
+
   const isVideoUrl = (url: string): boolean => {
-    return url.toLowerCase().endsWith('.mp4') || url.includes('.mp4');
+    const lower = url.toLowerCase();
+    return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg') || lower.includes('.mp4');
   };
 
   return (
@@ -453,16 +460,26 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
           <div className={styles.section}>
             <h4>Import Entity Table</h4>
             <p>Upload an entity table file. Existing entities will be checked for media additions and removals, and updated automatically.</p>
-            <label className={`${styles.fileInputLabel} ${loading ? styles.disabled : ''}`}>
-              {loading ? 'Importing...' : 'Choose Entity File...'}
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleEntityFileChange}
-                disabled={loading}
-                style={{ display: 'none' }}
-              />
-            </label>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <label className={`${styles.fileInputLabel} ${loading ? styles.disabled : ''}`}>
+                {loading ? 'Importing...' : 'Choose Entity File...'}
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleEntityFileChange}
+                  disabled={loading}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <button 
+                className={styles.primaryButton} 
+                onClick={handleTestPreview} 
+                style={{ backgroundColor: '#6c757d' }}
+                title="Test de media carrousel zonder database wijziging"
+              >
+                🧪 Test Carrousel Preview
+              </button>
+            </div>
           </div>
         </div>
 
@@ -483,7 +500,15 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({ theme, userI
               {newMediaItems.map((item, index) => (
                 <div key={index} className={styles.mediaItemCard}>
                   {isVideoUrl(item.url) ? (
-                    <video src={item.url} controls className={styles.mediaItemContent} />
+                    <video 
+                      controls 
+                      preload="metadata"
+                      playsInline
+                      className={styles.mediaItemContent}
+                    >
+                      <source src={item.url} type="video/mp4" />
+                      Your browser does not support the video tag.
+                    </video>
                   ) : (
                     <img src={item.url} alt={item.entityName} className={styles.mediaItemContent} />
                   )}
