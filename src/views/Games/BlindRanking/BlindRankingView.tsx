@@ -248,7 +248,7 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                                                 </div>
                                             </>
                                         ) : (
-                                            <span style={{ visibility: 'hidden' }}>Origin</span> 
+                                            <span style={{ visibility: 'hidden' }}>Origin</span>
                                         )}
                                     </div>
                                 </div>
@@ -343,21 +343,22 @@ export const BlindRankingView: React.FC<ViewProps> = ({
                 <div className={styles.setupCard}>
 
                     {l1Entities.length > 1 && (
-                        <div className={styles.dropdownFormGroup} style={{ marginBottom: '1.5rem' }}>
+                        <div className={styles.dropdownFormGroup}>
                             <label className={styles.inputLabel}>Filter by {l1Label}</label>
-                            <select
-                                onChange={handleSelectL1Dropdown}
-                                className={styles.customCategoryInput}
-                                defaultValue=""
-                                style={{ width: '100%', cursor: 'pointer' }}
-                            >
-                                <option value="" disabled>Choose a specific {l1Label.toLowerCase()}...</option>
-                                {l1Entities.map(l1 => (
-                                    <option key={l1.id} value={l1.name}>
-                                        {l1.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className={styles.selectWrapper}>
+                                <select
+                                    onChange={handleSelectL1Dropdown}
+                                    className={styles.customCategoryInput}
+                                    defaultValue=""
+                                >
+                                    <option value="" disabled>Choose a specific {l1Label.toLowerCase()}...</option>
+                                    {l1Entities.map(l1 => (
+                                        <option key={l1.id} value={l1.name}>
+                                            {l1.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     )}
 
