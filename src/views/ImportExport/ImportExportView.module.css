@@ -11,7 +11,7 @@
   border-radius: 12px;
   padding: 2.5rem;
   width: 100%;
-  max-width: 600px;
+  max-width: 650px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   color: var(--text);
 }
@@ -28,25 +28,46 @@
   margin-bottom: 2rem;
 }
 
-.section {
+/* --- Group Cards for Clear Distinction --- */
+.groupCard {
+  background: color-mix(in srgb, var(--bg), white 3%);
+  border: 1px solid color-mix(in srgb, var(--text), transparent 80%);
+  border-radius: 10px;
+  padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
 
-.section h3 {
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 0;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid color-mix(in srgb, var(--primary), transparent 80%);
+}
+
+.section {
+  margin-bottom: 1.25rem;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.section h4 {
+  font-size: 0.95rem;
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
 }
 
 .section p {
   font-size: 0.85rem;
   opacity: 0.7;
-  margin-bottom: 1rem;
-}
-
-.divider {
-  border: none;
-  border-top: 1px solid color-mix(in srgb, var(--text), transparent 85%);
-  margin: 2rem 0;
+  margin: 0 0 0.75rem 0;
 }
 
 .primaryButton {
@@ -86,4 +107,53 @@
   border-left: 4px solid var(--primary);
   border-radius: 4px;
   font-size: 0.9rem;
+}
+
+/* --- Media Carousel Styles --- */
+.mediaCarouselContainer {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding: 10px 0;
+  scroll-snap-type: x mandatory;
+}
+
+.mediaItemCard {
+  flex: 0 0 140px;
+  border: 1px solid color-mix(in srgb, var(--text), transparent 85%);
+  border-radius: 8px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--bg), white 8%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.mediaItemContent {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.mediaEntityName {
+  font-size: 11px;
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.mediaCategoryBadge {
+  font-size: 10px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text), transparent 85%);
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-top: 4px;
+  display: inline-block;
 }
